@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>알림 배치 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+
+/* Layout: wide workspace — scenario sidebar (steps list) on the left, full system diagram on the right */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#1a1f2b; --ink-2:#565e70; --ink-3:#8b92a1;
+  --line:#dfe3ea; --line-2:#b9c0cc; --box:#eef0f4;
+  --accent:#2f5bd3; --accent-bg:#e5ecfc;
+  --ok:#1d7a4b; --ok-bg:#ddf1e5; --warn:#a46700; --warn-bg:#fbeecd; --bad:#c03232; --bad-bg:#fbe3e3;
+  --n:#0f7a74; --n-bg:#dcf2ef; --p:#6a4bc4; --p-bg:#ebe5fa; --q:#b0601a; --q-bg:#fbeadb;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101318; --panel:#1a1e26; --ink:#e8ebf1; --ink-2:#a8afbc; --ink-3:#6f7786;
+  --line:#2a303b; --line-2:#465061; --box:#232833; --accent:#83a2f2; --accent-bg:#1e2945;
+  --ok:#6fd09c; --ok-bg:#163224; --warn:#ecc06c; --warn-bg:#3a2c0f; --bad:#f28b8b; --bad-bg:#3e1b1b;
+  --n:#5fd0c6; --n-bg:#123230; --p:#b49cf5; --p-bg:#2a2245; --q:#f0a868; --q-bg:#3a2715; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101318; --panel:#1a1e26; --ink:#e8ebf1; --ink-2:#a8afbc; --ink-3:#6f7786;
+  --line:#2a303b; --line-2:#465061; --box:#232833; --accent:#83a2f2; --accent-bg:#1e2945;
+  --ok:#6fd09c; --ok-bg:#163224; --warn:#ecc06c; --warn-bg:#3a2c0f; --bad:#f28b8b; --bad-bg:#3e1b1b;
+  --n:#5fd0c6; --n-bg:#123230; --p:#b49cf5; --p-bg:#2a2245; --q:#f0a868; --q-bg:#3a2715; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:1520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:20px;font-weight:600;margin:0}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.top .sp{flex:1}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+button,select{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:7px 14px;cursor:pointer}
+button:hover{background:var(--box)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);min-width:96px}
+.tab.sel{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:500}
+label{font-size:13px;color:var(--ink-2)}
+.grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.info h3{font-size:15px;font-weight:600;margin:0}
+.info .eb{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink-3)}
+.info .trig{display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--ink-2)}
+.info .trig b{font-weight:500;color:var(--ink);white-space:nowrap}
+.info p{margin:0;font-size:14px;color:var(--ink-2)}
+.info ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.info li{font-size:13px;color:var(--ink);padding:8px 10px;border-radius:8px;background:var(--box);line-height:1.5}
+.info .stores{display:flex;flex-wrap:wrap;gap:6px}
+.info .st{font-family:var(--f-mono);font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid}
+.cases{align-items:center}
+.caselbl{font-size:13px;color:var(--ink-2);margin-right:4px}
+.case.sel{background:var(--q-bg);border-color:var(--q);color:var(--q);font-weight:500}
+#n-jPEND.s-cur .frame{fill:var(--accent-bg);stroke:var(--accent);stroke-width:3.5}
+#n-jRETRY.s-cur .frame{fill:var(--q-bg);stroke:var(--q);stroke-width:3.5}
+#n-jACC.s-cur .frame{fill:var(--ok-bg);stroke:var(--ok);stroke-width:3.5}
+#n-jCAN.s-cur .frame{fill:var(--box);stroke:var(--ink-2);stroke-width:3.5}
+#n-jFAIL.s-cur .frame{fill:var(--bad-bg);stroke:var(--bad);stroke-width:3.5}
+.chk rect{fill:var(--panel);stroke:var(--line);transition:fill .3s,stroke .3s}
+.chk.ing rect{fill:var(--warn-bg);stroke:var(--warn)} .chk.ok rect{fill:var(--ok-bg);stroke:var(--ok)} .chk.bad rect{fill:var(--bad-bg);stroke:var(--bad)}
+.chk .mk{font-size:12px;font-weight:600;text-anchor:end;fill:var(--ink-3)}
+.chk.ok .mk{fill:var(--ok)} .chk.bad .mk{fill:var(--bad)} .chk.ing .mk{fill:var(--warn)}
+.jp-l{font-size:12px;fill:var(--ink-2);text-anchor:start} .jp-v{font-size:13px;font-weight:600;fill:var(--ink);text-anchor:end;font-variant-numeric:tabular-nums}
+.jp-v.flash{fill:var(--accent)}
+.flowline{display:flex;flex-direction:column;gap:2px;padding:10px 4px 2px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-2);line-height:1.5}
+.flowline .tr{color:var(--ink-3)} .flowline .tr b{font-weight:600;color:var(--ink)}
+.stepbox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1.5px solid var(--accent);background:var(--panel)}
+.stepbox .who{font-size:12px;font-weight:600;color:var(--accent)}
+.stepbox .what{font-size:14px;color:var(--ink);line-height:1.6}
+.stepbox .data{font-size:12px;color:var(--ink-2);padding:6px 8px;border-radius:6px;background:var(--box)}
+.stepbox .data b{font-weight:600;color:var(--ink)}
+.flow{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.flow li{display:grid;grid-template-columns:18px 1fr;gap:4px;font-size:14px;line-height:1.55;color:var(--ink)}
+.flow li::before{content:"→";color:var(--accent);font-weight:600}
+.stepbox.idle .flow li::before{color:var(--ink-3)}
+.stepbox.idle{border-style:dashed;border-color:var(--line-2)} .stepbox.idle .what{color:var(--ink-3)}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto}
+.log li{font-size:12px;color:var(--ink-2);display:grid;grid-template-columns:44px 1fr;gap:6px;padding:3px 0;border-bottom:1px solid var(--line);background:none;border-radius:0}
+.log li i{font-style:normal;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.log li.new{color:var(--ink)}
+.st.n{color:var(--n);background:var(--n-bg);border-color:var(--n)} .st.p{color:var(--p);background:var(--p-bg);border-color:var(--p)} .st.q{color:var(--q);background:var(--q-bg);border-color:var(--q)}
+.now{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:10px;background:var(--accent-bg);min-height:96px}
+.now .k{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;font-weight:500}
+.now .c{font-size:17px;font-weight:600;color:var(--ink);text-wrap:balance}
+.now .s{font-size:13px;color:var(--ink-2)}
+ol.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.list li{display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:13px;color:var(--ink-3);padding:6px 8px;border-radius:8px;transition:background .3s,color .3s}
+ol.list li{cursor:pointer}
+ol.list li:hover{background:var(--box);color:var(--ink)}
+ol.list li:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+ol.list li.on:hover{background:var(--accent-bg);color:var(--accent)}
+ol.list li b{font-weight:500;font-variant-numeric:tabular-nums}
+ol.list li.done{color:var(--ink-2)}
+ol.list li.on{background:var(--accent-bg);color:var(--accent);font-weight:500}
+.canvas{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;overflow-x:auto;min-width:0}
+svg{display:block;width:100%;min-width:900px;height:auto}
+svg text{font-family:var(--f-body);dominant-baseline:central}
+.node{transition:opacity .4s}
+.node .frame{fill:var(--panel);stroke:var(--line-2);stroke-width:1.3;transition:fill .3s,stroke .3s,stroke-width .3s}
+.node.on .frame{stroke:var(--accent);stroke-width:2.6;fill:var(--accent-bg)}
+.node.dash .frame{stroke-dasharray:7 5}
+.t1{font-size:14px;font-weight:600;fill:var(--ink);text-anchor:middle}
+.t2{font-size:12px;fill:var(--ink-2);text-anchor:middle}
+.mono{font-size:12.5px;font-weight:500;fill:var(--ink)}
+.dim{opacity:.18}
+.cyl .body{stroke-width:1.5;transition:stroke-width .3s}
+.cyl.on .body{stroke-width:3}
+.db-n .body{fill:var(--n-bg);stroke:var(--n)} .db-n .dbt{fill:var(--n)}
+.db-p .body{fill:var(--p-bg);stroke:var(--p)} .db-p .dbt{fill:var(--p)}
+.db-q .body{fill:var(--q-bg);stroke:var(--q)} .db-q .dbt{fill:var(--q)}
+.dbt{font-size:12px;font-weight:600;text-anchor:middle}
+.trow rect{fill:var(--panel);stroke:var(--line);transition:fill .3s}
+.trow.flash rect{fill:var(--warn-bg);stroke:var(--warn)}
+.cnt{font-size:12px;font-weight:600;fill:var(--ink);text-anchor:end;font-variant-numeric:tabular-nums}
+.edge{fill:none;stroke:var(--line-2);stroke-width:1.6;stroke-linejoin:round;transition:stroke .3s,stroke-width .3s,opacity .4s}
+.edge.dash{stroke-dasharray:7 6}
+.edge.on{stroke:var(--accent);stroke-width:3}
+.tag{opacity:0;transition:opacity .3s;pointer-events:none}
+.tag.show{opacity:1}
+.tag rect{fill:var(--ink)} .tag text{fill:var(--panel);font-size:12px;font-weight:500;text-anchor:middle}
+.pk{stroke:var(--panel);stroke-width:2.5}
+.pk.go{fill:var(--accent)} .pk.back{fill:var(--ok)} .pk.ext{fill:var(--q)}
+.mini{fill:var(--box);stroke:var(--line-2);transition:fill .3s,stroke .3s}
+.mini.run{fill:var(--accent-bg);stroke:var(--accent)} .mini.ok{fill:var(--ok-bg);stroke:var(--ok)} .mini.wait{fill:var(--warn-bg);stroke:var(--warn)}
+.mini.bad{fill:var(--bad-bg);stroke:var(--bad)} .mini.retry{fill:var(--q-bg);stroke:var(--q);stroke-dasharray:4 3}
+.lane{opacity:0;transition:opacity .4s}
+.lane.in{opacity:1;animation:slidein .6s ease-out}
+@keyframes slidein{0%{transform:translateX(-24px)}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){.lane.in{animation:none}}
+.tok{fill:var(--panel);stroke:var(--accent);stroke-width:2.5;opacity:0;transform-box:fill-box;transform-origin:center;transition:opacity .4s,fill .3s}
+.tok.show{opacity:1} .tok.used{fill:var(--accent)}
+.tok.pop{animation:pop .7s ease-out}
+@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.7)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.tok.pop{animation:none}}
+.mini.pick{stroke:var(--accent);stroke-width:2.5}
+.pk.bad{fill:var(--bad)}
+.mtxt{font-size:11px;fill:var(--ink-2);text-anchor:middle}
+.bar{fill:var(--accent);transform-box:fill-box;transform-origin:left center}
+.ring{fill:none;stroke:var(--accent);stroke-width:3;stroke-dasharray:10 8;opacity:0;transform-box:fill-box;transform-origin:center}
+.ring.spin{opacity:1;animation:spin 1.6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.qmark{font-size:22px;font-weight:600;fill:var(--warn);text-anchor:middle;opacity:0;transition:opacity .3s}
+.qmark.show{opacity:1;animation:bob 1.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-3);padding:4px 6px 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:3px;border:1.5px solid}
+.dot{width:10px;height:10px;border-radius:50%}
+@media (prefers-reduced-motion:reduce){.ring.spin,.qmark.show{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <h1>알림 배치 시뮬레이터</h1>
+    <span class="sp"></span>
+    <button id="play" class="primary" onclick="onPlay()">재생</button>
+    <button onclick="onNext()">다음 단계</button>
+    <button onclick="restart()">처음부터</button>
+    <label for="speed">속도</label>
+    <select id="speed" onchange="speed=+this.value">
+      <option value="0.5">아주 느리게</option>
+      <option value="1" selected>느리게</option>
+      <option value="1.6">보통</option>
+      <option value="2.5">빠르게</option>
+    </select>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tabs cases" id="cases" hidden><span class="caselbl">경우 선택</span></div>
+  <div class="grid">
+    <aside class="side">
+      <div class="card">
+        <div class="now" aria-live="polite"><span class="k" id="nowk">대기 중</span><span class="c" id="nowc">시나리오를 고르고 재생을 눌러</span></div>
+        <div class="stepbox idle" id="whatbox"><span class="who">지금 하는 일</span><span class="what" id="nows"></span></div>
+        <div class="flowline" id="info"></div>
+        <ol class="list" id="list"></ol>
+      </div>
+    </aside>
+    <div class="canvas">
+      <svg id="svg" viewBox="0 0 1200 860" role="img" aria-label="알림 시스템 전체 구성도 애니메이션">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g id="edges"></g><g id="nodes"></g><g id="pk"></g><g id="tags"></g>
+      </svg>
+      <svg id="svgJob" viewBox="0 0 1200 600" role="img" aria-label="푸시 발송 작업 한 건의 상태 변화 애니메이션" hidden>
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g id="edgesJ"></g><g id="nodesJ"></g><g id="pkJ"></g><g id="tagsJ"></g>
+      </svg>
+      <div class="legend" id="legendJob" hidden>
+        <span><i class="sw" style="background:var(--accent-bg);border-color:var(--accent)"></i>첫 발송 대기</span>
+        <span><i class="sw" style="background:var(--q-bg);border-color:var(--q)"></i>재시도 대기</span>
+        <span><i class="sw" style="background:var(--ok-bg);border-color:var(--ok)"></i>수락</span>
+        <span><i class="sw" style="background:var(--box);border-color:var(--ink-2)"></i>취소</span>
+        <span><i class="sw" style="background:var(--bad-bg);border-color:var(--bad)"></i>최종 실패</span>
+        <span>굵은 테두리 = 지금 작업이 있는 상태</span>
+      </div>
+      <div class="legend" id="legendMain">
+        <span><i class="sw" style="background:var(--n-bg);border-color:var(--n)"></i>알림 저장소</span>
+        <span><i class="sw" style="background:var(--p-bg);border-color:var(--p)"></i>설정·기기 저장소</span>
+        <span><i class="sw" style="background:var(--q-bg);border-color:var(--q)"></i>푸시 작업 저장소</span>
+        <span><i class="dot" style="background:var(--accent)"></i>요청·데이터 이동</span>
+        <span><i class="dot" style="background:var(--ok)"></i>응답·결과</span>
+        <span><i class="dot" style="background:var(--q)"></i>외부 호출</span>
+        <span><i class="sw" style="border-color:var(--ink-3);border-style:dashed"></i>V2 계획(미정)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg',$=id=>document.getElementById(id);
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function txt(p,x,y,s,cls,extra){const t=el('text',Object.assign({x,y,class:cls},extra||{}),p);t.textContent=s;return t}
+const NODES=$('nodes'),EDGES=$('edges'),PK=$('pk'),TAGS=$('tags');
+const N={};
+function box(id,x,y,w,h,lines,o={}){const g=el('g',{class:'node'+(o.dash?' dash':''),id:'n-'+id},o.parent||NODES);
+  el('rect',{class:'frame',x,y,width:w,height:h,rx:12},g);
+  let ty=y+(o.top||24);lines.forEach((s,i)=>{txt(g,x+w/2+(o.dx||0),ty,s,i===0?'t1':'t2');ty+=i===0?20:17});
+  N[id]={g,x,y,w,h};return g}
+function cyl(id,x,y,w,h,label,cls){const ry=14,g=el('g',{class:'node cyl '+cls,id:'n-'+id},NODES);
+  el('path',{class:'body',d:`M${x} ${y+ry} V${y+h-ry} A${w/2} ${ry} 0 0 0 ${x+w} ${y+h-ry} V${y+ry}`},g);
+  el('ellipse',{class:'body',cx:x+w/2,cy:y+ry,rx:w/2,ry},g);
+  txt(g,x+w/2,y+ry+26,label,'dbt');N[id]={g,x,y,w,h};return g}
+function trow(g,x,y,w,name){const r=el('g',{class:'trow'},g);el('rect',{x,y,width:w,height:28,rx:6},r);
+  txt(r,x+10,y+14,name,'mono');const c=txt(r,x+w-10,y+14,'','cnt');return{r,c}}
+function clockIcon(g,cx,cy){el('circle',{cx,cy,r:15,fill:'var(--panel)',stroke:'var(--ink-2)','stroke-width':2},g);
+  el('line',{x1:cx,y1:cy,x2:cx,y2:cy-9,stroke:'var(--ink)','stroke-width':2.2,'stroke-linecap':'round'},g);
+  el('line',{x1:cx,y1:cy,x2:cx+7,y2:cy,stroke:'var(--ink)','stroke-width':2.2,'stroke-linecap':'round'},g);
+  return el('circle',{class:'ring',cx,cy,r:22},g)}
+
+/* ---- user screen ---- */
+(function(){const x=40,y=200,w=170,h=150,g=el('g',{class:'node',id:'n-U'},NODES);
+  el('rect',{class:'frame',x,y,width:w,height:h,rx:12},g);
+  el('rect',{x:x+1,y:y+1,width:w-2,height:30,rx:11,fill:'var(--box)'},g);
+  txt(g,x+14,y+16,'사용자 화면','t1',{'text-anchor':'start','style':'text-anchor:start'});
+  el('circle',{cx:x+w-22,cy:y+16,r:10,fill:'var(--accent)'},g);
+  N.badge=txt(g,x+w-22,y+16,'2','t2',{style:'fill:var(--panel);font-weight:600;font-size:11px'});
+  N.list=el('g',{},g);N.U={g,x,y,w,h}})();
+let items=[];
+function renderU(){N.list.innerHTML='';const x=40,y=200;items.slice(-3).reverse().forEach((it,i)=>{const yy=y+40+i*34;
+  const r=el('rect',{x:x+10,y:yy,width:150,height:28,rx:6,fill:it.fresh?'var(--accent-bg)':'var(--box)'},N.list);
+  if(it.unread)el('circle',{cx:x+22,cy:yy+14,r:4,fill:'var(--accent)'},N.list);
+  txt(N.list,x+34,yy+14,it.t,'t2',{style:'text-anchor:start;fill:var(--ink)'})});
+  N.badge.textContent=items.filter(i=>i.unread).length}
+
+/* ---- nodes ---- */
+box('API',300,80,220,84,['요청을 받은 BE','접근권한 확인']);
+box('B2',300,195,220,118,['접속 중 갱신 경로 미정','지속 연결 선택 시'],{dash:1});
+(function(){const g=N.B2.g;N.be1=el('rect',{class:'mini',x:315,y:262,width:80,height:30,rx:6},g);txt(g,355,277,'발생 BE','mtxt');
+  N.be2=el('rect',{class:'mini',x:425,y:262,width:80,height:30,rx:6},g);txt(g,465,277,'연결 BE','mtxt');
+  el('line',{x1:397,y1:277,x2:421,y2:277,stroke:'var(--ink-3)','stroke-width':1.5,'marker-end':'url(#ah)','stroke-dasharray':'3 3'},g)})();
+box('POLL',300,380,220,70,['최신 알림 ID 조회','GET /stream']);
+box('C',40,560,170,70,['03시 스케줄러'],{top:35,dx:18});N.Cring=clockIcon(N.C.g,70,595);
+box('CLEAN',300,550,220,90,['초과 수신자 정리','→ 미참조 알림 정리']);
+N.tx1=el('rect',{class:'mini',x:320,y:602,width:85,height:26,rx:6},N.CLEAN.g);txt(N.CLEAN.g,362,615,'트랜잭션 1','mtxt');
+N.tx2=el('rect',{class:'mini',x:415,y:602,width:85,height:26,rx:6},N.CLEAN.g);txt(N.CLEAN.g,457,615,'트랜잭션 2','mtxt');
+box('V',40,760,170,80,['V2 계획','참여·자진 퇴장·','내보내기 요청'],{dash:1,top:22});
+box('B1',300,740,220,80,['참여 변경·응답·알림 생성','순서와 트랜잭션 경계 미정'],{dash:1,top:28});
+N.q1=txt(N.B1.g,500,752,'?','qmark');
+cyl('P',600,50,240,140,'설정·기기','db-p');
+const rP1=trow(N.P.g,615,102,210,'사용자별 알림 설정'),rP2=trow(N.P.g,615,136,210,'푸시 구독 기기');
+cyl('N',600,240,240,185,'알림','db-n');
+const rN1=trow(N.N.g,615,292,210,'알림 내용'),rN2=trow(N.N.g,615,326,210,'사용자별 수신·읽음 기록');
+N.nq=txt(N.N.g,720,385,'?','qmark');
+cyl('Q',600,560,240,135,'푸시 작업','db-q');
+trow(N.Q.g,615,612,210,'푸시 발송 작업');
+N.qs=[0,1,2].map(i=>{const x=613+i*74;const r=el('rect',{class:'mini',x,y:646,width:70,height:24,rx:5},N.Q.g);const tx=txt(N.Q.g,x+35,658,'','mtxt');return{r,tx}});
+function setQ(i,c,label){setMini(N.qs[i].r,c);N.qs[i].tx.textContent=label||''}
+box('S',940,60,220,70,['08시 스케줄러'],{top:35,dx:18});N.Sring=clockIcon(N.S.g,970,95);
+box('G',940,175,220,90,['냉장고별 임박·만료 생성','순차 순회']);
+N.fr=[0,1,2].map(i=>{const r=el('rect',{class:'mini',x:965+i*60,y:233,width:50,height:22,rx:5},N.G.g);txt(N.G.g,990+i*60,244,'냉장고 '+(i+1),'mtxt');return r});
+box('J',940,330,220,90,['설정·구독을 확인해','푸시 작업 생성'],{top:34});
+box('D',940,480,220,160,['발송 대상 조회','작업마다 가상 스레드 생성','동시에 보낼 수 있는 수 제한'],{top:22});
+N.permit=N.D.g.querySelectorAll('text')[2];
+N.tokens=[0,1].map(i=>el('circle',{class:'tok',cx:1118+i*24,cy:497,r:9},N.D.g));
+function setTokens(n,cls){N.tokens.forEach((c,i)=>c.setAttribute('class','tok'+(i<n?' show'+(cls?' '+cls:''):'')))}
+function useTokens(used){N.tokens.forEach((c,i)=>c.setAttribute('class','tok show'+(i<used?' used':'')))}
+N.lanes=[0,1,2].map(i=>{const y=550+i*28,g=el('g',{class:'lane'},N.D.g);const bg=el('rect',{class:'mini',x:954,y,width:192,height:22,rx:5},g);
+  const t=txt(g,995,y+11,'스레드 '+(i+1),'mtxt');const st=txt(g,1110,y+11,'','mtxt');
+  const bar=el('rect',{class:'bar',x:1040,y:y+8,width:40,height:6,rx:3,style:'transform:scaleX(0)'},g);return{g,bg,st,bar,t}});
+N.sTime=txt(N.S.g,1068,116,'','mtxt');
+box('W',940,720,220,100,['외부 Web Push 서비스','→ 브라우저 전달'],{top:22});
+N.br=[0,1,2].map(i=>{const x=960+i*62,g=N.W.g;const r=el('rect',{class:'mini',x,y:776,width:54,height:30,rx:5},g);
+  el('line',{x1:x,y1:784,x2:x+54,y2:784,stroke:'var(--line-2)'},g);return r});
+box('R',620,735,200,70,['T3: 작업별 결과 커밋'],{top:35});
+
+/* ---- edges ---- */
+const E={};
+function edge(id,pts,label,o={}){const mk='url(#'+(o.mk||'ah')+')';const p=el('polyline',{class:'edge'+(o.dash?' dash':''),points:pts.map(a=>a.join(',')).join(' '),'marker-end':mk},o.edges||EDGES);
+  if(o.both)p.setAttribute('marker-start',mk);
+  let best=0,bi=1;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d>best){best=d;bi=i}}
+  const m=o.at||[(pts[bi][0]+pts[bi-1][0])/2,(pts[bi][1]+pts[bi-1][1])/2];
+  const tg=el('g',{class:'tag'},o.tags||TAGS);const r=el('rect',{rx:6,height:24},tg);const t=txt(tg,m[0],m[1],label||'');
+  E[id]={p,pts,tg,r,t,m,label,pk:o.pk||PK}}
+edge('U-API',[[125,198],[125,110],[298,110]],'HTTP 요청',{at:[200,110]});
+edge('API-U',[[300,145],[160,145],[160,198]],'조회 완료·변경 커밋 후 응답',{at:[232,145]});
+edge('API-N',[[520,140],[560,140],[560,290],[598,290]],'조회·읽음 변경',{both:1});
+edge('API-P',[[522,100],[598,100]],'설정 조회·구독 등록/해제',{both:1,at:[560,72]});
+edge('U-POLL',[[212,320],[260,320],[260,400],[298,400]],'반복 GET /stream',{at:[260,362]});
+edge('N-POLL',[[598,405],[522,405]],'최신 알림 ID',{at:[560,428]});
+edge('POLL-U',[[300,435],[240,435],[240,342],[212,342]],'JSON 응답 후 요청 종료',{at:[250,460]});
+edge('S-G',[[1050,130],[1050,173]],'');
+edge('G-N',[[940,222],[870,222],[870,290],[842,290]],'T1: 알림·수신자 함께 커밋',{at:[880,200]});
+edge('G-J',[[1050,265],[1050,328]],'생성 순회 종료 후 · 푸시 활성화 시',{at:[1050,297]});
+edge('N-J',[[842,370],[938,370]],'알림 조회',{at:[890,350]});
+edge('P-J',[[720,48],[720,26],[1182,26],[1182,375],[1162,375]],'설정·구독 확인',{at:[950,26]});
+edge('J-Q',[[940,405],[880,405],[880,470],[720,470],[720,558]],'T2: 묶음별 커밋',{at:[800,470]});
+edge('J-D',[[1050,420],[1050,478]],'',{});
+edge('Q-D',[[842,600],[938,600]],'발송 대상 조회',{at:[890,582]});
+edge('D-W',[[1050,640],[1050,718]],'DB 트랜잭션 밖 호출',{at:[1050,680]});
+edge('W-R',[[938,770],[822,770]],'외부 호출 결과',{at:[880,750]});
+edge('R-Q',[[720,735],[720,697]],'',{});
+edge('R-D',[[800,735],[800,712],[880,712],[880,630],[938,630]],'발송 묶음 완료 후 다음 시각까지 대기·재조회',{at:[820,700]});
+edge('C-CLEAN',[[210,595],[298,595]],'',{});
+edge('CLEAN-N',[[520,575],[570,575],[570,480],[650,480],[650,427]],'각각 별도 트랜잭션',{at:[580,500]});
+edge('V-B1',[[210,800],[298,800]],'',{dash:1});
+edge('B1-N',[[520,770],[585,770],[585,520],[690,520],[690,427]],'수신 대상·생성 시점 미정',{dash:1,at:[680,540]});
+edge('N-B2',[[598,320],[540,320],[540,280],[522,280]],'',{dash:1});
+edge('B2-U',[[300,240],[212,240]],'발생 BE ↔ 연결 BE 전달 경계',{dash:1,at:[256,218]});
+
+/* ---- job state scene ---- */
+const NJ=$('nodesJ'),JO={parent:NJ},EJ={edges:$('edgesJ'),tags:$('tagsJ'),pk:$('pkJ'),mk:'ah2'};
+box('jGEN',40,250,150,80,['작업 생성','알림 1건 × 기기 1대'],JO);
+box('jPEND',240,250,170,80,['첫 발송 대기','다음 시각 = 지금'],JO);
+box('jCHK',470,220,220,140,['발송 자격 확인'],JO);
+const CHKS=['정오 전인가','구독이 그대로인가','받을 자격이 있나'].map((s,i)=>{const g=el('g',{class:'chk'},N.jCHK.g);
+  el('rect',{x:485,y:256+i*32,width:190,height:26,rx:6},g);txt(g,497,269+i*32,s,'jp-l',{style:'fill:var(--ink)'});const mk=txt(g,665,269+i*32,'','mk');return{g,mk}});
+box('jSEND',750,250,170,80,['외부 푸시 호출','결과 저장 (T3)'],JO);
+box('jCAN',480,40,200,70,['취소','최종 · 시도 횟수 안 셈'],JO);
+box('jACC',990,110,170,70,['수락','최종 상태'],JO);
+box('jFAIL',990,420,170,70,['최종 실패','최종 상태'],JO);
+box('jRETRY',750,430,170,90,['재시도 대기','5분 → 15분 → 30분'],JO);
+N.jWait=txt(N.jRETRY.g,835,495,'','jp-v',{style:'text-anchor:middle;fill:var(--q)'});
+(function(){const g=el('g',{},NJ);el('rect',{x:40,y:400,width:360,height:180,rx:12,fill:'var(--box)',stroke:'var(--line-2)'},g);
+  txt(g,56,422,'작업 #1 정보','t1',{style:'text-anchor:start'});
+  N.jp={};[['now','현재 시각'],['st','상태'],['att','시도 횟수'],['next','다음 발송 시각'],['dl','발송 기한'],['err','마지막 오류']].forEach(([k,l],i)=>{
+    txt(g,56,450+i*21,l,'jp-l');N.jp[k]=txt(g,384,450+i*21,'—','jp-v')})})();
+edge('J-GEN-PEND',[[190,290],[238,290]],'',EJ);
+edge('J-PEND-CHK',[[410,290],[468,290]],'발송 시각 도착',Object.assign({at:[440,235]},EJ));
+edge('J-CHK-SEND',[[690,290],[748,290]],'모두 통과',Object.assign({at:[720,235]},EJ));
+edge('J-SEND-ACC',[[922,270],[955,270],[955,145],[988,145]],'수락됨',EJ);
+edge('J-SEND-RETRY',[[835,332],[835,428]],'실패 · 재시도 남음',EJ);
+edge('J-RETRY-CHK',[[748,500],[640,500],[640,362]],'다음 시각 도착',Object.assign({at:[694,522]},EJ));
+edge('J-CHK-CAN',[[580,218],[580,112]],'구독 변경 · 받을 자격 없음',EJ);
+edge('J-SEND-CAN',[[835,248],[835,75],[682,75]],'구독 사용 불가',Object.assign({at:[900,160]},EJ));
+edge('J-CHK-FAIL',[[468,340],[440,340],[440,585],[1075,585],[1075,492]],'정오 지남',EJ);
+edge('J-SEND-FAIL',[[922,310],[955,310],[955,455],[988,455]],'4번째 실패 · 정오 넘김',Object.assign({at:[1060,520]},EJ));
+const ST={PENDING:['jPEND','첫 발송 대기'],RETRY:['jRETRY','재시도 대기'],ACCEPTED:['jACC','수락'],CANCELLED:['jCAN','취소'],FAILED:['jFAIL','최종 실패']};
+const STROWS=(function(){const g=el('g',{},NJ);el('rect',{x:40,y:36,width:400,height:196,rx:12,fill:'var(--panel)',stroke:'var(--line-2)'},g);
+  txt(g,56,56,'DB에 저장되는 작업 상태','t1',{style:'text-anchor:start'});txt(g,424,56,'(푸시 발송 작업 테이블)','jp-l',{style:'text-anchor:end;fill:var(--ink-3)'});
+  const rows=[['PENDING','첫 발송 대기','아직 한 번도 안 보냄','var(--accent)'],['RETRY','재시도 대기','실패 후 다음 시각을 기다림','var(--q)'],
+    ['ACCEPTED','수락','외부가 받음 · 끝','var(--ok)'],['CANCELLED','취소','보낼 필요 없어짐 · 끝','var(--ink-2)'],['FAILED','최종 실패','보내야 했지만 못 보냄 · 끝','var(--bad)']];
+  const out={};rows.forEach(([k,ko,m,c],i)=>{const y=72+i*31;const rg=el('g',{class:'strow'},g);
+    out[k]=el('rect',{x:48,y,width:384,height:27,rx:6,fill:'transparent'},rg);
+    el('circle',{cx:62,cy:y+13.5,r:5,fill:c},rg);txt(rg,74,y+13.5,ko,'jp-v',{style:'text-anchor:start'});
+    txt(rg,168,y+13.5,k,'jp-l',{style:'fill:var(--ink-3);font-size:11px'});txt(rg,424,y+13.5,m,'jp-l',{style:'text-anchor:end'})});return out})();
+let JS={};
+function jSet(o){const prev=Object.assign({},JS);Object.assign(JS,o);
+  Object.keys(STROWS).forEach(k=>{const on=JS.st===k;STROWS[k].setAttribute('fill',on?'var(--accent-bg)':'transparent');STROWS[k].setAttribute('stroke',on?'var(--accent)':'none')});
+  Object.values(ST).forEach(([id])=>N[id].g.classList.remove('s-cur'));if(JS.st)N[ST[JS.st][0]].g.classList.add('s-cur');
+  const v={now:JS.now,st:JS.st?ST[JS.st][1]:'—',att:JS.att==null?'—':JS.att+'회',next:JS.next||'비어 있음',dl:JS.dl||'—',err:JS.err||'없음'};
+  Object.keys(v).forEach(k=>{N.jp[k].textContent=v[k];const ch=k==='st'?prev.st!==JS.st:prev[k]!==JS[k];N.jp[k].classList.toggle('flash',!!o.hasOwnProperty(k==='st'?'st':k)&&ch)})}
+function jReset(){JS={now:'08:00'};jSet({st:null,att:null,next:'',dl:'',err:''});CHKS.forEach(c=>{c.g.setAttribute('class','chk');c.mk.textContent=''});N.jWait.textContent=''}
+function setChk(i,c,m){CHKS[i].g.setAttribute('class','chk'+(c?' '+c:''));CHKS[i].mk.textContent=m||''}
+async function runChecks(failAt,t){CHKS.forEach((c,i)=>setChk(i,''));for(let i=0;i<3;i++){setChk(i,'ing','확인 중');if(!await wait(700,t))return false;
+  if(i===failAt){setChk(i,'bad','걸림');return false}setChk(i,'ok','통과')}return true}
+async function clockTo(to,t){const [h,m]=JS.now.split(':').map(Number),[h2,m2]=to.split(':').map(Number);const a=h*60+m,b=h2*60+m2;
+  await vtime(2200,k=>{const x=Math.round(a+(b-a)*k);N.jp.now.textContent=String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');N.jWait.textContent='남은 대기 '+(b-Math.round(a+(b-a)*k))+'분'},t);JS.now=to;N.jWait.textContent=''}
+const JC={
+ gen:{c:'작업 생성',n:['jGEN'],e:[],d:'오늘 만든 임박·만료 알림과, 받을 사람의 구독 기기 한 대를 짝지어 발송 작업 1건을 만들어. 기기가 2대면 작업도 2건이야. 처음에는 시도 0회, 다음 발송 시각은 지금, 발송 기한은 오늘 정오로 저장해.',
+  run:async t=>{jSet({att:0,next:'08:00',dl:'12:00'});await wait(1600,t)}},
+ pend:{c:'첫 발송 대기',n:['jGEN','jPEND'],e:['J-GEN-PEND'],d:'만든 작업을 "첫 발송 대기" 상태로 DB에 저장해. 아직 한 번도 보내지 않은 작업이라는 뜻이야. 다음 발송 시각을 지금(08:00)으로 적어 두기 때문에, 바로 이어지는 발송 대상 조회에서 이 작업을 가져가.',
+  run:async t=>{if(!await fly('J-GEN-PEND',F*.7,'go',t))return;jSet({st:'PENDING'})}},
+ check:(from,failAt)=>({c:'발송 자격 확인',n:[from==='J-PEND-CHK'?'jPEND':'jRETRY','jCHK'],e:[from],
+  d:'보내기 직전에 이 작업을 지금 보내도 되는지 세 가지를 확인해. 작업을 만든 뒤에 상황이 바뀌었을 수 있어서야. ① 정오 전인가: 8시 알림이 오후에 도착하면 늦은 정보라서 정오까지만 보내. ② 구독이 그대로인가: 작업을 만든 뒤 사용자가 구독을 해제하거나 다시 등록했으면 옛 구독으로 보내지 않아. ③ 받을 자격이 있나: 그 사이 탈퇴했거나, 냉장고가 삭제됐거나, 알림을 껐으면 보내지 않아.'+(failAt!=null?' 이번에는 사용자가 구독을 바꿔서 ②에서 걸려.':' 이번에는 셋 다 통과해.'),
+  run:async t=>{if(!await fly(from,F*.7,'go',t))return;await runChecks(failAt,t)}}),
+ send:{c:'외부 푸시 호출',n:['jCHK','jSEND'],e:['J-CHK-SEND'],d:'외부 푸시 서비스로 알림을 보내. 외부 응답을 최대 10초까지 기다릴 수 있어서, 이 호출 동안에는 DB 트랜잭션을 열어 두지 않아. 응답이 오면 이 작업의 결과만 짧은 트랜잭션으로 따로 저장해. 이 결과 저장이 T3야. 알림·수신자 저장(T1), 발송 작업 저장(T2)에 이어지는 세 번째 트랜잭션이야.',
+  run:async t=>{await fly('J-CHK-SEND',F*.8,'ext',t)}},
+ accept:(n,c)=>({c:c||'수락 · 결과 저장',n:['jSEND','jACC'],e:['J-SEND-ACC'],d:'외부 푸시 서비스가 요청을 받아들였어. 상태를 수락으로 바꾸고 시도 횟수를 1 올려. 다음 발송 시각은 비워. 수락은 외부 서비스가 받았다는 뜻이고, 브라우저에 실제로 표시됐다는 뜻은 아니야.',
+  run:async t=>{if(!await fly('J-SEND-ACC',F*.7,'back',t))return;jSet({st:'ACCEPTED',att:n,next:''})}}),
+ cancel:{c:'취소',n:['jCHK','jCAN'],e:['J-CHK-CAN'],d:'작업을 만든 뒤 사용자가 구독을 바꿨어. 옛 구독으로는 보내지 않고 취소로 저장해. 취소는 보낸 게 아니라서 시도 횟수에 넣지 않아. 탈퇴, 냉장고 삭제, 알림 끔으로 받을 자격이 없어진 경우도 똑같이 취소돼.',
+  run:async t=>{if(!await fly('J-CHK-CAN',F*.7,'go',t))return;jSet({st:'CANCELLED',next:'',err:'구독 변경'})}},
+ fail:(n,delay,next)=>({c:'발송 실패 → 재시도 대기',n:['jSEND','jRETRY'],e:['J-SEND-RETRY'],d:'외부 푸시 호출이 실패했어. 시도 횟수를 '+n+'회로 올리고, '+delay+' 뒤인 '+next+'을 다음 발송 시각으로 저장해. 상태는 재시도 대기가 돼.',
+  run:async t=>{if(!await fly('J-SEND-RETRY',F*.7,'bad',t))return;jSet({st:'RETRY',att:n,next,err:'발송 실패'})}}),
+ wait:(delay,to)=>({c:delay+' 기다림',n:['jRETRY'],e:[],d:'재시도 대기 작업은 다음 발송 시각이 될 때까지 발송 조회에 잡히지 않아. 그동안 08시 배치는 끝나지 않고 그 시각까지 기다려. '+to+'이 되면 배치가 다시 발송 대상을 조회해서 이 작업을 가져와.',
+  run:async t=>{await clockTo(to,t)}}),
+ round:(n,delay,next)=>({c:'다시 시도 → '+n+'번째 실패',n:['jRETRY','jCHK','jSEND'],e:['J-RETRY-CHK','J-CHK-SEND','J-SEND-RETRY'],d:'다시 자격을 확인하고 외부 푸시를 호출했지만 또 실패했어. 시도 횟수가 '+n+'회가 되고, 이번에는 '+delay+' 뒤인 '+next+'을 다음 발송 시각으로 저장해.',
+  run:async t=>{if(!await fly('J-RETRY-CHK',F*.6,'go',t))return;if(!await runChecks(null,t))return;if(!await fly('J-CHK-SEND',F*.6,'ext',t))return;if(!await fly('J-SEND-RETRY',F*.6,'bad',t))return;jSet({st:'RETRY',att:n,next,err:'발송 실패'})}}),
+ final:{c:'다시 시도 → 4번째 실패 → 최종 실패',n:['jRETRY','jCHK','jSEND','jFAIL'],e:['J-RETRY-CHK','J-CHK-SEND','J-SEND-FAIL'],d:'재시도는 5분, 15분, 30분 뒤 세 번까지야. 네 번째도 실패하면 더 기다리지 않고 최종 실패로 끝내. 다음 시도 시각이 정오를 넘기거나, 보내기 전에 이미 정오가 지난 경우도 최종 실패야.',
+  run:async t=>{if(!await fly('J-RETRY-CHK',F*.6,'go',t))return;if(!await runChecks(null,t))return;if(!await fly('J-CHK-SEND',F*.6,'ext',t))return;if(!await fly('J-SEND-FAIL',F*.7,'bad',t))return;jSet({st:'FAILED',att:4,next:'',err:'발송 실패'})}}
+};
+const CASES={
+ ok:{name:'바로 성공',steps:()=>[JC.gen,JC.pend,JC.check('J-PEND-CHK'),JC.send,JC.accept(1)]},
+ cancel:{name:'취소',steps:()=>[JC.gen,JC.pend,JC.check('J-PEND-CHK',1),JC.cancel]},
+ retry:{name:'재시도 후 성공',steps:()=>[JC.gen,JC.pend,JC.check('J-PEND-CHK'),JC.send,JC.fail(1,'5분','08:05'),JC.wait('5분','08:05'),JC.check('J-RETRY-CHK'),JC.send,JC.accept(2,'수락 · 결과 저장 (2번째 시도)')]},
+ fail:{name:'최종 실패',steps:()=>[JC.gen,JC.pend,JC.check('J-PEND-CHK'),JC.send,JC.fail(1,'5분','08:05'),JC.wait('5분','08:05'),JC.round(2,'15분','08:20'),JC.wait('15분','08:20'),JC.round(3,'30분','08:50'),JC.wait('30분','08:50'),JC.final]}
+};
+let curCase='ok';
+
+/* ---- virtual clock ---- */
+let speed=1,paused=false,manual=false,running=false,release=null,tok={dead:true};
+function vtime(ms,cb,t){if(t.fast){if(!t.dead&&cb)cb(1);return Promise.resolve(!t.dead)}return new Promise(res=>{let e=0,last=performance.now();
+  (function f(now){if(t.dead)return res(false);const dt=Math.min(now-last,100);last=now;e+=dt*(t.fast?400:(paused?0:speed/(t.mul||1)));const k=Math.min(e/ms,1);cb&&cb(k);if(k<1)requestAnimationFrame(f);else res(true)})(last)})}
+const wait=(ms,t)=>vtime(ms,null,t);
+function fly(id,ms,cls,t,rev){const P=rev?[...E[id].pts].reverse():E[id].pts;const c=el('circle',{r:9,class:'pk '+(cls||'go'),cx:P[0][0],cy:P[0][1]},E[id].pk);
+  const seg=[];let tot=0;for(let i=1;i<P.length;i++){const d=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);seg.push(d);tot+=d}
+  return vtime(ms,k=>{let d=k*tot,i=0;while(i<seg.length-1&&d>seg[i]){d-=seg[i];i++}const r=seg[i]?Math.min(d/seg[i],1):1;
+    c.setAttribute('cx',P[i][0]+(P[i+1][0]-P[i][0])*r);c.setAttribute('cy',P[i][1]+(P[i+1][1]-P[i][1])*r)},t).then(v=>{c.remove();return v})}
+const F=2600; /* base travel time per edge */
+function flash(row,t){row.r.classList.add('flash');return wait(1100,t).then(v=>{row.r.classList.remove('flash');return v})}
+function setMini(r,c){r.setAttribute('class','mini'+(c?' '+c:''))}
+
+/* ---- state ---- */
+let cN,cR;
+function resetState(){PK.innerHTML='';$('pkJ').innerHTML='';jReset();cN=4;cR=8;rN1.c.textContent=cN+'건';rN2.c.textContent=cR+'건';rP1.c.textContent='';rP2.c.textContent='';
+  items=[{t:'두부 만료',unread:false},{t:'우유 임박',unread:true},{t:'계란 임박',unread:true}];renderU();
+  [0,1,2].forEach(i=>setQ(i,''));N.fr.forEach(r=>setMini(r,''));N.br.forEach(r=>setMini(r,''));
+  N.sTime.textContent='';N.lanes[0].t.textContent='스레드 1';
+  N.lanes.forEach(l=>{l.g.setAttribute('class','lane');setMini(l.bg,'');l.st.textContent='';l.bar.style.transform='scaleX(0)'});N.permit.textContent='동시에 보낼 수 있는 수 제한';setTokens(0);
+  [N.tx1,N.tx2,N.be1,N.be2].forEach(r=>setMini(r,''));N.Sring.setAttribute('class','ring');N.Cring.setAttribute('class','ring');
+  N.q1.setAttribute('class','qmark');N.nq.setAttribute('class','qmark')}
+function updN(){rN1.c.textContent=cN+'건';rN2.c.textContent=cR+'건'}
+
+/* ---- scenarios ---- */
+const SC={
+ req:{name:'사용자 요청',steps:[
+  {c:'HTTP 요청',s:'사용자가 알림을 눌러 읽음 처리를 요청해',n:['U','API'],e:['U-API'],run:async t=>{await fly('U-API',F,'go',t)}},
+  {c:'접근권한 확인',s:'요청을 받은 BE가 이 사용자의 알림인지 확인해',n:['API'],e:[],run:t=>wait(1600,t)},
+  {c:'조회·읽음 변경',s:'notification_recipients의 읽음 상태를 바꾸고 커밋해',n:['API','N'],e:['API-N'],run:async t=>{if(!await fly('API-N',F,'go',t))return;await flash(rN2,t);await fly('API-N',F,'back',t,1)}},
+  {c:'설정 조회·구독 등록/해제',s:'알림 설정과 기기 구독 정보를 다룰 때는 이 저장소를 써',n:['API','P'],e:['API-P'],run:async t=>{if(!await fly('API-P',F*.8,'go',t))return;await flash(rP1,t);await fly('API-P',F*.8,'back',t,1)}},
+  {c:'조회 완료·변경 커밋 후 응답',s:'DB 커밋이 끝난 뒤에 화면으로 응답해',n:['API','U'],e:['API-U'],run:async t=>{if(!await fly('API-U',F,'back',t))return;items[2].unread=false;renderU();await wait(600,t)}}]},
+ poll:{name:'실시간 갱신(폴링)',steps:[
+  {c:'반복 GET /stream',s:'화면이 주기적으로 새 알림이 있는지 물어봐',n:['U','POLL'],e:['U-POLL'],run:t=>fly('U-POLL',F,'go',t)},
+  {c:'최신 알림 ID 조회',s:'notifications에서 가장 최근 알림 ID만 읽어',n:['N','POLL'],e:['N-POLL'],run:async t=>{await flash(rN1,t);await fly('N-POLL',F*.7,'back',t)}},
+  {c:'JSON 응답 후 요청 종료',s:'새 알림이 있으면 화면에 반영하고 연결은 끊어',n:['POLL','U'],e:['POLL-U'],run:async t=>{if(!await fly('POLL-U',F,'back',t))return;items.forEach(i=>i.fresh=false);items.push({t:'요거트 임박',unread:true,fresh:true});renderU();await wait(600,t)}},
+  {c:'다음 주기 · 반복 GET /stream',s:'연결을 유지하지 않으니 다시 요청을 보내',n:['U','POLL'],e:['U-POLL'],run:t=>fly('U-POLL',F,'go',t)},
+  {c:'최신 알림 ID 조회',s:'이번엔 새 알림이 없어',n:['N','POLL'],e:['N-POLL'],run:async t=>{await flash(rN1,t);await fly('N-POLL',F*.7,'back',t)}},
+  {c:'JSON 응답 후 요청 종료',s:'변경 없음 응답을 받고 다시 끊어',n:['POLL','U'],e:['POLL-U'],run:async t=>{await fly('POLL-U',F,'back',t);items.forEach(i=>i.fresh=false);renderU()}}]},
+ batch:{name:'08시 배치',steps:[
+  {c:'08시 스케줄러 시작',s:'사용자 요청과 상관없이 정해진 시각에 실행돼',n:['S'],e:[],run:async t=>{N.Sring.setAttribute('class','ring spin');await wait(1800,t)}},
+  {c:'냉장고별 임박·만료 생성',s:'냉장고를 하나씩 순서대로 돌아',n:['S','G'],e:['S-G'],run:t=>fly('S-G',F*.6,'go',t)},
+  {c:'T1: 알림·수신자 함께 커밋',s:'냉장고 하나마다 알림과 수신자를 한 트랜잭션으로 저장해',n:['G','N'],e:['G-N'],run:async t=>{for(let i=0;i<3;i++){setMini(N.fr[i],'run');if(!await fly('G-N',F*.75,'go',t))return;cN++;cR+=2;updN();setMini(N.fr[i],'ok');flash(rN1,t);await flash(rN2,t)}}},
+  {c:'생성 순회 종료 후 · 푸시 활성화 시',s:'모든 냉장고를 돈 다음에야 푸시 단계로 넘어가',n:['G','J'],e:['G-J'],run:t=>fly('G-J',F*.6,'go',t)},
+  {c:'설정·구독을 확인해 푸시 작업 생성',s:'새 알림, 알림 설정, 구독 기기를 함께 읽어',n:['N','P','J'],e:['N-J','P-J'],run:async t=>{flash(rN1,t);flash(rP1,t);flash(rP2,t);await Promise.all([fly('N-J',F*.7,'go',t),fly('P-J',F*1.3,'go',t)])}},
+  {c:'T2: 묶음별 커밋',s:'보낼 작업들을 저장해',n:['J','Q'],e:['J-Q'],run:async t=>{if(!await fly('J-Q',F,'go',t))return;for(let i=0;i<3;i++){setQ(i,'wait','발송 대기');await wait(300,t)}}},
+  {c:'발송 대상 조회',s:'보낼 시각이 된 작업을 가져와',n:['J','Q','D'],e:['J-D','Q-D'],run:async t=>{await Promise.all([fly('J-D',F*.6,'go',t),fly('Q-D',F*.7,'go',t)]);for(const q of N.qs)q.r.classList.add('pick');await wait(900,t);for(const q of N.qs)q.r.classList.remove('pick')}},
+  {c:'동시 발송 허가 C개 준비',s:'허가를 만들 뿐, 스레드를 만드는 건 아니야',n:['D'],e:[],run:async t=>{N.permit.textContent='발송 허가 만드는 중';if(!await wait(600,t))return;
+    for(let i=1;i<=2;i++){setTokens(i,'pop');N.permit.textContent='발송 허가 '+i+'개';if(!await wait(1000,t))return}
+    setTokens(2);N.permit.textContent='발송 허가 2개 준비 (C=2)';await wait(1500,t)}},
+  {c:'작업마다 가상 스레드 실행',s:'스케줄러는 기다리지 않고 작업을 계속 맡겨',n:['D'],e:[],run:async t=>{N.permit.textContent='가상 스레드 제출 0 / 3';if(!await wait(600,t))return;
+    for(let i=0;i<3;i++){const l=N.lanes[i];l.g.setAttribute('class','lane in');setMini(l.bg,'run');l.st.textContent='시작됨';N.permit.textContent='가상 스레드 제출 '+(i+1)+' / 3';
+      if(!await wait(1100,t))return;setMini(l.bg,'')}
+    N.permit.textContent='스레드 3개 시작 · 제출 끝';await wait(1400,t)}},
+  {c:'허가를 얻은 스레드만 발송 → T3: 작업별 결과 커밋',s:'허가가 없으면 그 스레드 안에서 기다려',n:['D','W','R','Q'],e:['D-W','W-R','R-Q'],run:async t=>{
+     let used=0;const show=()=>{N.permit.textContent='허가 사용 '+used+' / 2';useTokens(used)};
+     async function job(i,dur,fail,onFree){const l=N.lanes[i];used++;show();setMini(l.bg,'run');l.st.textContent='자격 확인';
+       if(!await wait(700,t))return;l.st.textContent='발송 중';
+       const g=vtime(dur,k=>l.bar.style.transform='scaleX('+k+')',t);
+       if(!await fly('D-W',dur,'ext',t))return;await g;setMini(N.br[i],fail?'bad':'ok');
+       l.st.textContent='결과 저장';
+       if(!await fly('W-R',F*.6,fail?'bad':'back',t))return;if(!await fly('R-Q',F*.4,fail?'bad':'back',t))return;
+       if(fail){setQ(i,'retry','재시도 대기');setMini(l.bg,'bad');l.st.textContent='실패 저장'}else{setQ(i,'ok','완료');setMini(l.bg,'ok');l.st.textContent='완료'}
+       used--;show();onFree&&onFree()}
+     setMini(N.lanes[2].bg,'wait');N.lanes[2].st.textContent='허가 대기';
+     let free;const freed=new Promise(r=>free=r);
+     const a=job(0,F*.9,false,free),b=job(1,F*1.4,true,free);await freed;if(t.dead)return;await Promise.all([a,b,job(2,F,false)])}},
+  {c:'발송 묶음 완료 후 다음 시각까지 대기·재조회',s:'재시도 대기 작업은 다음 시도 시각에 다시 가져와',n:['R','D','Q'],e:['R-D'],run:async t=>{if(!await fly('R-D',F,'back',t))return;N.permit.textContent='다음 재시도 08:05까지 대기';
+    await vtime(3000,k=>{N.sTime.textContent='현재 08:0'+Math.min(5,Math.floor(k*5))+' · 08:05까지 대기'},t);N.sTime.textContent='08:05 도착'}},
+  {c:'재시도 시각 도착 → 다시 발송',s:'재시도 대기였던 작업만 다시 보내',n:['S','Q','D','W','R'],e:['Q-D','D-W','W-R','R-Q'],run:async t=>{
+    N.permit.textContent='다시 발송 대상 조회';N.qs[1].r.classList.add('pick');if(!await fly('Q-D',F*.7,'go',t))return;N.qs[1].r.classList.remove('pick');
+    N.lanes.forEach(l=>{l.g.setAttribute('class','lane');l.st.textContent='';l.bar.style.transform='scaleX(0)';setMini(l.bg,'')});
+    setTokens(0);N.permit.textContent='발송 허가 다시 준비';if(!await wait(700,t))return;setTokens(2,'pop');N.permit.textContent='발송 허가 2개 준비 (C=2)';if(!await wait(900,t))return;
+    const l=N.lanes[0];l.t.textContent='새 스레드';l.g.setAttribute('class','lane in');l.st.textContent='시작됨';if(!await wait(900,t))return;
+    useTokens(1);N.permit.textContent='허가 사용 1 / 2';setMini(l.bg,'run');l.st.textContent='자격 확인';if(!await wait(700,t))return;
+    l.st.textContent='발송 중';const g=vtime(F,k=>l.bar.style.transform='scaleX('+k+')',t);if(!await fly('D-W',F,'ext',t))return;await g;setMini(N.br[1],'ok');
+    l.st.textContent='결과 저장';if(!await fly('W-R',F*.6,'back',t))return;if(!await fly('R-Q',F*.4,'back',t))return;
+    setQ(1,'ok','완료');setMini(l.bg,'ok');l.st.textContent='완료';useTokens(0);N.permit.textContent='허가 사용 0 / 2';await wait(700,t)}},
+  {c:'남은 작업 없음 → 배치 종료',s:'보낼 작업이 없으면 반복이 끝나',n:['R','D','S'],e:['R-D'],run:async t=>{if(!await fly('R-D',F,'back',t))return;
+    N.permit.textContent='남은 작업 없음';if(!await wait(900,t))return;N.Sring.setAttribute('class','ring');N.sTime.textContent='배치 종료';await wait(1200,t)}}]},
+ clean:{name:'03시 정리',steps:[
+  {c:'03시 스케줄러 시작',s:'오래된 데이터를 정리하는 별도 배치야',n:['C'],e:[],run:async t=>{cN=104;cR=104;updN();flash(rN1,t);flash(rN2,t);N.Cring.setAttribute('class','ring spin');await wait(1600,t)}},
+  {c:'초과 수신자 정리 → 미참조 알림 정리',s:'두 작업을 순서대로 실행해',n:['C','CLEAN'],e:['C-CLEAN'],run:t=>fly('C-CLEAN',F*.6,'go',t)},
+  {c:'트랜잭션 1 · 초과 수신자 정리',s:'먼저 notification_recipients를 줄여',n:['CLEAN','N'],e:['CLEAN-N'],run:async t=>{setMini(N.tx1,'run');if(!await fly('CLEAN-N',F,'go',t))return;cR=99;updN();await flash(rN2,t);setMini(N.tx1,'ok')}},
+  {c:'트랜잭션 2 · 미참조 알림 정리',s:'각각 별도 트랜잭션이라 하나가 실패해도 다른 하나는 남아',n:['CLEAN','N'],e:['CLEAN-N'],run:async t=>{setMini(N.tx2,'run');if(!await fly('CLEAN-N',F,'go',t))return;cN=99;updN();await flash(rN1,t);setMini(N.tx2,'ok');N.Cring.setAttribute('class','ring')}}]},
+ v2:{name:'V2 계획',steps:[
+  {c:'참여·자진 퇴장·내보내기 요청',s:'V2에서 새로 생기는 알림 발생 계기야',n:['V','B1'],e:['V-B1'],run:t=>fly('V-B1',F*.7,'go',t)},
+  {c:'참여 변경·응답·알림 생성 순서와 트랜잭션 경계 미정',s:'어느 시점에 응답할지 아직 정하지 않았어',n:['B1'],e:[],run:async t=>{N.q1.setAttribute('class','qmark show');await wait(2000,t)}},
+  {c:'수신 대상·생성 시점 미정',s:'누구에게, 언제 알림을 만들지 정해야 해',n:['B1','N'],e:['B1-N'],run:async t=>{if(!await fly('B1-N',F*1.2,'go',t))return;N.nq.setAttribute('class','qmark show');await wait(900,t)}},
+  {c:'접속 중 갱신 경로 미정',s:'지금 접속 중인 사용자에게 어떻게 알릴지 정해야 해',n:['N','B2'],e:['N-B2'],run:t=>fly('N-B2',F*.6,'go',t)},
+  {c:'지속 연결 선택 시 · 발생 BE ↔ 연결 BE 전달 경계',s:'알림이 생긴 서버와 사용자가 연결된 서버가 다를 수 있어',n:['B2','U'],e:['B2-U'],run:async t=>{setMini(N.be1,'run');await wait(900,t);setMini(N.be2,'run');await wait(900,t);await fly('B2-U',F*.7,'go',t)}}]}
+};
+const DETAIL={
+ req:['사용자가 알림 하나를 읽음 처리하는 요청을 보내. 서버는 여러 대일 수 있고, 그중 한 대가 이 요청을 처리해.',
+  '서버는 DB를 바꾸기 전에 요청한 사용자가 이 알림의 수신자인지 확인해. 수신자가 아니면 여기서 거절하고 끝나.',
+  '알림 내용은 알림 테이블에 한 건만 있고, 읽음 여부는 수신자 기록에 사용자별로 따로 있어. 그래서 이 사용자의 수신자 기록만 읽음으로 바꾸고 커밋해. 같은 알림을 받은 다른 구성원의 읽음 상태는 그대로야.',
+  '알림 설정을 바꾸거나 기기 구독을 등록·해제하는 요청은 알림 설정과 등록된 기기 정보를 읽거나 바꿔.',
+  '커밋이 끝난 뒤에 응답을 보내. 그래서 화면에 읽음으로 표시됐다면 DB에도 이미 반영된 상태야. 안 읽은 알림 수가 하나 줄어.'],
+ poll:['화면이 일정 간격으로 새 알림이 있는지 확인하는 요청을 보내. 연결을 열어 두지 않고, 매번 새 요청을 보내는 방식이야.',
+  '서버는 알림 목록 전체가 아니라 이 사용자의 가장 최근 알림 번호만 조회해. 화면이 마지막으로 받은 번호와 비교하면 새 알림이 있는지 알 수 있어.',
+  '최근 알림 번호가 달라서 새 알림이 있다는 걸 확인했어. 서버는 결과를 응답하고 요청을 끝내. 화면은 새 알림을 목록에 추가하고 안 읽은 수를 올려.',
+  '요청이 끝났으니 다음 주기에 화면이 다시 요청을 보내. 그래서 새 알림은 생성된 즉시가 아니라 다음 요청 시점에 화면에 반영돼.',
+  '이번에는 최근 알림 번호가 화면이 가진 것과 같아. 그 사이 새 알림이 없었다는 뜻이야.',
+  '변경 없음 응답을 받고 요청이 끝나. 화면은 그대로 두고, 다음 주기에 다시 확인해.'],
+ batch:['매일 8시에 스케줄러가 실행돼. 사용자 요청과 상관없이 시각이 계기야. 시계 주변 링이 도는 동안은 배치가 아직 끝나지 않은 상태야.',
+  'DB에 있는 전체 냉장고를 하나씩 순차적으로 조회하면서 알림을 만들어. 한 냉장고의 처리가 끝나야 다음 냉장고를 조회해.',
+  '냉장고마다 유통기한 임박 식재료와 만료된 식재료를 조회해. 임박 식재료가 있으면 임박 알림 1건, 만료 식재료가 있으면 만료 알림 1건을 만들어. 알림마다 그 냉장고의 활동 중인 구성원 전원에게 수신자 기록을 만들어. 알림 설정을 꺼도 알림함에 알림은 추가돼. 설정은 푸시 발송에만 적용돼. 알림과 수신자 기록은 한 트랜잭션(T1)이라 함께 저장되고, 실패하면 함께 롤백돼. 커밋된 알림은 사용자 화면이 다음에 알림을 조회할 때 나타나.',
+  '모든 냉장고를 처리한 뒤에 푸시 단계로 넘어가. 푸시 기능이 꺼져 있으면 여기서 끝나고, 알림은 알림함에만 남아.',
+  '알림 수신자 전원이 푸시 대상은 아니야. 서버는 수신자마다 푸시 수신을 켜 두었는지, 푸시를 받을 기기가 등록돼 있는지 확인해. 두 조건을 모두 만족하는 사용자만 푸시 대상이 돼.',
+  '푸시 대상마다 발송 작업을 만들어 저장하고 커밋해(T2). 아직 발송한 것은 아니고, 보낼 목록을 저장한 단계야. T1과 별도라서 여기서 실패하면 알림은 있는데 발송 작업은 없는 상태가 될 수 있어.',
+  'DB에서 지금 보낼 작업을 가져와. 첫 발송을 기다리는 작업과 재시도를 기다리는 작업 중에서, 보낼 시각이 된 것만 가져와. 가져오는 개수에 제한이 없어서 3,000건이면 3,000건을 한 번에 가져와.',
+  '동시에 발송할 수 있는 허가를 C개 만들어. 허가를 만드는 것이지 스레드를 만드는 건 아니야. 그림은 C=2이고, 운영 설정값은 아니야.',
+  '가져온 작업마다 가상 스레드를 하나씩 실행해. 스케줄러는 허가를 기다리지 않고 작업을 계속 맡겨서, 작업이 3,000건이면 가상 스레드도 3,000개가 생겨. 가상 스레드는 가벼워서 실제 운영체제 스레드 3,000개가 생기는 건 아니야.',
+  '각 스레드는 세마포어에서 허가를 하나 얻어야 발송을 시작해. 남은 허가가 없으면 그 스레드 안에서 기다려. 허가를 얻으면 발송 자격 확인, 외부 푸시 호출, 결과 저장(T3) 순서로 처리하고, 끝나면 허가를 돌려줘. 그림에서 스레드 2는 발송에 실패해서 재시도 대기로 저장돼. 돌려받은 허가는 기다리던 스레드 3이 가져가.',
+  '스케줄러는 맡긴 작업이 모두 끝날 때까지 기다려. 그다음 재시도 대기 작업 중 가장 빠른 다음 시도 시각을 조회해. 재시도는 별도 배치가 아니야. 08시 배치가 끝나지 않고 그 시각까지 기다렸다가 다시 발송 대상을 조회해. 이 반복을 정오까지 계속하고, 그동안 스케줄러 스레드를 계속 사용해. 작업 한 건의 자격 확인과 재시도 규칙은 "푸시 작업 상태" 탭에서 볼 수 있어.',
+  '08:05가 되면 배치가 다시 발송 대상을 조회해. 이번에는 재시도 대기였던 작업 2만 보낼 시각이 됐어. 허가를 새로 만들고, 가상 스레드를 실행하고, 자격 확인, 외부 푸시 호출, 결과 저장(T3)을 앞과 같은 순서로 거쳐. 이번에는 수락돼서 완료로 저장돼.',
+  '발송이 끝나면 다시 다음 재시도 시각을 조회해. 첫 발송 대기나 재시도 대기 작업이 하나도 없어서 반복이 끝나. 정오가 되거나, 기다리던 중 스레드가 중단돼도 여기서 끝나. 이제 08시 배치가 종료되고 시계 링이 멈춰.'],
+ clean:['매일 03시에 정리 배치가 실행돼. 08시 배치와는 별개 작업이야. 쌓인 알림 데이터를 줄이는 역할이야. 그림은 사용자 1명, 냉장고 1개에 알림과 수신 기록이 104건씩 쌓인 예시야.',
+  '두 단계로 정리해. ① 사용자·냉장고마다 99개를 넘는 수신 기록 삭제, ② 아무도 받지 않게 된 알림 삭제 순서야.',
+  '① 사용자·냉장고마다 수신 기록을 99개까지만 남겨. 안 읽은 것과 최신 것을 먼저 남기고, 나머지를 지운 뒤 커밋해. 이게 첫 번째 트랜잭션이야.',
+  '② 수신 기록도, 푸시 발송 작업도 남지 않은 알림을 지운 뒤 커밋해. 이게 두 번째 트랜잭션이야. 두 트랜잭션은 별개라서 ②가 실패해도 ①에서 지운 기록은 되돌아가지 않아.'],
+ v2:['V2에서는 공유 냉장고에 참여하거나, 스스로 나가거나, 내보내질 때 다른 구성원에게 알림을 보내야 해. 이번에는 시각이 아니라 사용자 요청이 계기야.',
+  '참여 요청에는 참여 관계 저장, 요청자에게 응답, 다른 구성원에게 알림 생성이 함께 걸려 있어. 이 셋의 순서와 트랜잭션 범위가 아직 정해지지 않았어.',
+  '누구에게 알림을 보낼지, 응답 전과 후 중 언제 알림을 만들지도 아직 정해지지 않았어.',
+  '지금 접속 중인 사용자에게 새 알림을 바로 보여 줄 방법도 정해야 해. 현재 방식은 다음 확인 요청 때 반영돼서 늦어.',
+  '연결을 유지하는 방식을 쓰면, 알림을 만든 서버와 사용자가 연결된 서버가 다를 수 있어. 그러면 두 서버 사이에 알림을 전달하는 방법이 필요해.']
+};
+Object.keys(DETAIL).forEach(k=>SC[k].steps.forEach((s,i)=>s.d=DETAIL[k][i]));
+SC.job={name:'푸시 작업 상태',steps:[]};
+function buildJob(){SC.job.steps=CASES[curCase].steps().map(s=>Object.assign({sc:'job'},s));
+  scNodes.job=new Set();scEdges.job=new Set();SC.job.steps.forEach(s=>{s.n.forEach(n=>scNodes.job.add(n));s.e.forEach(e=>scEdges.job.add(e))})}
+SC.all={name:'전체 흐름',steps:['req','poll','batch','clean','v2'].flatMap(k=>SC[k].steps.map(s=>Object.assign({sc:k},s)))};
+Object.keys(SC).forEach(k=>{if(k!=='all')SC[k].steps.forEach(s=>s.sc=k)});
+
+/* ---- highlighting ---- */
+const scNodes={},scEdges={};
+Object.keys(SC).forEach(k=>{scNodes[k]=new Set();scEdges[k]=new Set();SC[k].steps.forEach(s=>{s.n.forEach(n=>scNodes[k].add(n));s.e.forEach(e=>scEdges[k].add(e))})});
+function dimTo(k){const ns=scNodes[k],es=scEdges[k];
+  Object.keys(N).forEach(id=>{if(N[id]&&N[id].g)N[id].g.classList.toggle('dim',!!k&&!ns.has(id))});
+  Object.keys(E).forEach(id=>E[id].p.classList.toggle('dim',!!k&&!es.has(id)))}
+function hl(step){Object.keys(N).forEach(id=>{if(N[id]&&N[id].g)N[id].g.classList.toggle('on',step&&step.n.includes(id))});
+  Object.keys(E).forEach(id=>{const on=step&&step.e.includes(id);E[id].p.classList.toggle('on',on);
+    if(on&&E[id].label){const b=E[id].t.getBBox();E[id].r.setAttribute('x',b.x-10);E[id].r.setAttribute('y',E[id].m[1]-12);E[id].r.setAttribute('width',b.width+20)}
+    E[id].tg.classList.toggle('show',!!(on&&E[id].label))})}
+
+/* ---- flow explanation ---- */
+const INFO={
+ batch:{t:'08시 배치',trig:'매일 08:00 스케줄러',sum:'DB의 전체 냉장고를 순차적으로 조회하며 유통기한 임박·만료 알림을 만들고, 이어서 푸시를 병렬로 보내는 정기 작업이야.',
+  st:[['n','notifications'],['n','notification_recipients'],['p','notification_preferences'],['p','user_devices'],['q','push_notifications']],
+  pts:['병렬 실행과 독립 실행은 달라. 가상 스레드로 동시에 보내도 스케줄러는 묶음이 끝날 때까지 기다려.',
+   'T1·T2·T3는 서로 다른 트랜잭션이야. T1이 성공하고 T2가 실패하면 알림함엔 알림이 있지만 푸시 작업은 없어.',
+   '외부 Web Push 호출은 DB 트랜잭션 밖이야. 외부가 수락한 뒤 결과를 기록하기 전에 서버가 꺼지면 DB엔 성공 기록이 없어.',
+   '외부 서비스가 수락했다고 브라우저에 알림이 실제로 표시됐다는 뜻은 아니야.']},
+ req:{t:'사용자 요청',trig:'사용자의 API 호출',sum:'알림 목록 조회, 읽음 처리, 알림 설정·구독 변경처럼 사용자가 직접 요청하는 흐름이야.',
+  st:[['n','notifications'],['n','notification_recipients'],['p','notification_preferences'],['p','user_devices']],
+  pts:['요청을 받은 BE가 먼저 이 사용자의 알림인지 접근권한을 확인해.','DB 조회가 끝나거나 변경이 커밋된 뒤에 응답해.','이 요청으로 08시 배치가 실행되지는 않아. 두 흐름은 계기가 달라.']},
+ poll:{t:'실시간 갱신(폴링)',trig:'화면의 반복 GET /stream',sum:'화면이 주기적으로 새 알림이 있는지 묻고, 서버는 최신 알림 ID만 확인해 바로 응답하는 흐름이야.',
+  st:[['n','notifications'],['n','notification_recipients']],
+  pts:['연결을 유지하지 않아. 응답을 보내면 요청이 끝나고, 다음 주기에 새로 요청해.','새 알림이 생긴 순간이 아니라 다음 요청 시점에 화면에 반영돼.']},
+ job:{t:'푸시 작업 상태',trig:'08시 배치의 발송 단계',sum:'발송 작업 한 건이 첫 발송 대기에서 시작해 수락, 취소, 재시도, 최종 실패 중 어디로 가는지 따라가. 위에서 경우를 골라 봐.'},
+ clean:{t:'03시 정리',trig:'매일 03:00 스케줄러',sum:'쌓인 수신자 기록을 줄이고, 더 이상 아무도 참조하지 않는 알림을 지우는 정리 작업이야.',
+  st:[['n','notification_recipients'],['n','notifications']],
+  pts:['초과 수신자 정리가 먼저, 미참조 알림 정리가 나중이야.','두 정리는 각각 별도 트랜잭션이라 하나가 실패해도 다른 하나의 결과는 남아.']},
+ v2:{t:'V2 계획',trig:'참여·자진 퇴장·내보내기 요청',sum:'공유 냉장고에서 구성원이 바뀔 때 알림을 만드는 새 흐름이야. 점선 부분은 아직 정해지지 않았어.',
+  st:[['n','notifications'],['n','notification_recipients']],
+  pts:['참여 변경, 응답, 알림 생성의 순서와 트랜잭션 경계를 정해야 해. 참여 저장 후, 알림 저장 후, 푸시 발송 후 중 언제 응답할지가 핵심이야.',
+   '누구에게, 언제 알림을 만들지 아직 미정이야.','지속 연결을 택하면 알림이 생긴 서버와 사용자가 연결된 서버가 다를 수 있어. 두 서버 사이 전달 방법이 필요해.']},
+ all:{t:'전체 흐름',trig:'다섯 가지 계기',sum:'사용자 요청, 폴링, 08시 배치, 03시 정리, V2 계획을 차례로 이어서 보여줘. 재생 중에는 지금 흐름의 설명으로 바뀌어.',
+  st:[['n','notifications'],['p','notification_preferences'],['q','push_notifications']],
+  pts:['사용자 요청과 폴링은 사용자가 시작하고, 08시·03시 배치는 시각이 시작해.','세 저장소는 색으로 구분돼. 초록은 알림, 보라는 설정·기기, 주황은 푸시 작업이야.']}
+};
+function renderInfo(k){const d=INFO[k],box=$('info');box.innerHTML='';
+  const tr=document.createElement('span');tr.className='tr';
+  const b=document.createElement('b');b.textContent=(cur==='all'?d.t+' · ':'')+'실행 계기 ';tr.appendChild(b);tr.appendChild(document.createTextNode(d.trig));box.appendChild(tr);
+  const p=document.createElement('span');p.textContent=d.sum;box.appendChild(p)}
+
+/* ---- UI ---- */
+let cur='batch';
+const tabs=$('tabs');['batch','job','req','poll','clean','v2','all'].forEach(k=>{const b=document.createElement('button');b.className='tab';b.id='tab-'+k;b.textContent=SC[k].name;b.onclick=()=>select(k);tabs.appendChild(b)});
+Object.keys(CASES).forEach(k=>{const b=document.createElement('button');b.className='case';b.id='case-'+k;b.textContent=CASES[k].name;
+  b.onclick=()=>{curCase=k;select('job')};$('cases').appendChild(b)});
+function renderList(i){const L=$('list');L.innerHTML='';SC[cur].steps.forEach((s,j)=>{const li=document.createElement('li');li.className=j<i?'done':j===i?'on':'';
+  li.innerHTML='<b>'+(j+1)+'</b><span></span>';li.lastChild.textContent=s.c;li.tabIndex=0;li.title='여기서부터 재생';
+  li.onclick=()=>play(j);li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();play(j)}};L.appendChild(li)});
+  const on=L.children[i];if(on&&cur==='all')on.scrollIntoView({block:'nearest'})}
+function setNow(i){const s=SC[cur].steps[i],n=SC[cur].steps.length;
+  $('nowk').textContent=(cur==='all'?SC[s.sc].name+' · ':'')+(i+1)+' / '+n;$('nowc').textContent=s.c;setWhat(s.d||s.s||'');$('whatbox').classList.remove('idle')}
+function setWhat(text){const box=$('nows');box.innerHTML='';const ul=document.createElement('ul');ul.className='flow';
+  text.split(/(?<=[.?])\s+/).filter(Boolean).forEach(line=>{const li=document.createElement('li');li.textContent=line;ul.appendChild(li)});box.appendChild(ul)}
+function btn(){$('play').textContent=running&&!paused&&!manual?'일시정지':'재생'}
+function select(k){cur=k;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('sel',b.id==='tab-'+k));stop();
+  const job=k==='job';if(job)buildJob();$('svg').toggleAttribute('hidden',job);$('legendMain').hidden=job;$('svgJob').toggleAttribute('hidden',!job);$('legendJob').hidden=!job;$('cases').hidden=!job;
+  document.querySelectorAll('.case').forEach(b=>b.classList.toggle('sel',b.id==='case-'+curCase));
+  dimTo(k==='all'?null:k);renderInfo(k);renderList(-1);$('nowk').textContent=SC[k].name+' · '+SC[k].steps.length+'단계';$('nowc').textContent='재생을 누르면 시작해';setWhat('재생하면 단계마다 여기서 무슨 일이 일어나는지 알려줘. 다음 단계 버튼으로 한 칸씩 볼 수도 있어.');$('whatbox').classList.add('idle')}
+function stop(){tok.dead=true;running=false;paused=false;release=null;resetState();hl(null);btn()}
+function gate(t){return new Promise(res=>{release=()=>{release=null;res()};if(!manual)wait(1400,t).then(()=>{if(release)release()})})}
+async function play(start=0){stop();const t={dead:false,fast:start>0};tok=t;running=true;btn();const steps=SC[cur].steps;
+  for(let i=0;i<steps.length;i++){if(i===start)t.fast=false;if(i>start){await gate(t);if(t.dead)return}
+    const s=steps[i];if(cur==='all'){dimTo(s.sc);if(i===0||steps[i-1].sc!==s.sc)renderInfo(s.sc)}if(i>=start){setNow(i);renderList(i);hl(s)}const t0=performance.now();await s.run(t);
+    if(!t.dead&&!t.fast&&s.sc==='job'){const v=(performance.now()-t0)*speed;if(v<4800)await wait(4800-v,t)}if(t.dead)return}
+  running=false;btn();renderList(steps.length);$('nowk').textContent=SC[cur].name+' · 끝';$('nows').textContent='다시 보려면 재생을 눌러'}
+function onPlay(){if(!running){manual=false;paused=false;play();return}
+  if(paused||manual){paused=false;manual=false;if(release)release()}else paused=true;btn()}
+function onNext(){manual=true;paused=false;if(!running)play();else if(release)release();btn()}
+function restart(){select(cur)}
+resetState();select('batch');
+</script>
+
+</body>
+</html>
