@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>다먹자 알림 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#1a1f2b; --ink-2:#565e70; --ink-3:#8b92a1;
+  --line:#dfe3ea; --line-2:#b9c0cc; --box:#eef0f4; --shade:rgba(15,20,30,.35);
+  --accent:#2f5bd3; --accent-bg:#e5ecfc;
+  --ok:#1d7a4b; --ok-bg:#ddf1e5; --warn:#a46700; --warn-bg:#fbeecd; --bad:#c03232; --bad-bg:#fbe3e3;
+  --n:#0f7a74; --n-bg:#dcf2ef; --p:#6a4bc4; --p-bg:#ebe5fa; --q:#b0601a; --q-bg:#fbeadb; --down:#2a2f3a;
+  --s1:#2f5bd3; --s2:#0f7a74; --u1:#6a4bc4; --u2:#b0601a;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101318; --panel:#1a1e26; --ink:#e8ebf1; --ink-2:#a8afbc; --ink-3:#6f7786; --shade:rgba(0,0,0,.55);
+  --line:#2a303b; --line-2:#465061; --box:#232833; --accent:#83a2f2; --accent-bg:#1e2945;
+  --ok:#6fd09c; --ok-bg:#163224; --warn:#ecc06c; --warn-bg:#3a2c0f; --bad:#f28b8b; --bad-bg:#3e1b1b;
+  --n:#5fd0c6; --n-bg:#123230; --p:#b49cf5; --p-bg:#2a2245; --q:#f0a868; --q-bg:#3a2715; --down:#05070a;
+  --s1:#83a2f2; --s2:#5fd0c6; --u1:#b49cf5; --u2:#f0a868; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101318; --panel:#1a1e26; --ink:#e8ebf1; --ink-2:#a8afbc; --ink-3:#6f7786; --shade:rgba(0,0,0,.55);
+  --line:#2a303b; --line-2:#465061; --box:#232833; --accent:#83a2f2; --accent-bg:#1e2945;
+  --ok:#6fd09c; --ok-bg:#163224; --warn:#ecc06c; --warn-bg:#3a2c0f; --bad:#f28b8b; --bad-bg:#3e1b1b;
+  --n:#5fd0c6; --n-bg:#123230; --p:#b49cf5; --p-bg:#2a2245; --q:#f0a868; --q-bg:#3a2715; --down:#05070a;
+  --s1:#83a2f2; --s2:#5fd0c6; --u1:#b49cf5; --u2:#f0a868; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{word-break:keep-all;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;margin:0}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ham{width:38px;height:38px;flex:none;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);cursor:pointer;display:grid;place-content:center;gap:4px;padding:0}
+.ham i{display:block;width:18px;height:2px;border-radius:2px;background:var(--ink)}
+.ham:hover{background:var(--box)}
+.brand{font-size:15px;font-weight:600;white-space:nowrap;margin-right:6px}
+.scr{display:flex;gap:6px;flex-wrap:wrap}
+.scr button{font:inherit;font-size:13.5px;color:var(--ink-2);background:var(--panel);border:1px solid var(--line-2);border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap}
+.scr button:hover{background:var(--box)}
+.scr button.legacy{border-style:dashed}
+.scr button.sel{background:var(--ink);border-color:var(--ink);color:var(--panel);font-weight:500}
+button:focus-visible,select:focus-visible,ol.list li:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.shade{position:fixed;inset:0;z-index:9;background:var(--shade);opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer{position:fixed;z-index:10;top:0;left:0;bottom:0;width:min(330px,86vw);background:var(--panel);border-right:1px solid var(--line);transform:translateX(-102%);transition:transform .22s ease;padding:16px;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+body.open .shade{opacity:1;pointer-events:auto} body.open .drawer{transform:none}
+.drawer .hd{font-size:12px;font-weight:600;color:var(--ink-2);padding:4px 6px 8px}
+.drawer button{font:inherit;text-align:left;border:1px solid transparent;background:none;color:var(--ink);border-radius:10px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.drawer button:hover{background:var(--box)}
+.drawer button.sel{background:var(--accent-bg);border-color:var(--accent)}
+.drawer button b{font-size:14px;font-weight:600} .drawer button.sel b{color:var(--accent)}
+.drawer button span{font-size:12px;color:var(--ink-2);line-height:1.5}
+.drawer .foot{margin-top:auto;font-size:12px;color:var(--ink-3);padding:8px 6px;line-height:1.6}
+.wrap{max-width:none;margin:0 auto;padding:10px 16px 24px;display:flex;flex-direction:column;gap:10px}
+.titlebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+h1{font-size:16px;font-weight:600;margin:0 8px 0 0;white-space:nowrap}
+.sp{flex:1}
+.lede{font-size:13px;color:var(--ink-2);margin:0}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctl label{font-size:13px;color:var(--ink-2)}
+select{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;max-width:100%;min-width:0}
+#sel{flex:1 1 320px;max-width:520px}
+.btn{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:7px 16px;cursor:pointer}
+.btn:hover{background:var(--box)} .btn:disabled{opacity:.4;cursor:default;background:var(--panel)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);min-width:96px}
+.grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--box);color:var(--ink-2);white-space:nowrap}
+.chip.code{background:var(--ok-bg);color:var(--ok)} .chip.risk{background:var(--bad-bg);color:var(--bad)} .chip.perf{background:var(--warn-bg);color:var(--warn)} .chip.sol{background:var(--q-bg);color:var(--q)} .chip.cls{background:var(--accent-bg);color:var(--accent)}
+.now{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:10px;background:var(--accent-bg)}
+.now .k{font-size:12px;color:var(--accent);font-weight:500;font-variant-numeric:tabular-nums;display:flex;gap:6px;align-items:center}
+.ph{font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--panel);color:var(--ink-2)}
+.ph.p-norm{color:var(--ok)} .ph.p-prob{color:var(--bad)} .ph.p-obs{color:var(--warn)} .ph.p-fix{color:var(--q)} .ph.p-re{color:var(--accent)} .ph.p-sum{color:var(--ink-2)}
+.now .c{font-size:17px;font-weight:600;color:var(--ink);text-wrap:balance}
+.stepbox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1.5px solid var(--accent);background:var(--panel);min-height:120px}
+.stepbox .who{font-size:12px;font-weight:600;color:var(--accent)}
+.stepbox.idle{border-style:dashed;border-color:var(--line-2)}
+.flow{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.flow li{display:grid;grid-template-columns:18px 1fr;gap:4px;font-size:14px;line-height:1.55;color:var(--ink)}
+.flow li::before{content:"→";color:var(--accent);font-weight:600}
+.stepbox.idle .flow li{color:var(--ink-3)} .stepbox.idle .flow li::before{color:var(--ink-3)}
+.abrow{display:flex;gap:8px;flex-wrap:wrap}
+.abrow button{flex:1 1 120px;font:inherit;font-size:13.5px;text-align:left;border:1.5px solid var(--line-2);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.abrow button b{font-weight:600} .abrow button span{font-size:12px;color:var(--ink-2)}
+.abrow button.sel{border-color:var(--q);background:var(--q-bg)} .abrow button.sel b{color:var(--q)}
+ol.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.list li{display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:13px;color:var(--ink-3);padding:6px 8px;border-radius:8px;cursor:pointer}
+ol.list li b{font-weight:500;font-variant-numeric:tabular-nums}
+ol.list li:hover{background:var(--box);color:var(--ink)}
+ol.list li.done{color:var(--ink-2)}
+ol.list li.on,ol.list li.on:hover{background:var(--accent-bg);color:var(--accent);font-weight:500}
+ol.list li.sep{cursor:default;font-size:11.5px;font-weight:600;color:var(--ink-3);padding:8px 8px 2px;grid-template-columns:1fr}
+ol.list li.sep:hover{background:none;color:var(--ink-3)}
+.phases{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.phases span.pp{font-size:13px;font-weight:600;padding:5px 12px;border-radius:999px;background:var(--box);color:var(--ink-3)}
+.phases span.ar{color:var(--ink-3);font-size:13px}
+.phases span.pp.on.p1{background:var(--bad-bg);color:var(--bad)} .phases span.pp.on.p2{background:var(--q-bg);color:var(--q)} .phases span.pp.on.p3{background:var(--ok-bg);color:var(--ok)}
+.phases span.pp.done{color:var(--ink-2);background:var(--panel);border:1px solid var(--line)}
+.cmp{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start;padding:12px;border-radius:10px;border:1px solid var(--line);font-size:13.5px}
+.cmp .h{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--ink-2)}
+.cmp b{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.cmp b.bf{background:var(--bad-bg);color:var(--bad)} .cmp b.af{background:var(--ok-bg);color:var(--ok)}
+.cmp span{color:var(--ink)} .cmp span.wait{color:var(--ink-3)}
+.cmp2{display:grid;grid-template-columns:1fr;gap:8px}
+@media (max-width:640px){.cmp2{grid-template-columns:1fr}}
+.cmp2 .col{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .3s,background .3s}
+.cmp2 .col b{font-size:12.5px;font-weight:600}
+.cmp2 .col.bf b{color:var(--bad)} .cmp2 .col.af b{color:var(--ok)}
+.cmp2 .col span{font-size:13px;line-height:1.55;color:var(--ink)}
+.cmp2 .col.bf.on{border-color:var(--bad);background:var(--bad-bg)} .cmp2 .col.af.on{border-color:var(--ok);background:var(--ok-bg)}
+.cmp2.ab .col b{color:var(--q)} .cmp2.ab .col.on{border-color:var(--q);background:var(--q-bg)}
+.flowline{display:flex;flex-direction:column;gap:2px;padding:10px 4px 2px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-2);line-height:1.55}
+.flowline b{font-weight:600;color:var(--ink)}
+details.more summary{font-size:13px;color:var(--ink-2);cursor:pointer;padding:4px 2px}
+.grid{grid-template-columns:clamp(300px,20vw,400px) minmax(0,1fr)}
+.now .c{font-size:18px}
+.canvas{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;overflow-x:auto;min-width:0}
+svg{display:block;width:100%;min-width:900px;height:auto;max-height:calc(100vh - 150px);min-height:420px}
+svg text{font-family:var(--f-body);dominant-baseline:central}
+.node{transition:opacity .4s}
+.node.hide{display:none}
+.node.dim,.edge.dim,.sseln.dim{opacity:.16}
+.node .frame{fill:var(--panel);stroke:var(--line-2);stroke-width:1.6;transition:fill .3s,stroke-width .3s}
+.node.on .frame{stroke-width:3;fill:var(--accent-bg)}
+.node.dash .frame{stroke-dasharray:7 5}
+.node.pop .frame{animation:pop 1.2s ease}
+@keyframes pop{0%{stroke-width:6}100%{stroke-width:1.6}}
+.node.pulse .frame,.node.pulse .body{animation:pulse 1.1s ease-in-out 3}
+@keyframes pulse{0%,100%{stroke-width:2}50%{stroke-width:7}}
+.t1{font-size:14px;font-weight:600;fill:var(--ink);text-anchor:middle}
+.t2{font-size:12px;fill:var(--ink-2);text-anchor:middle}
+.cyl .body{stroke-width:1.5;transition:stroke-width .3s}
+.cyl.on .body{stroke-width:3}
+.cyl.dash .body{stroke-dasharray:7 5}
+.db-n .body{fill:var(--n-bg);stroke:var(--n)} .db-n .dbt{fill:var(--n)}
+.db-p .body{fill:var(--p-bg);stroke:var(--p)} .db-p .dbt{fill:var(--p)}
+.db-q .body{fill:var(--q-bg);stroke:var(--q)} .db-q .dbt{fill:var(--q)}
+.db-a .body{fill:var(--accent-bg);stroke:var(--accent)} .db-a .dbt{fill:var(--accent)}
+.dbt{font-size:12.5px;font-weight:600;text-anchor:middle}
+.trow rect{fill:var(--panel);stroke:var(--line);transition:fill .3s,stroke .3s}
+.trow .rl{font-size:12.5px;font-weight:500;fill:var(--ink)}
+.trow.flash rect{fill:var(--warn-bg);stroke:var(--warn)}
+.trow.pend rect{fill:var(--warn-bg);stroke:var(--warn);stroke-dasharray:4 3}
+.trow.ok rect{fill:var(--ok-bg);stroke:var(--ok)}
+.trow.bad rect{fill:var(--bad-bg);stroke:var(--bad)}
+.cnt{font-size:12px;font-weight:600;fill:var(--ink);text-anchor:end;font-variant-numeric:tabular-nums}
+.edge{fill:none;stroke:var(--line-2);stroke-width:1.6;stroke-linejoin:round;transition:stroke .3s,stroke-width .3s}
+.edge.on{stroke:var(--accent);stroke-width:3}
+.edge.hide{display:none}
+.tag{opacity:0;transition:opacity .3s;pointer-events:none}
+.tag.show{opacity:1}
+.tag rect{fill:var(--ink);opacity:.92} .tag text{fill:var(--panel);font-size:12px;font-weight:500;text-anchor:middle}
+.pk{stroke:var(--panel);stroke-width:2.5}
+.pk.go{fill:var(--accent)} .pk.back{fill:var(--ok)} .pk.ext{fill:var(--q)} .pk.bad{fill:var(--bad)}
+.mini{fill:var(--box);stroke:var(--line-2);transition:fill .3s,stroke .3s}
+.mini.ok{fill:var(--ok-bg);stroke:var(--ok)} .mini.wait{fill:var(--warn-bg);stroke:var(--warn)} .mini.bad{fill:var(--bad-bg);stroke:var(--bad)} .mini.run{fill:var(--accent-bg);stroke:var(--accent)}
+.mtxt{font-size:11.5px;fill:var(--ink-2);text-anchor:middle}
+.note{font-size:12px;font-weight:500;fill:var(--ink-2);text-anchor:middle}
+.note.ok{fill:var(--ok)} .note.bad{fill:var(--bad)} .note.warn{fill:var(--warn)}
+.sseln{fill:none;stroke-width:3;stroke-dasharray:2 5;stroke-linecap:round}
+.sseln.ok{stroke:var(--ok)} .sseln.flow{stroke-width:4.5} .sseln.bad{stroke:var(--bad);stroke-dasharray:10 8}
+.ovl rect{fill:var(--down);fill-opacity:.82} .ovl text{fill:#f2f2f2;font-size:14px;font-weight:600;text-anchor:middle}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-3);padding:4px 6px 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:3px;border:1.5px solid}
+.dot{width:10px;height:10px;border-radius:50%}
+@media (max-width:640px){header{position:static}.brand{display:none}.scr button{padding:6px 10px;font-size:12.5px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head>
+<body>
+<header>
+  <button class="ham" id="ham" aria-label="화면 메뉴 열기" aria-expanded="false" aria-controls="drawer"><i></i><i></i><i></i></button>
+  <span class="brand">다먹자 알림 시뮬레이터</span>
+  <nav class="scr" id="scr" aria-label="화면 선택"></nav>
+</header>
+<div class="shade" id="shade"></div>
+<nav class="drawer" id="drawer" aria-label="화면 메뉴"><div class="hd">화면</div><div id="dlist" style="display:flex;flex-direction:column;gap:6px"></div>
+  <div class="foot">교육·설계 검토용 가상 시뮬레이터야. 실제 서비스를 바꾸거나 알림을 보내지 않아. 숫자와 시간은 교육용 가정이야.</div></nav>
+<iframe id="legacy" title="기존 알림 배치 시뮬레이터" hidden style="display:block;width:100%;height:calc(100vh - 60px);border:0"></iframe>
+<div class="wrap" id="main">
+  <p class="lede" id="slede" hidden></p>
+  <div class="ctl">
+    <h1 id="stitle"></h1>
+        <select id="sel"></select>
+    <button class="btn primary" id="play">재생</button>
+    <button class="btn" id="prev">이전</button>
+    <button class="btn" id="next">다음</button>
+    <button class="btn" id="home">처음으로</button>
+    <label for="speed">속도</label>
+    <select id="speed"><option value="0.5">아주 느리게</option><option value="0.75">느리게</option><option value="1" selected>보통</option><option value="1.6">빠르게</option></select>
+  </div>
+  <div class="grid">
+    <aside class="card">
+      <div class="chips" id="chips" hidden></div>
+      <div class="phases" id="phases"></div>
+      <div class="now" aria-live="polite"><span class="k" id="nowk"></span><span class="c" id="nowc"></span></div>
+      <div class="stepbox idle" id="whatbox"><span class="who">지금 하는 일</span><div id="nows"></div><div class="abrow" id="abrow" hidden></div></div>
+      <div class="cmp2" id="cmp"><div class="col bf"><b id="cmpLa">문제</b><span id="cmpA"></span></div><div class="col af"><b id="cmpLb">해결책</b><span id="cmpB"></span></div></div>
+      <div class="flowline" id="info"></div>
+      <ol class="list" id="list"></ol>
+    </aside>
+    <div class="canvas">
+      <svg id="svg" viewBox="0 0 1200 600" role="img" aria-label="알림 흐름 그림">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+        <g id="conns"></g><g id="edges"></g><g id="nodes"></g><g id="tags"></g><g id="pk"></g>
+      </svg>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--accent)"></i>요청·저장</span>
+        <span><i class="dot" style="background:var(--ok)"></i>응답·조회 결과</span>
+        <span><i class="dot" style="background:var(--q)"></i>신호·외부 호출</span>
+        <span><i class="dot" style="background:var(--bad)"></i>실패</span>
+        <span><i class="sw" style="border-color:var(--ink-3);border-style:dashed"></i>해결 후보로 추가되는 장치</span>
+        <span><i class="sw" style="border-color:var(--ok);border-style:dotted"></i>SSE 연결 (V2 후보)</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const NS='http://www.w3.org/2000/svg',$=id=>document.getElementById(id);
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function txt(p,x,y,s,cls,extra){const t=el('text',Object.assign({x,y,class:cls},extra||{}),p);t.textContent=s;return t}
+const SVG=$('svg'),NODES=$('nodes'),EDGES=$('edges'),PK=$('pk'),TAGS=$('tags'),CONNS=$('conns');
+const show=(g,v)=>{g.style.display=v?'':'none'};
+let N={},E={},R={};
+
+/* ---------- building blocks ---------- */
+function box(id,x,y,w,h,title,sub,o={}){const g=el('g',{class:'node'+(o.dash?' dash':'')},NODES);
+  const fr=el('rect',{class:'frame',x,y,width:w,height:h,rx:12},g);if(o.stroke)fr.style.stroke=o.stroke;
+  const t=txt(g,x+w/2,y+24,title,'t1');if(o.stroke)t.style.fill=o.stroke;
+  const s=txt(g,x+w/2,y+45,sub||'','t2');const n=txt(g,x+w/2,y+h-20,'','note');
+  const ov=el('g',{class:'ovl',style:'display:none'},g);el('rect',{x,y,width:w,height:h,rx:12},ov);const ovt=txt(ov,x+w/2,y+h/2,'종료','');
+  N[id]={g,x,y,w,h,t,s,n,ov,ovt,sub0:sub||'',vis:true};return N[id]}
+function browser(id,x,y,name,col,sub,b0){const b=box(id,x,y,180,100,name,sub,{stroke:col});
+  b.badge=el('circle',{cx:x+158,cy:y+22,r:11,fill:col},b.g);b.bt=txt(b.g,x+158,y+22,b0==null?'1':String(b0),'t2',{style:'fill:var(--panel);font-weight:600;font-size:11px'});b.b0=b0==null?'1':String(b0);return b}
+function server(id,x,y,w,h,sub,o={}){const col=id==='S2'?'var(--s2)':'var(--s1)';return box(id,x,y,w,h,o.title||('서버 '+id),sub,{stroke:col})}
+function cyl(id,x,y,w,h,label,cls,dash){const ry=14,g=el('g',{class:'node cyl '+cls+(dash?' dash':'')},NODES);
+  el('path',{class:'body',d:`M${x} ${y+ry} V${y+h-ry} A${w/2} ${ry} 0 0 0 ${x+w} ${y+h-ry} V${y+ry}`},g);
+  el('ellipse',{class:'body',cx:x+w/2,cy:y+ry,rx:w/2,ry},g);txt(g,x+w/2,y+ry+22,label,'dbt');
+  const n=txt(g,x+w/2,y+h-8,'','note');N[id]={g,x,y,w,h,n,vis:true};return N[id]}
+function trow(cid,key,i,name,cnt){const c=N[cid],x=c.x+14,y=c.y+52+i*34,w=c.w-28;const r=el('g',{class:'trow'},c.g);
+  el('rect',{x,y,width:w,height:28,rx:6},r);const l=txt(r,x+12,y+14,name,'rl');const v=txt(r,x+w-12,y+14,cnt,'cnt');R[key]={r,v,l,init:cnt,w,full:name};fitRow(key)}
+function mchip(p,x,y,w,label){const g=el('g',{},p);const r=el('rect',{class:'mini ok',x,y,width:w,height:24,rx:6},g);const t=txt(g,x+w/2,y+12,label,'mtxt');return{g,r,t}}
+function redis(x,y){const b=box('R',x,y,200,100,'Redis Pub/Sub','구독 중인 서버 모두에 전달',{dash:1});b.chips={};
+  ['S1','S2'].forEach((s,i)=>{b.chips[s]=mchip(b.g,x+28+i*76,y+56,68,s+' 구독')});b.n.setAttribute('y',y+92);return b}
+function conn(id,pts,a,b){const g=el('polyline',{class:'sseln ok',points:pts.map(p=>p.join(',')).join(' ')},CONNS);N[id]={g,vis:true,isConn:1,pts,a,b};
+  if(a&&b&&pts[0][0]>-2000){let best=0,bi=1;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d>best){best=d;bi=i}}
+   const m=[(pts[bi][0]+pts[bi-1][0])/2,(pts[bi][1]+pts[bi-1][1])/2];const tg=el('g',{class:'tag'},TAGS);const r=el('rect',{rx:6,height:24},tg);const t=txt(tg,m[0],m[1],'');
+   E['~'+id]={p:g,pts,tg,r,t,m,label:'',a,b,isConn:1,cid:id}}return N[id]}
+function caption(x,y,s){txt(NODES,x,y,s,'note')}
+function edge(id,pts,label,at){const p=el('polyline',{class:'edge',points:pts.map(a=>a.join(',')).join(' '),'marker-end':'url(#ah)'},EDGES);
+  let best=0,bi=1;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d>best){best=d;bi=i}}
+  const d0=pts.length>1?Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]):0;const fi=(d0>=90&&pts.length>2)?1:bi;
+  const m=at||[(pts[fi][0]+pts[fi-1][0])/2,(pts[fi][1]+pts[fi-1][1])/2];
+  const tg=el('g',{class:'tag'},TAGS);const r=el('rect',{rx:6,height:24},tg);const t=txt(tg,m[0],m[1],label||'');
+  const [a,b]=id.split('-');E[id]={p,pts,tg,r,t,m,label,a,b}}
+function fitTag(id){const e=E[id];if(!e.t.textContent)return;let w;try{w=e.t.getBBox().width}catch(_){w=0}if(!w)w=e.t.textContent.length*12;e.w=w+20;
+  let mx=e.m[0],my=e.m[1];let bs=null,bd=1e9;for(let i=1;i<e.pts.length;i++){const [x1,y1]=e.pts[i-1],[x2,y2]=e.pts[i];
+    const dd=(y1===y2)?(mx>=Math.min(x1,x2)-1&&mx<=Math.max(x1,x2)+1?Math.abs(my-y1):1e9):(x1===x2)?(my>=Math.min(y1,y2)-1&&my<=Math.max(y1,y2)+1?Math.abs(mx-x1):1e9):1e9;if(dd<bd){bd=dd;bs=[x1,y1,x2,y2]}}
+  if(bs){if(bs[1]===bs[3]){if(Math.abs(my-bs[1])<16)my=bs[1]+(my>bs[1]+2?17:-17)}else if(Math.abs(mx-bs[0])<w/2+14)mx=bs[0]+w/2+14}
+  e.mx=mx;const y=my+(e.dy||0);e.t.setAttribute('x',mx);e.t.setAttribute('y',y);e.r.setAttribute('x',mx-w/2-10);e.r.setAttribute('y',y-12);e.r.setAttribute('width',w+20)}
+function declutter(){const sh=Object.values(E).filter(e=>e.tg.classList.contains('show'));sh.forEach(e=>{e.dy=0});
+  for(let it=0;it<6;it++){let moved=false;for(let i=0;i<sh.length;i++)for(let j=i+1;j<sh.length;j++){const a=sh[i],b=sh[j];const ay=a.m[1]+a.dy,by=b.m[1]+b.dy,ax=a.mx??a.m[0],bx=b.mx??b.m[0];
+    if(Math.abs(ax-bx)<((a.w||80)+(b.w||80))/2+4&&Math.abs(ay-by)<28){if(by>=ay)b.dy+=28-(by-ay);else a.dy+=28-(ay-by);moved=true}}if(!moved)break}
+  sh.forEach(e=>{const id=Object.keys(E).find(k=>E[k]===e);fitTag(id)})}
+function tag(id,s){const e=E[id];e.t.textContent=s;e.tg.classList.add('show');e.p.classList.add('on');fitTag(id);declutter()}
+
+/* ---------- visibility ---------- */
+function setVis(id,v){const n=N[id];if(!n)throw new Error('node '+id);n.vis=v;n.g.classList.toggle('dim',!v)}
+function updEdges(){Object.values(E).forEach(e=>{const v=N[e.a]&&N[e.b]&&N[e.a].vis&&N[e.b].vis&&(!e.cid||N[e.cid].vis);e.p.classList.toggle('dim',!v);if(!v){e.tg.classList.remove('show');e.p.classList.remove('on')}})}
+function reveal(...ids){ids.forEach(id=>setVis(id,true));updEdges()}
+function hideN(...ids){ids.forEach(id=>setVis(id,false));updEdges()}
+
+/* ---------- state helpers ---------- */
+function fitRow(k){const r=R[k];if(!r.w)return;r.l.style.fontSize='';r.v.style.fontSize='';let lw=0,vw=0;try{lw=r.l.getBBox().width;vw=r.v.getBBox().width}catch(_){return}if(!lw)return;
+  if(lw+vw+34>r.w){r.l.style.fontSize='11px';r.v.style.fontSize='11px';try{lw=r.l.getBBox().width;vw=r.v.getBBox().width}catch(_){}if(lw+vw+30>r.w){const t=r.l.textContent;let s=t;while(s.length>2&&r.l.getBBox().width+vw+30>r.w){s=s.slice(0,-1);r.l.textContent=s+'…'}}}}
+function setR(k,v,c){if(!R[k])throw new Error('row '+k);if(v!=null)R[k].v.textContent=v;R[k].r.setAttribute('class','trow'+(c?' '+c:''));if(v!=null){if(R[k].full)R[k].l.textContent=R[k].full;fitRow(k)}}
+function rlabel(k,s){R[k].l.textContent=s;R[k].full=s;fitRow(k)}
+function note(id,s,c){const n=N[id].n;n.textContent=s||'';n.setAttribute('class','note'+(c?' '+c:''))}
+function subt(id,s){N[id].s.textContent=s}
+function badge(id,v){N[id].bt.textContent=v}
+function down(id,on,label){show(N[id].ov,on);if(label)N[id].ovt.textContent=label}
+function rsub(s,ok){const c=N.R.chips[s];c.r.setAttribute('class','mini '+(ok?'ok':'bad'));c.t.textContent=s+(ok?' 구독':' 끊김')}
+function sse(id,ok){const c=N[id].g.classList;c.toggle('ok',!!ok);c.toggle('bad',!ok)}
+function qItem(s,c){const q=N.Q;if(!q.item)return;show(q.item.g,!!s);show(q.s,!s);q.item.r.setAttribute('class','mini '+(c||'wait'));q.item.t.textContent=s||''}
+function resetData(){Object.values(R).forEach(r=>{r.v.textContent=r.init;r.r.setAttribute('class','trow')});
+  Object.entries(N).forEach(([id,n])=>{if(n.isConn){n.g.classList.remove('bad','flow');n.g.classList.add('ok');return}
+    if(n.n)note(id,'');if(n.ov)show(n.ov,0);if(n.bt)n.bt.textContent=n.b0;if(n.s)n.s.textContent=n.sub0;if(n.chips)Object.keys(n.chips).forEach(s=>rsub(s,1))});
+  if(N.Q&&N.Q.item)qItem('');PK.innerHTML=''}
+
+/* ---------- time & motion ---------- */
+const STOP={};let tok={dead:true,fast:true},speed=1,paused=false,auto=false;
+function vtime(ms,cb){const t=tok;if(t.dead)return Promise.reject(STOP);if(t.fast){cb&&cb(1);return Promise.resolve()}
+  return new Promise((res,rej)=>{let e=0,last=performance.now();(function f(now){if(t.dead)return rej(STOP);const dt=Math.min(now-last,100);last=now;e+=dt*(paused?0:speed);const k=Math.min(e/ms,1);cb&&cb(k);if(k<1)requestAnimationFrame(f);else res()})(last)})}
+const wait=ms=>vtime(ms);
+const F=1900;
+let FLOWN=0,REC=null;
+function untag(k){const e=E[k];e.tg.classList.remove('show');e.p.classList.remove('on','flow');declutter()}
+function fly(id,cls,o={}){if(tok.dead)return Promise.reject(STOP);const ed=E[id];if(!ed)throw new Error('edge '+id);
+  let P=o.rev?[...ed.pts].reverse():ed.pts;let k=id,lab=o.label!=null?o.label:ed.label;
+  if(cls==='ext'&&!o.rev&&/^S/.test(ed.a)&&/^B/.test(ed.b)){const ck=Object.keys(E).find(q=>E[q].isConn&&E[q].a===ed.b&&E[q].b===ed.a&&N[q.slice(1)].g.style.display!=='none');
+    if(ck){k=ck;P=[...E[ck].pts].reverse();if(o.label==null)lab='SSE 안내'}}
+  if(o.rev&&!ed.isConn)ed.p.setAttribute('marker-start','url(#ah)');
+  if(tok.fast){if(REC)REC.push([k,lab]);return Promise.resolve()}FLOWN++;
+  const ke=E[k];if(lab)tag(k,lab);else{ke.p.classList.add('on')}if(ke.isConn)ke.p.classList.add('flow');
+  const c=el('circle',{r:9,class:'pk '+(cls||'go'),cx:P[0][0],cy:P[0][1]},PK);
+  const seg=[];let tot=0;for(let i=1;i<P.length;i++){const d=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);seg.push(d);tot+=d}
+  return vtime(o.ms||F,q=>{let d=q*tot,i=0;while(i<seg.length-1&&d>seg[i]){d-=seg[i];i++}const r=seg[i]?Math.min(d/seg[i],1):1;
+    c.setAttribute('cx',P[i][0]+(P[i+1][0]-P[i][0])*r);c.setAttribute('cy',P[i][1]+(P[i+1][1]-P[i][1])*r)}).finally(()=>{c.remove();if(!tok.dead)untag(k)})}
+const back=(id,o={})=>fly(id,o.cls||'back',Object.assign({rev:1},o));
+async function flash(k,c){setR(k,null,'flash');await wait(900);setR(k,null,c||'')}
+const both=(...ps)=>Promise.all(ps);
+async function count(id,from,to,ms,fmt){await vtime(ms,k=>note(id,fmt(Math.round(from+(to-from)*k)),'warn'))}
+
+
+/* ---------- scene specs (위치는 자동 배치) ---------- */
+const cylH=n=>52+n*34+22;
+const dropSingle=(o,sp,ids)=>{if(o.single){sp.nodes=sp.nodes.filter(n=>!ids.includes(n.id))}return sp};
+const SPECS={
+ batch:o=>dropSingle(o,{nodes:[
+  {id:'S1',col:1,type:'server',w:210,h:140,title:o.single?'서버 (1대)':'서버 S1',sub:'08시 배치 실행'},
+  {id:'S2',col:1,type:'server',w:210,h:140,sub:'08시 배치 실행'},
+  {id:'X',col:2,type:'box',w:200,h:100,title:o.xname||'독립 실행자',sub:'미완료 기록을 이어 처리',dash:1},
+  {id:'W',col:2,type:'box',w:200,h:90,title:'외부 Web Push 서비스',sub:'제공자가 수락하면 성공'},
+  {id:'L',col:3,type:'cyl',w:310,label:'실행권 테이블',cls:'db-a',dash:1,rows:[['lock','08시 배치 실행권','비어 있음']]},
+  {id:'RF',col:3,type:'cyl',w:310,label:'냉장고·재료 테이블',cls:'db-p',rows:[['rf','알림 대상 냉장고','3곳']]},
+  {id:'ND',col:3,type:'cyl',w:310,label:'알림 테이블',cls:'db-n',rows:[['nd1','알림 내용 (오늘)','0건'],['nd2','수신자 기록 (오늘)','0건']]},
+  {id:'J',col:3,type:'cyl',w:310,label:'푸시 발송 작업 테이블',cls:'db-q',rows:[['j1','작업 #1 (U1 아이패드)','없음'],['j2','작업 #2 (U1 노트북)','없음'],['j3','작업 #3 (U2 아이패드)','없음']]}],
+  edges:[['S1-L','실행권 요청'],['S2-L','실행권 요청'],['S1-RF','대상 냉장고 ID 조회'],['S1-ND','알림·수신자 저장'],['S2-ND','알림·수신자 저장'],
+   ['S1-J','작업 저장·조회'],['S2-J','작업 저장·조회'],['S1-W','푸시 발송'],['S2-W','푸시 발송'],['X-J','작업 조회·저장'],['X-ND','빠진 작업 찾기'],['X-W','푸시 발송']]},['S2']),
+ poll:o=>dropSingle(o,{nodes:[
+  {id:'B1',col:0,type:'browser',name:'U1 · 아이패드',colr:'var(--u1)',sub:'냉장고 1 알림 화면'},
+  {id:'B2',col:0,type:'browser',name:'U1 · 노트북',colr:'var(--u1)',sub:'냉장고 1 알림 화면'},
+  {id:'S1',col:1,type:'server',w:200,h:130,title:o.single?'서버 (1대)':'서버 S1',sub:o.single?'모든 요청 처리':'아이패드 요청 처리'},
+  {id:'S2',col:1,type:'server',w:200,h:130,sub:'노트북 요청 처리'},
+  {id:'R',col:2,type:'redis'},
+  {id:'ND',col:3,type:'cyl',w:300,label:'알림 테이블',cls:'db-n',rows:[['nd1','냉장고 1 최신 알림 ID','#12'],['nd2','U1 미읽음 수','1']]}],
+  edges:[['B1-S1','요청'],['S1-B1','응답'],
+   ...(o.single?[['B2-S1','요청'],['S1-B2','응답']]:[['B2-S2','요청'],['S2-B2','응답']]),
+   ['S1-ND','알림 조회'],['S2-ND','알림 조회'],['S1-R','신호 발행'],['R-S2','신호 전달']],
+  conns:[['C1','B1','S1'],['C2','B2',o.single?'S1':'S2']]},['S2','R']),
+ sub:o=>({nodes:[
+  {id:'B1',col:0,type:'browser',name:'U1 · 아이패드',colr:'var(--u1)',sub:'푸시 받는 기기',nobadge:1},
+  {id:'P',col:1,type:'box',w:220,h:130,title:o.P||'서버 · 발송 처리',sub:o.Psub||'발송 작업 처리',stroke:o.Pcol||'var(--s1)'},
+  {id:'A',col:1,type:'box',w:220,h:130,title:o.A||'서버 · 구독 요청',sub:o.Asub||'등록·갱신·해제 처리',stroke:o.Acol||'var(--s1)'},
+  {id:'W',col:2,type:'box',w:200,h:100,title:'외부 Web Push 서비스',sub:'구독 주소로 전달'},
+  {id:'SUB',col:3,type:'cyl',w:300,label:'푸시 구독 테이블',cls:'db-p',rows:[['sub','U1 아이패드 구독',o.sub0||'v1 · 주소 A · 활성']]},
+  {id:'J',col:3,type:'cyl',w:300,label:'푸시 발송 작업 테이블',cls:'db-q',rows:[['j1','작업 #1',o.j0||'v1 기준 · 대기']]}],
+  edges:[['B1-A','구독 요청'],['A-SUB','구독 저장'],['P-SUB','구독 조회'],['P-J','작업 조회·저장'],['P-W','푸시 발송'],['W-B1','푸시 도착']]}),
+ clean:o=>dropSingle(o,{nodes:[
+  {id:'S1',col:1,type:'server',w:210,h:130,title:o.single?'서버 (1대)':'서버 S1',sub:'03시 정리 실행'},
+  {id:'S2',col:1,type:'server',w:210,h:130,sub:'03시 정리 실행'},
+  {id:'L',col:3,type:'cyl',w:310,label:'실행권 테이블',cls:'db-a',dash:1,rows:[['lock','03시 정리 실행권','비어 있음']]},
+  {id:'ND',col:3,type:'cyl',w:310,label:'알림 테이블',cls:'db-n',rows:[['rc','U1 · 냉장고 1 수신자 기록','120건'],['nc','알림 내용','300건']]}],
+  edges:[['S1-L','실행권 요청'],['S2-L','실행권 요청'],['S1-ND','정리'],['S2-ND','정리']]},['S2']),
+ v2:o=>({nodes:[
+  {id:'B1',col:0,type:'browser',name:'U1 · 아이패드',colr:'var(--u1)',sub:o.single?'30초 폴링':'SSE: S1'},
+  {id:'B2',col:0,type:'browser',name:'U1 · 노트북',colr:'var(--u1)',sub:o.single?'30초 폴링':'SSE: S2'},
+  {id:'B3',col:0,type:'browser',name:'U2 · 아이패드',colr:'var(--u2)',sub:o.single?'30초 폴링':'SSE: S2'},
+  {id:'S1',col:1,type:'server',w:200,h:130,title:o.single?'서버 (1대)':'서버 S1',sub:o.s1sub||'요청 처리'},
+  {id:'S2',col:1,type:'server',w:200,h:130,sub:'노트북·U2 연결 보유'},
+  {id:'R',col:2,type:'redis'},
+  {id:'X',col:2,type:'box',w:200,h:95,title:'독립 실행자',sub:'기록을 읽어 후속 처리',dash:1},
+  {id:'Q',col:2,type:'queue'},
+  {id:'W',col:2,type:'box',w:200,h:85,title:'외부 Web Push 서비스',sub:'제공자 수락 ≠ 단말 수신'},
+  {id:'F',col:3,type:'cyl',w:320,label:'공유 냉장고 테이블',cls:'db-p',rows:[['mem','냉장고 1 구성원','U1 · U2']]},
+  {id:'ND',col:3,type:'cyl',w:320,label:'알림 테이블',cls:'db-n',rows:[['nd1','알림 내용','12건'],['nd2','수신자·읽음','U1 미읽음 1 · U2 미읽음 1']]},
+  {id:'O',col:3,type:'cyl',w:320,label:'아웃박스 테이블',cls:'db-q',dash:1,rows:[['ob','전달할 일','없음']]},
+  {id:'J',col:3,type:'cyl',w:320,label:'후속 작업·전달 기록 테이블',cls:'db-a',dash:1,rows:[['jb1','후속 작업','없음'],['jb2','전달 확인','없음']]}],
+  edges:[['B1-S1','요청'],['S1-B1','SSE 안내'],['S2-B2','SSE 안내'],['B2-S2','최신 상태 조회'],['S2-B3','SSE 안내'],['B3-S2','최신 상태 조회'],
+   ['S1-F','변경 저장'],['S1-ND','알림·수신자 저장'],['S1-O','전달할 일 저장'],['S1-R','신호 발행'],['R-S2','신호 전달'],['S2-ND','최신 상태 조회'],
+   ['O-X','대기 기록 읽기'],['X-R','발행'],['X-Q','큐에 넣기'],['Q-X','메시지 받기'],['X-J','작업 저장·선점'],['X-W','푸시 발송']],
+  conns:o.single?[]:[['C1','B1','S1'],['C2','B2','S2'],['C3','B3','S2']]})
+};
+
+
+/* ---------- 직접 정한 위치 (v1처럼 격자 배치) [x,y,w,h,col] ---------- */
+const POS={};
+const POS2={
+ '1:batch:s':{S1:[40,150,240,300],RF:[480,20,320,null,2],ND:[480,158,320,null,2],J:[480,330,320,null,2],W:[480,546,320,90,2],X:[1000,230,240,150,3]},
+ '1:poll:s':{B1:[20,40,200,110],B2:[20,330,200,110],S1:[440,20,240,420],ND:[900,160,320,null,2]},
+ '1:sub:m':{W:[20,40,210,120,0],B1:[20,340,210,110],P:[450,30,240,140],A:[450,330,240,140],J:[920,36,320,null,2],SUB:[920,196,320,null,2]},
+ '2:sub:m':{W:[20,40,210,120,0],B1:[20,340,210,110],P:[450,30,240,140],A:[450,330,240,140],J:[920,36,320,null,2],SUB:[920,196,320,null,2]},
+ '2:batch:m':{S1:[40,170,240,330],L:[490,20,320,null,2],RF:[490,158,320,null,2],ND:[490,296,320,null,2],J:[490,468,320,null,2],W:[490,684,320,90,2],S2:[1010,170,240,330,3]},
+ '2:clean:m':{S1:[40,40,240,320],L:[490,40,320,null,2],ND:[490,200,320,null,2],S2:[1010,40,240,320,3]},
+ '2:poll:m':{B1:[20,45,200,110],B2:[20,515,200,110],S1:[440,20,240,170],R:[460,285,200,100,1],S2:[440,480,240,170],ND:[900,262,320,null,2]},
+ '3:v2:m':{B1:[20,80,200,110],B2:[20,470,200,110],B3:[20,600,200,110],S1:[420,20,240,230],R:[440,300,200,100,1],S2:[420,450,240,260],
+   F:[860,20,320,null,2],O:[860,140,320,null,2],ND:[860,430,320,null,2],J:[860,600,320,null,2],W:[1380,0,230,85,3],X:[1380,175,230,245,3],Q:[1395,470,200,85,3]}
+};
+const VIA_LEFT=[];
+/* ---------- 배치 ---------- */
+function layoutNodes(spec,vis){const EL=(spec.edges||[]).map(e=>e[0].split('-')).concat((spec.conns||[]).map(c=>[c[1],c[2]]));const ns=spec.nodes.filter(n=>vis.has(n.id));ns.forEach(n=>{if(n.type==='browser'){n.w=180;n.h=100}if(n.type==='redis'){n.w=200;n.h=100}if(n.type==='queue'){n.w=200;n.h=85}if(n.type==='cyl')n.h=cylH(n.rows.length);if(n.type==='server'||n.type==='box'){const deg=EL.filter(([x,y])=>(x===n.id&&vis.has(y))||(y===n.id&&vis.has(x))).length;n.h=Math.max(n.h,60+deg*24)}});
+  if(spec.pos){const P={};ns.forEach(n=>{const q=spec.pos[n.id];if(!q)return;const w=q[2]||n.w,h=q[3]||n.h;n.w=w;n.h=h;P[n.id]={x:q[0],y:q[1],w,h,col:q[4]!=null?q[4]:n.col,cyl:n.type==='cyl'}});
+    const cols=[...new Set(Object.values(P).map(p=>p.col))].sort((a,b)=>a-b);const byC={},cx={},cw={};
+    cols.forEach(c=>{byC[c]=ns.filter(n=>P[n.id]&&P[n.id].col===c).sort((a,b)=>P[a.id].y-P[b.id].y);const xs=byC[c].map(n=>P[n.id]);cx[c]=Math.min(...xs.map(p=>p.x));cw[c]=Math.max(...xs.map(p=>p.x+p.w))-cx[c]});
+    return {P,cols,cx,cw,H:Math.max(...Object.values(P).map(p=>p.y+p.h)),byC}}
+  const cols=[...new Set(ns.map(n=>n.col))].sort((a,b)=>a-b);const byC={},cw={};cols.forEach(c=>{byC[c]=ns.filter(n=>n.col===c);cw[c]=Math.max(...byC[c].map(n=>n.w))});
+  const G=72;let H=280;cols.forEach(c=>{H=Math.max(H,byC[c].reduce((a,n)=>a+n.h,0)+G*(byC[c].length-1))});
+  const sumW=cols.reduce((a,c)=>a+cw[c],0),k=cols.length;const gap=k>1?Math.max(200,Math.min(320,(1200-40-sumW)/(k-1))):0;
+  const total=sumW+gap*(k-1);let x=(1200-total)/2;const cx={};cols.forEach(c=>{cx[c]=x;x+=cw[c]+gap});
+  const P={};cols.forEach(c=>{const L=byC[c],sh=L.reduce((a,n)=>a+n.h,0);const g=L.length>1?Math.min((H-sh)/(L.length-1),150):0;const bh=sh+g*(L.length-1);let y=30+(H-bh)/2;
+    L.forEach(n=>{P[n.id]={x:cx[c]+(cw[c]-n.w)/2,y,w:n.w,h:n.h,col:c};y+=n.h+g})});
+  const anchor=cols.reduce((m,c)=>(byC[c].reduce((a,n)=>a+n.h,0)+G*(byC[c].length-1))>(byC[m].reduce((a,n)=>a+n.h,0)+G*(byC[m].length-1))?c:m,cols[0]);
+  const top=30,bot=30+H;
+  for(let pass=0;pass<3;pass++)cols.forEach(c=>{if(c===anchor)return;const L=byC[c];
+    const want=L.map(n=>{const nb=EL.filter(([a,b])=>(a===n.id||b===n.id)).map(([a,b])=>a===n.id?b:a).filter(o=>P[o]&&P[o].col!==c);
+      return nb.length?nb.reduce((s,o)=>s+P[o].y+P[o].h/2,0)/nb.length-n.h/2:P[n.id].y});
+    let y=top;L.forEach((n,i)=>{let v=Math.max(want[i],y);P[n.id].y=v;y=v+n.h+G});
+    let over=L.length?P[L[L.length-1].id].y+L[L.length-1].h-bot:0;
+    if(over>0){for(let i=L.length-1;i>=0;i--){const lim=i===L.length-1?bot-L[i].h:P[L[i+1].id].y-G-L[i].h;P[L[i].id].y=Math.min(P[L[i].id].y,lim)}}
+    L.forEach((n,i)=>{if(i>0)P[n.id].y=Math.max(P[n.id].y,P[L[i-1].id].y+L[i-1].h+G);if(P[n.id].y<top)P[n.id].y=top})});
+  return {P,cols,cx,cw,H,byC}}
+function routeEdges(list,L){const {P,cols,cx,cw,byC}=L;const ci=c=>cols.indexOf(c);
+  const gut=i=>i<cols.length-1?[cx[cols[i]]+cw[cols[i]],cx[cols[i+1]]]:[cx[cols[i]]+cw[cols[i]],cx[cols[i]]+cw[cols[i]]+70];
+  const ports={};const addPort=(id,side,e,key)=>{(ports[id+side]=ports[id+side]||[]).push({e,key})};
+  const R=list.map(([id,a,b])=>{const A=P[a],B=P[b];const r={id,a,b,A,B};
+    if(A.col!==B.col){r.sa=A.col<B.col?'R':'L';r.sb=A.col<B.col?'L':'R'}
+    else{const col=byC[A.col].filter(n=>P[n.id]);const ya=A.y,yb=B.y;const between=col.some(n=>{const p=P[n.id];return p!==A&&p!==B&&p.y>Math.min(ya,yb)&&p.y<Math.max(ya,yb)});
+      if(!between){r.sa=ya<yb?'B':'T';r.sb=ya<yb?'T':'B'}else if(VIA_LEFT.includes(id)){r.sa='L';r.sb='L';r.side=1;r.vl=1}else{r.sa='R';r.sb='R';r.side=1}}
+    if(A.col!==B.col){const lo=Math.max(A.y+(A.cyl?44:14),B.y+(B.cyl?44:14)),hi=Math.min(A.y+A.h-(A.cyl?26:12),B.y+B.h-(B.cyl?26:12));if(hi-lo>=14){const ia=ci(A.col),ib=ci(B.col);let ok=true;if(Math.abs(ia-ib)>1){const m=(lo+hi)/2;for(let i=Math.min(ia,ib)+1;i<Math.max(ia,ib);i++)for(const n of byC[cols[i]]){const p=P[n.id];if(p&&m>p.y-14&&m<p.y+p.h+14)ok=false}}if(ok){r.straight=[lo,hi];return r}}}
+    addPort(a,r.sa,r,'a');addPort(b,r.sb,r,'b');return r});
+  const sg={};R.filter(r=>r.straight).forEach(r=>{const k=[r.a,r.b].sort().join('|');(sg[k]=sg[k]||[]).push(r)});
+  Object.values(sg).forEach(arr=>{arr.sort((u,v)=>u.id<v.id?-1:1);const [lo,hi]=arr[0].straight;arr.forEach((r,i)=>{const y=lo+(hi-lo)*(i+1)/(arr.length+1);r.ya=r.yb=y;r.xa=r.sa==='R'?r.A.x+r.A.w:r.A.x;r.xb=r.sb==='L'?r.B.x:r.B.x+r.B.w;r.pts=[[r.xa,y],[r.xb,y]];r.at=[(r.xa+r.xb)/2,y+(arr.length>1?(i===0?-16:16):0)]})});
+  Object.entries(ports).forEach(([k,arr])=>{const id=k.slice(0,-1),side=k.slice(-1),p=P[id];
+    const other=x=>x.key==='a'?x.e.B:x.e.A;
+    if(side==='L'||side==='R'){arr.sort((u,v)=>(other(u).y+other(u).h/2)-(other(v).y+other(v).h/2));const top=p.cyl?p.y+44:p.y+Math.min(34,p.h*.28),bot=p.cyl?p.y+p.h-26:p.y+p.h-Math.min(22,p.h*.18);
+      const fx=R.filter(r=>r.pts&&r.straight&&((r.a===id&&r.sa===side)||(r.b===id&&r.sb===side))).map(r=>{const o=r.a===id?r.B:r.A;return {fixed:1,y:r.ya,oy:o.y+o.h/2}});
+      const items=arr.map(x=>{const o=other(x);return {x,oy:o.y+o.h/2}}).concat(fx).sort((u,v)=>u.oy-v.oy);
+      let lo=top,run=[];const place=(hi)=>{const n=run.length;run.forEach((it,i)=>{it.y=n===1&&lo===top&&hi===bot&&!fx.length?(p.y+p.h/2):lo+(hi-lo)*(i+.5)/n});run=[]};
+      items.forEach(it=>{if(it.fixed){place(Math.max(lo+4,it.y-18));lo=Math.min(bot,it.y+18)}else run.push(it)});place(bot);
+      items.forEach(it=>{if(it.fixed)return;const x=it.x;x.e[x.key==='a'?'ya':'yb']=it.y;x.e[x.key==='a'?'xa':'xb']=side==='R'?p.x+p.w:p.x})}
+    else{arr.sort((u,v)=>other(u).x-other(v).x);arr.forEach((x,i)=>{const xx=p.x+p.w*(i+1)/(arr.length+1);x.e[x.key==='a'?'xa':'xb']=xx;x.e[x.key==='a'?'ya':'yb']=side==='B'?p.y+p.h:p.y})}});
+  const legs={};const addLeg=(g,r,y1,y2,tag)=>{const right=r.A.x<r.B.x||r.side;const yl=right?y1:y2,yr=right?y2:y1;(legs[g]=legs[g]||[]).push({r,y1,y2,tag,yl,yr})};
+  const freeAt=(y,c1,c2)=>{for(let i=Math.min(c1,c2)+1;i<Math.max(c1,c2);i++){for(const n of byC[cols[i]]){const p=P[n.id];if(y>p.y-14&&y<p.y+p.h+14)return false}}return true};
+  R.forEach(r=>{if(r.sa==='T'||r.sa==='B'){r.pts=[[r.xa,r.ya],[r.xa,r.yb]];if(Math.abs(r.xa-r.xb)>1)r.pts=[[r.xa,r.ya],[r.xa,(r.ya+r.yb)/2],[r.xb,(r.ya+r.yb)/2],[r.xb,r.yb]];return}
+    if(r.side){addLeg(r.vl?'L'+ci(r.A.col):ci(r.A.col),r,r.ya,r.yb,'s');return}
+    const ia=ci(r.A.col),ib=ci(r.B.col),lo=Math.min(ia,ib);
+    if(Math.abs(ia-ib)===1){addLeg(lo,r,r.ya,r.yb,'m');return}
+    const gA=ia<ib?ia:ia-1,gB=ia<ib?ib-1:ib;
+    if(freeAt(r.ya,ia,ib)){addLeg(gB,r,r.ya,r.yb,'last');return}
+    if(freeAt(r.yb,ia,ib)){addLeg(gA,r,r.ya,r.yb,'first');return}
+    const cands=[];for(let i=lo+1;i<Math.max(ia,ib);i++)byC[cols[i]].forEach(n=>{const p=P[n.id];cands.push(p.y-26,p.y+p.h+26)});
+    let best=null,bd=1e9;cands.forEach(y=>{if(!freeAt(y,ia,ib))return;const d=Math.abs(y-r.ya)+Math.abs(y-r.yb);if(d<bd){bd=d;best=y}});if(best==null)best=Math.max(...Object.values(P).map(p=>p.y+p.h))+30;
+    r.yc=best;addLeg(gA,r,r.ya,best,'c1');addLeg(gB,r,best,r.yb,'c2')});
+  Object.entries(legs).forEach(([g,arr])=>{const [l,rr]=String(g)[0]==='L'?[cx[cols[+g.slice(1)]]-80,cx[cols[+g.slice(1)]]]:gut(+g);const cr=(i,j)=>{const between=(y,a,b)=>y>Math.min(a,b)+1&&y<Math.max(a,b)-1;return (between(j.yl,i.yl,i.yr)?1:0)+(between(i.yr,j.yl,j.yr)?1:0)};
+    const cost=o=>{let c=0;for(let a=0;a<o.length;a++)for(let b=a+1;b<o.length;b++)c+=cr(o[a],o[b]);return c};
+    const key=x=>x.yl<x.yr?(1e5-x.yl):x.yl;arr.sort((u,v)=>key(u)-key(v));
+    if(arr.length>1&&arr.length<=7){let best=arr.slice(),bc=cost(arr);const perm=(rest,acc)=>{if(!rest.length){const c=cost(acc);if(c<bc){bc=c;best=acc.slice()}return}for(let i=0;i<rest.length;i++){acc.push(rest[i]);perm(rest.slice(0,i).concat(rest.slice(i+1)),acc);acc.pop();if(bc===0)return}};perm(arr.slice(),[]);arr.splice(0,arr.length,...best)}
+    arr.forEach((x,i)=>{const lx=l+(rr-l)*(i+1)/(arr.length+1);x.r['lx_'+x.tag]=lx})});
+  R.forEach(r=>{if(r.pts)return;const xa=r.xa,xb=r.xb;
+    if(r.side){const lx=r.lx_s;r.pts=[[xa,r.ya],[lx,r.ya],[lx,r.yb],[xb,r.yb]];return}
+    if(r.lx_m!=null){r.pts=[[xa,r.ya],[r.lx_m,r.ya],[r.lx_m,r.yb],[xb,r.yb]];return}
+    if(r.lx_last!=null){r.pts=[[xa,r.ya],[r.lx_last,r.ya],[r.lx_last,r.yb],[xb,r.yb]];return}
+    if(r.lx_first!=null){r.pts=[[xa,r.ya],[r.lx_first,r.ya],[r.lx_first,r.yb],[xb,r.yb]];return}
+    r.pts=[[xa,r.ya],[r.lx_c1,r.ya],[r.lx_c1,r.yc],[r.lx_c2,r.yc],[r.lx_c2,r.yb],[xb,r.yb]]});
+  R.forEach(r=>{r.pts=r.pts.filter((p,i,a)=>i===0||Math.abs(p[0]-a[i-1][0])>.5||Math.abs(p[1]-a[i-1][1])>.5)});
+  return R}
+function makeNode(n,p){const x=p.x,y=p.y;
+  if(n.type==='server')return server(n.id,x,y,n.w,n.h,n.sub,{title:n.title});
+  if(n.type==='browser'){const b=browser(n.id,x,y,n.name,n.colr,n.sub,n.b0);if(n.nobadge){show(b.badge,0);show(b.bt,0)}return b}
+  if(n.type==='redis')return redis(x,y);
+  if(n.type==='queue'){const q=box('Q',x,y,200,85,'저장형 메시지 큐','선택 B에서만 사용',{dash:1});q.item=mchip(q.g,x+30,y+50,140,'');show(q.item.g,0);q.n.setAttribute('y',y-8);return q}
+  if(n.type==='cyl'){cyl(n.id,x,y,n.w,n.h,n.label,n.cls,n.dash);n.rows.forEach(([k,name,c],i)=>trow(n.id,k,i,name,c));return N[n.id]}
+  return box(n.id,x,y,n.w,n.h,n.title,n.sub,{dash:n.dash,stroke:n.stroke})}
+function buildScene(name,o,vis,posKey){const spec=SPECS[name](o);if(posKey&&POS2[posKey]&&vis)spec.pos=POS2[posKey];const all=new Set(spec.nodes.map(n=>n.id));const V=vis||all;
+  const L=layoutNodes(spec,V);const off={x:-3000,y:-3000};
+  spec.nodes.forEach(n=>{if(!V.has(n.id)){n.w=n.w||200;n.h=n.h||100;if(n.type==='cyl')n.h=cylH(n.rows.length)}const nn=makeNode(n,L.P[n.id]||Object.assign({w:n.w,h:n.h},off));if(!L.P[n.id]&&nn&&nn.g)nn.g.style.display='none'});
+  const list=spec.edges.map(([id,label])=>{const [a,b]=id.split('-');return [id,a,b,label]});
+  const vlist=list.filter(([id,a,b])=>L.P[a]&&L.P[b]);const cl=(spec.conns||[]).filter(([id,a,b])=>L.P[a]&&L.P[b]);
+  const routed=routeEdges(vlist.map(x=>[x[0],x[1],x[2]]).concat(cl.map(([id,a,b])=>['~'+id,a,b])),L);const rm={},ra={};routed.forEach(r=>{rm[r.id]=r.pts;ra[r.id]=r.at});
+  list.forEach(([id,a,b,label])=>{edge(id,rm[id]||[[-3000,-3000],[-2990,-3000]],label,ra[id]);if(!rm[id])E[id].p.classList.add('hide')});
+  (spec.conns||[]).forEach(([id,a,b])=>{conn(id,(rm['~'+id]||[[-3000,-3000],[-2990,-3000]]),a,b);if(!rm['~'+id])N[id].g.style.display='none'});
+  const db=spec.nodes.filter(n=>n.type==='cyl'&&L.P[n.id]);if(db.length>1){const ps=db.map(n=>L.P[n.id]);const bx=ps[0].x+ps[0].w/2;const same=Object.values(L.P).filter(p=>Math.abs(p.x+p.w/2-bx)<40);const by=Math.max(...same.map(p=>p.y+p.h))+18;caption(bx,by,'모든 테이블은 같은 DB 안에 있어')}}
+
+const st=(p,c,d,n,e,run)=>({p,c,d,n,e,run:run||(()=>wait(600))});
+
+/* ===== ① 현재 단일 인스턴스 정상 흐름 ===== */
+const S1L=[
+ {name:'08시 임박·만료 알림 배치',scene:'batch',opt:{single:1},show:['S1','RF','ND','J','W'],tags:['code'],
+  intro:'서버 1대와 공통 DB로 08시 배치가 하는 일을 순서대로 봐. 다음을 누르면 한 단계씩 진행해.',
+  steps:[
+  st('flow','08시 배치 시작','매일 08시에 서버의 스케줄러가 배치를 시작해. 지금은 서버가 1대야.',['S1'],[],async()=>{note('S1','08:00 배치 시작','warn');await wait(900)}),
+  st('flow','대상 냉장고 ID 조회','먼저 알림을 만들 냉장고 ID 목록을 읽어. 가상 데이터로 3곳이야.',['S1','RF'],['S1-RF'],async()=>{await fly('S1-RF');await back('S1-RF');await flash('rf')}),
+  st('flow','냉장고별 알림·수신자 저장 (T1)','냉장고마다 트랜잭션을 하나씩 열어서 처리해. 유통기한이 3일 이내인 재료가 있으면 임박 알림, 지난 재료가 있으면 만료 알림을 냉장고당 1건씩 만들어. 활성 구성원마다 수신자 기록도 같이 저장해. 냉장고 1, 2, 3 순서로 처리해.',['S1','ND'],['S1-ND'],
+   async()=>{for(let k=1;k<=3;k++){note('S1','냉장고 '+k+' 처리 중','warn');await fly('S1-ND','go',{ms:F*.7});setR('nd1',k+'건','ok');setR('nd2',[2,3,5][k-1]+'건','ok')}note('S1','알림 생성 끝')}),
+  st('flow','푸시 발송 작업 생성 (T2)','모든 냉장고 처리가 끝나면 발송 작업을 만들어. 오늘 알림 중에서 푸시를 켠 사용자의 활성 기기마다 작업을 하나씩 만들어. 이 단계는 한 트랜잭션이야. 이미 작업이 있는 알림과 기기 조합은 건너뛰어.',['S1','J'],['S1-J'],
+   async()=>{await fly('S1-J','go',{label:'작업 생성'});['j1','j2','j3'].forEach(k=>setR(k,'대기','pend'))}),
+  st('flow','보낼 작업을 모두 조회해 발송','보낼 차례가 된 작업을 한 번에 조회해. 작업마다 가상 스레드를 만들고, 동시에 외부로 보내는 수는 서버당 20개로 제한해. 보내기 직전에 작업의 구독 버전과 기기의 현재 버전이 같은지 확인해.',['S1','J','W'],['S1-J','S1-W'],
+   async()=>{await back('S1-J',{label:'보낼 작업 조회'});note('S1','동시 발송 3 / 최대 20');await fly('S1-W','ext',{label:'작업 #1·#2·#3 발송'});note('W','응답 중')}),
+  st('flow','작업마다 결과 저장 (T3)','작업마다 결과를 따로 저장해. 제공자가 수락하면 완료야. 404·410이면 구독을 무효로 하고 작업을 취소해. 그 밖의 실패는 재시도로 표시해. 제공자 수락이 단말 수신을 뜻하지는 않아.',['S1','J','W'],['S1-W','S1-J'],
+   async()=>{await back('S1-W',{cls:'back',label:'수락 · 실패 · 410'});note('W','');await fly('S1-J','go',{label:'결과 저장'});setR('j1','수락','ok');setR('j2','재시도 · 08:05','pend');setR('j3','취소 · 구독 만료','bad')}),
+  st('flow','같은 실행 안에서 재시도','따로 도는 재시도 처리기는 없어. 같은 08시 실행이 다음 재시도 시각까지 기다렸다가 다시 보내. 간격은 5분, 15분, 30분이고 최대 세 번이야. 정오가 지나면 더 보내지 않아.',['S1','J','W'],['S1-W','S1-J'],
+   async()=>{note('S1','08:05까지 대기','warn');await wait(1300);note('S1','08:05 재시도');await fly('S1-W','ext',{label:'#2 다시 발송'});await fly('S1-J','go',{label:'결과 저장'});setR('j2','수락','ok');note('S1','배치 끝','ok')})]},
+
+ {name:'폴링으로 화면 갱신',scene:'poll',opt:{single:1},show:['B1','B2','S1','ND'],tags:['code'],
+  intro:'지금 화면 갱신은 폴링이야. 같은 사용자 U1의 아이패드와 노트북이 냉장고 1 알림 화면을 보고 있어.',
+  steps:[
+  st('flow','보이는 화면이 30초마다 요청','알림 화면이 보이는 동안 30초마다 이 냉장고의 최신 알림 ID를 서버에 물어봐. 서버는 1대라서 두 화면 요청을 모두 같은 서버가 받아.',['B1','B2','S1'],['B1-S1','B2-S1'],
+   async()=>{await both(fly('B1-S1'),fly('B2-S1'))}),
+  st('flow','최신 알림 ID와 미읽음 수 확인','서버가 알림 테이블에서 최신 알림 ID와 미읽음 수를 읽어 돌려줘.',['S1','ND','B1','B2'],['S1-ND','S1-B1','S1-B2'],
+   async()=>{await fly('S1-ND');await flash('nd1');await back('S1-ND');await both(fly('S1-B1','back'),fly('S1-B2','back'))}),
+  st('flow','바뀐 게 없으면 그대로','받은 ID가 화면이 가진 #12와 같아서 목록을 다시 읽지 않아. 다음 30초를 기다려.',['B1','B2'],[],
+   async()=>{await vtime(2600,k=>{const s='다음 요청까지 '+Math.ceil(30*(1-k))+'초';note('B1',s);note('B2',s)})}),
+  st('flow','그 사이 새 알림 저장','08시 배치 같은 다른 흐름이 냉장고 1에 새 알림을 저장했어. 화면은 아직 몰라.',['S1','ND'],['S1-ND'],
+   async()=>{await fly('S1-ND','go',{label:'새 알림 저장'});setR('nd1','#13','ok');setR('nd2','2','ok')}),
+  st('flow','다음 요청에서 변화 발견','다음 요청에서 최신 ID가 #13으로 바뀐 걸 알게 돼.',['B1','B2','S1'],['B1-S1','B2-S1','S1-B1','S1-B2'],
+   async()=>{await both(fly('B1-S1'),fly('B2-S1'));await both(fly('S1-B1','back',{label:'최신 #13'}),fly('S1-B2','back',{label:'최신 #13'}))}),
+  st('flow','바뀌었을 때만 목록 다시 조회','ID가 바뀌었을 때만 알림 목록을 다시 읽어서 화면을 맞춰. 새 알림이 보이기까지 최대 30초 걸릴 수 있어.',['B1','B2','S1','ND'],['B1-S1','B2-S1'],
+   async()=>{await both(fly('B1-S1','go',{label:'목록 조회'}),fly('B2-S1','go',{label:'목록 조회'}));await both(fly('S1-B1','back'),fly('S1-B2','back'));badge('B1',2);badge('B2',2);note('B1','목록 갱신','ok');note('B2','목록 갱신','ok')})]},
+
+ {name:'푸시 구독 등록·갱신·해제',scene:'sub',opt:{sub0:'없음',j0:'없음'},show:['B1','A','SUB'],tags:['code'],
+  intro:'기기의 푸시 구독은 활성 상태와 버전을 가져. 바뀔 때마다 버전이 1씩 올라.',
+  steps:[
+  st('flow','구독 등록','브라우저가 푸시 구독을 받으면 구독 주소와 키를 서버에 보내. 서버는 이 기기의 구독을 활성으로 저장해. 가상 데이터로 버전은 v1이야.',['B1','A','SUB'],['B1-A','A-SUB'],
+   async()=>{await fly('B1-A','go',{label:'구독 등록'});await fly('A-SUB');setR('sub','v1 · 주소 A · 활성','ok')}),
+  st('flow','구독 갱신','브라우저가 구독을 새로 받으면 갱신 요청을 보내. 주소를 바꾸고 버전을 1 올려.',['B1','A','SUB'],['B1-A','A-SUB'],
+   async()=>{await fly('B1-A','go',{label:'구독 갱신'});await fly('A-SUB');setR('sub','v2 · 주소 B · 활성','ok')}),
+  st('flow','발송 작업은 버전을 기억','발송 작업을 만들 때 그 순간의 구독 버전을 같이 저장해. 보내기 직전에 기기의 현재 버전과 다르면 보내지 않고 작업을 취소해.',['P','SUB','J'],['P-J','P-SUB'],
+   async()=>{reveal('P','J');setR('j1','v1 기준 · 대기','pend');await fly('P-J','go',{label:'작업 조회'});await back('P-SUB',{label:'현재 v2'});setR('j1','v1 기준 · 취소','bad');note('P','v1 ≠ v2 · 취소')}),
+  st('flow','404·410이면 구독 무효','외부 서비스가 404나 410으로 이 구독이 없다고 답하면 구독을 무효로 바꿔. 다른 오류에서는 구독을 끄지 않고 재시도해.',['P','W','SUB'],['P-W','P-SUB'],
+   async()=>{reveal('W');note('P','');await fly('P-W','ext',{label:'v2 작업 발송'});await back('P-W',{cls:'bad',label:'410 · 구독 없음'});await fly('P-SUB','bad',{label:'무효 처리'});setR('sub','v2 · 주소 B · 무효','bad')}),
+  st('flow','사용자 해제','사용자가 알림을 끄면 해제 요청을 보내. 상태를 해제로 바꾸고 버전을 1 올려. 무효와 해제는 다른 상태로 남아.',['B1','A','SUB'],['B1-A','A-SUB'],
+   async()=>{setR('sub','v2 · 주소 B · 활성','');await fly('B1-A','go',{label:'구독 해제'});await fly('A-SUB');setR('sub','v3 · 해제','pend')})]},
+
+ {name:'03시 수신자 기록 정리',scene:'clean',opt:{single:1},show:['S1','ND'],tags:['code'],
+  intro:'03시 정리는 알림함이 끝없이 쌓이지 않게 오래된 수신자 기록을 지워. 숫자는 가정이야.',
+  steps:[
+  st('flow','03시 정리 시작','매일 03시에 정리가 시작돼. U1의 냉장고 1 수신자 기록이 120건 쌓여 있어.',['S1','ND'],[],async()=>{note('S1','03:00 정리 시작','warn');await flash('rc')}),
+  st('flow','99위 밖 수신자 기록 삭제','사용자와 냉장고 조합마다 수신자 기록을 줄 세워. 안 읽은 기록이 앞, 그다음은 최신순이야. 99번째 밖의 21건을 지워.',['S1','ND'],['S1-ND'],
+   async()=>{await fly('S1-ND','go',{label:'99위 밖 삭제'});setR('rc','99건','ok')}),
+  st('flow','아무도 안 쓰는 알림 내용 삭제','수신자 기록이 하나도 남지 않은 알림 내용을 지워. 이 단계는 앞 단계와 다른 트랜잭션이야.',['S1','ND'],['S1-ND'],
+   async()=>{await fly('S1-ND','go',{label:'참조 없는 알림 삭제'});setR('nc','285건 (가정)','ok');note('S1','정리 끝','ok')})]},
+
+ {name:'공유 냉장고 알림 (현재 확인 범위)',scene:'v2',opt:{single:1,s1sub:'모든 요청 처리'},show:['S1','F','ND','B1','B3'],tags:['code','plan'],
+  intro:'U1과 U2가 냉장고 1을 함께 써. 코드에서 확인한 범위와 아직 계획인 부분을 나눠서 봐.',
+  steps:[
+  st('flow','구성원 모두가 수신자','08시 배치는 냉장고의 활성 구성원 모두에게 수신자 기록을 만들어. 개인 알림 설정과 상관없이 알림함에는 들어가.',['S1','F','ND'],['S1-F','S1-ND'],
+   async()=>{await back('S1-F',{label:'활성 구성원 조회'});await fly('S1-ND','go',{label:'U1·U2 수신자 저장'});setR('nd1','13건','ok');setR('nd2','U1 미읽음 2 · U2 미읽음 2','ok');badge('B1',2);badge('B3',2)}),
+  st('flow','읽음은 사용자마다 따로','U1이 알림을 읽으면 U1의 수신자 기록만 읽음이 돼. U2의 미읽음은 그대로야.',['B1','S1','ND','B3'],['B1-S1','S1-ND'],
+   async()=>{await fly('B1-S1','go',{label:'읽음 요청'});await fly('S1-ND','go',{label:'U1 읽음 저장'});setR('nd2','U1 미읽음 1 · U2 미읽음 2','ok');badge('B1',1);note('B3','U2는 그대로')}),
+  st('flow','푸시는 켠 사용자 기기만','푸시 발송 작업은 푸시 알림을 켠 사용자의 활성 기기에만 만들어. 알림함 기록과 푸시는 따로 판단해.',['S1','W'],[],async()=>{reveal('W');note('W','설정을 켠 기기만 대상');await wait(900)}),
+  st('flow','참여·내보내기 알림은 계획','알림 종류에 참여와 내보내기가 정의돼 있어. 하지만 이 알림을 만드는 코드는 확인되지 않았어. 그래서 V2 계획으로만 표시해.',['F'],[],async()=>{note('F','참여·내보내기 알림: V2 계획','warn');await wait(900)})]}
+];
+
+/* ===== ② 단일 인스턴스 문제와 대응 ===== */
+const S2L=[
+ {name:'1-A. T1 성공 · T2 실패: 알림은 있는데 발송 작업이 없음',cmp:['알림은 보이는데 발송 작업이 없어서 푸시가 영영 안 나가.','복구 실행자가 빠진 작업을 찾아 만들어서 푸시가 나가.'],scene:'batch',opt:{single:1,xname:'복구 실행자'},show:['S1','ND','J'],tags:['code','risk','sol'],cls:['now'],
+  intro:'08시 배치는 알림 저장(T1)과 발송 작업 생성(T2)이 다른 트랜잭션이야. 그 사이에서 실패하면 어떻게 되는지 보고, 같은 그림에 대응을 붙여 다시 실행해.',
+  steps:[
+  st('norm','T1 저장 성공','냉장고 1의 알림과 수신자 기록을 저장하고 커밋했어.',['S1','ND'],['S1-ND'],async()=>{await fly('S1-ND');setR('nd1','1건','ok');setR('nd2','2건','ok')}),
+  st('prob','T2에서 오류','발송 작업을 만드는 T2가 DB 오류로 실패했어. T2는 롤백되지만 이미 커밋된 T1은 그대로 남아.',['S1','J'],['S1-J'],async()=>{await fly('S1-J','bad',{label:'작업 생성 실패'});setR('j1','없음','bad');setR('j2','없음','bad');note('S1','T2 실패 · 롤백','bad')}),
+  st('obs','알림은 보이고 푸시는 안 나감','알림함에는 알림이 보여. 하지만 발송 작업이 없어서 푸시는 나가지 않아. 다음 날 T2는 그날 알림만 찾기 때문에 이 알림의 작업은 다시 만들어지지 않아.',['ND','J'],[],async()=>{await flash('nd1','ok');setR('j1',null,'bad')}),
+  st('fix','빠진 작업을 찾는 복구 경로','대응 후보는 두 가지야. 알림과 수신자와 후속 기록을 한 트랜잭션에 저장하거나, T1·T2를 유지하고 작업이 빠진 알림을 찾아 만드는 복구 실행을 둬. 여기서는 T1·T2를 유지하는 경우를 보여 줘.',['X','ND','J'],['X-ND','X-J'],async()=>{reveal('X');note('X','작업 없는 알림 찾기','warn');await fly('X-ND','go',{label:'작업 없는 알림 찾기',ms:F*.8});await back('X-ND',{label:'작업 없는 알림 #1',ms:F*.8});note('X','빠진 작업 만들기','warn');await fly('X-J','go',{label:'빠진 작업 만들기',ms:F*.8});note('X','이렇게 채울 거야','ok')}),
+  st('re','같은 조건으로 다시 실행','같은 데이터로 처음부터 다시 해. T1은 성공하고 T2는 같은 오류로 실패해.',['S1','ND','J'],['S1-ND','S1-J'],async()=>{resetData();note('X','');await fly('S1-ND');setR('nd1','1건','ok');setR('nd2','2건','ok');await fly('S1-J','bad',{label:'작업 생성 실패'});setR('j1','없음','bad');setR('j2','없음','bad')}),
+  st('re','복구 실행자가 빠진 작업 생성','복구 실행자가 오늘 알림 중 작업이 없는 알림을 찾아 작업을 만들어. 이미 있는 작업은 다시 만들지 않아.',['X','ND','J'],['X-ND','X-J'],async()=>{await back('X-ND',{label:'작업 없는 알림 #1'});await fly('X-J','go',{label:'빠진 작업 생성'});setR('j1','대기 (복구로 생성)','ok');setR('j2','대기 (복구로 생성)','ok')}),
+  st('sum','해결 전후','해결 전에는 작업이 빠진 채로 끝났어. 해결 뒤에는 복구 실행이 찾아서 채워. 얼마나 지난 알림까지 찾을지, 정오가 지난 알림을 보낼지는 미정이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'1-B. 외부 발송 성공 · T3 실패: 성공 기록이 없는 작업',scene:'batch',opt:{single:1},show:['S1','J','W'],tags:['code','risk','sol'],cls:['now'],
+  intro:'외부 서비스는 수락했는데 결과 저장(T3)이 실패하는 경우야. 1-A와는 다른 흐름이야.',
+  steps:[
+  st('norm','작업 #1 발송','작업 #1을 외부 서비스로 보내.',['S1','J','W'],['S1-W'],async()=>{setR('j1','대기','pend');await fly('S1-W','ext',{label:'#1 발송'})}),
+  st('prob','수락됐는데 결과 저장 실패','외부 서비스는 수락했어. 그런데 결과를 저장하는 T3가 실패했어.',['S1','J','W'],['S1-W','S1-J'],async()=>{await back('S1-W',{label:'수락'});note('W','수락함','ok');await fly('S1-J','bad',{label:'결과 저장 실패'});setR('j1','대기','bad')}),
+  st('obs','DB에는 아직 보낼 작업','DB에는 #1이 아직 보낼 차례인 작업으로 남아. 같은 08시 실행이 다시 조회하면 #1을 또 보낼 수 있어. DB만 봐서는 이미 수락됐는지 알 수 없어.',['S1','J','W'],['S1-J','S1-W'],async()=>{await back('S1-J',{label:'보낼 작업: #1'});await fly('S1-W','ext',{label:'#1 다시 발송'});note('W','같은 푸시 2번','bad')}),
+  st('fix','보내기 전 상태를 먼저 기록','대응은 보내기 전에 보내는 중과 시도 시각을 먼저 저장하는 거야. 결과 저장이 실패해도 결과를 모르는 작업이라는 사실이 DB에 남아.',['J'],[],async()=>{rlabel('j1','작업 #1 (상태를 먼저 기록)');await wait(900)}),
+  st('re','같은 조건으로 다시 실행','같은 데이터와 같은 장애로 다시 해. 보내기 전에 #1을 보내는 중으로 저장하고 보내.',['S1','J','W'],['S1-J','S1-W'],async()=>{resetData();await fly('S1-J','go',{label:'보내는 중 기록'});setR('j1','보내는 중 · 08:00','pend');await fly('S1-W','ext',{label:'#1 발송'});await back('S1-W',{label:'수락'});note('W','수락함','ok')}),
+  st('re','결과 저장 실패 뒤의 처리','결과 저장이 실패해도 #1은 결과를 모르는 상태로 남아. 바로 다시 보내지 않고, 정한 시간이 지나면 다시 보낼지 규칙에 따라 판단해.',['S1','J'],['S1-J'],async()=>{await fly('S1-J','bad',{label:'결과 저장 실패'});setR('j1','결과 모름 · 확인 필요','pend')}),
+  st('sum','남는 한계','상태를 숨기지 않고 관리할 수는 있어. 하지만 외부 발송이 두 번 되지 않는다고 보장하지는 못해. 다른 서버가 작업을 선점하는 장치가 있어도 이 중복은 완전히 없어지지 않아.',[],[],async()=>{note('W','재발송하면 중복 가능','warn');await wait(600)})]},
+
+ {name:'2. 냉장고별 순차 처리로 배치 시간 증가',scene:'batch',opt:{single:1,xname:'독립 발송 실행자'},show:['S1','RF','ND'],tags:['perf','sol'],cls:['now','perf'],
+  intro:'냉장고가 늘면 생성 단계가 길어질 수 있다는 성능 가설이야. 실제 시간은 측정 전이라 효과를 확정하지 않아.',
+  steps:[
+  st('norm','냉장고 3곳이면 금방','냉장고마다 T1을 순서대로 처리해. 3곳은 금방 끝나.',['S1','RF','ND'],['S1-ND'],async()=>{for(let k=1;k<=3;k++){await fly('S1-ND','go',{ms:F*.5});setR('nd1',k+'건','ok')}}),
+  st('prob','냉장고가 많아지면','교육용 가정으로 냉장고가 3,000곳이면, 한 흐름이 하나씩 처리해서 생성 단계가 길어져.',['S1','RF'],['S1-RF'],async()=>{setR('rf','3,000곳 (가정)','flash');await count('S1',0,3000,2400,v=>'냉장고 '+v+' / 3,000')}),
+  st('obs','뒤 단계가 밀릴 수 있음','발송 작업 생성과 첫 발송은 생성이 모두 끝난 뒤에 시작해. 그래서 첫 푸시가 늦어질 수 있어. 얼마나 늦는지는 측정 전이야.',['S1'],[],async()=>{note('S1','첫 발송은 생성이 끝난 뒤','warn');await wait(900)}),
+  st('fix','제한된 단위와 진행 기록','대응 후보는 냉장고를 정한 단위로 나눠 처리하고 어디까지 했는지 기록하는 거야. 발송은 독립 실행자가 따로 맡을 수 있어. 병렬로 나눌지는 측정 뒤에 정해.',['X','W'],[],async()=>{reveal('X','W','J');setR('rf','3,000곳 · 500곳씩 (가정)','ok');await wait(900)}),
+  st('re','같은 물량으로 다시 실행','같은 3,000곳을 500곳씩 처리하고 단위마다 진행 위치를 기록해. 끝난 단위의 작업은 실행자가 먼저 보내기 시작할 수 있어.',['S1','ND','X','J','W'],['S1-ND','X-J','X-W'],
+   async()=>{resetData();setR('rf','3,000곳 · 500곳씩 (가정)','ok');for(let k=1;k<=2;k++){await fly('S1-ND','go',{ms:F*.6});note('S1','진행 기록: '+k*500+'곳','ok');setR('j1','단위 '+k+' 작업 생성','pend')}await fly('X-J','go',{label:'끝난 단위 작업'});await fly('X-W','ext');note('X','첫 발송 시작','ok')}),
+  st('sum','검증할 지표','해결 효과는 확정하지 않아. 냉장고당 처리 시간, 전체 생성 시간, 첫 발송까지 걸린 시간, 쿼리 시간으로 확인해. 3번과 5번 문제와 원인이 이어질 수 있어.',[],[],async()=>{await wait(600)})]},
+
+ {name:'3. 푸시 작업 대량 생성·저장',scene:'batch',opt:{single:1,xname:'독립 발송 실행자'},show:['S1','ND','J'],tags:['code','perf','sol'],cls:['now','perf'],
+  intro:'T2는 오늘 알림 전체의 작업을 한 번에 조회해서 한 트랜잭션으로 저장해. 물량이 커질 때의 성능 가설이야.',
+  steps:[
+  st('norm','작업 3건을 한 번에 저장','오늘 알림과 푸시를 켠 기기를 묶어 작업을 만들고 한 트랜잭션으로 저장해.',['S1','J'],['S1-J'],async()=>{await fly('S1-J','go',{label:'작업 3건 저장'});['j1','j2','j3'].forEach(k=>setR(k,'대기','pend'))}),
+  st('prob','물량이 많아지면','가정으로 작업이 30,000건이면 한 번의 조회 결과와 한 트랜잭션에 모두 담겨. 저장이 길어질 수 있다는 가설이야.',['S1','J'],['S1-J'],async()=>{rlabel('j1','오늘 작업');setR('j1','30,000건 저장 중 (가정)','pend');await count('S1',0,30000,2400,v=>'저장 '+v.toLocaleString()+'건')}),
+  st('obs','끝나야 첫 발송 시작','이 트랜잭션이 끝나야 첫 발송이 시작돼. 중간에 실패하면 전부 롤백되고 같은 실행에서 다시 만들지 않아. 저장 크기와 DB 영향은 측정 대상이야.',['S1','J'],[],async()=>{setR('j1','실패하면 전부 롤백','bad');note('S1','첫 발송 대기','warn');await wait(900)}),
+  st('fix','나눠 만들고 빠진 건 복구','대응 후보는 정한 단위로 나눠 생성하고, 빠진 작업은 복구 경로로 채우고, 발송은 독립 실행자가 맡는 거야.',['X','W'],[],async()=>{reveal('X','W');await wait(900)}),
+  st('re','같은 물량으로 다시 실행','같은 30,000건을 1,000건씩 나눠 저장해. 먼저 저장된 단위부터 실행자가 보내기 시작해.',['S1','J','X','W'],['S1-J','X-J','X-W'],
+   async()=>{resetData();rlabel('j1','오늘 작업');for(let k=1;k<=3;k++){await fly('S1-J','go',{ms:F*.5,label:'1,000건 저장'});setR('j1',(k*1000).toLocaleString()+'건 저장됨','pend')}await back('X-J',{label:'저장된 작업'});await fly('X-W','ext');note('X','먼저 저장된 단위 발송','ok')}),
+  st('sum','검증할 지표','트랜잭션 시간, 잠금과 로그 크기, 첫 발송까지 시간을 측정해서 단위를 정해. 2번 문제와 이어질 수 있지만 따로 떨어진 병목이라고 단정하지 않아.',[],[],async()=>{await wait(600)})]},
+
+ {name:'4. 가상 스레드 발송의 동시 처리·자원 한계',scene:'batch',opt:{single:1},show:['S1','J','W'],tags:['code','perf','sol'],cls:['now','perf'],
+  intro:'발송 단계는 보낼 작업을 모두 가져와 작업마다 가상 스레드를 만들고, 동시 발송은 20개로 제한해. 작업이 많을 때의 자원 가설을 봐.',
+  steps:[
+  st('norm','작업마다 가상 스레드','보낼 작업 3건을 가져와 작업마다 가상 스레드를 만들어. 동시에 보내는 수는 20개까지야.',['S1','J','W'],['S1-J','S1-W'],async()=>{await back('S1-J',{label:'보낼 작업 3건'});note('S1','가상 스레드 3 · 동시 발송 3');await fly('S1-W','ext')}),
+  st('prob','작업이 30,000건이면','가정으로 30,000건이면 한 번에 모두 가져오고 가상 스레드도 30,000개 만들어. 그중 20개만 보내고 나머지는 차례를 기다려.',['S1','J'],['S1-J'],async()=>{rlabel('j1','보낼 작업');setR('j1','30,000건 조회 (가정)','pend');await back('S1-J',{label:'전부 조회'});await count('S1',0,29980,2000,v=>'대기 '+v.toLocaleString()+' · 발송 20')}),
+  st('obs','무엇이 쌓이는가','기다리는 가상 스레드와 작업 객체가 메모리에 함께 올라와. 가상 스레드가 기다린다고 DB 연결을 잡는 건 아니야. 작업이 많다고 같은 수의 DB 연결을 쓰는 것도 아니야. 메모리와 GC 영향은 측정 전 가설이야.',['S1'],[],async()=>{note('S1','메모리 영향은 측정 필요','warn');await wait(900)}),
+  st('fix','꺼내는 양과 동시 발송 제한','대응은 한 번에 조회하고 선점하는 작업 수를 제한하고, 동시 발송 수 제한은 유지하는 거야. 숫자는 후속 실험으로 정해.',['S1'],[],async()=>{subt('S1','한 번에 500건 (가정) · 동시 20');await wait(900)}),
+  st('re','같은 물량으로 다시 실행','같은 30,000건을 500건씩 가져와 20개씩 보내. 다 보내면 다음 500건을 가져와.',['S1','J','W'],['S1-J','S1-W'],
+   async()=>{resetData();subt('S1','한 번에 500건 (가정) · 동시 20');rlabel('j1','보낼 작업');setR('j1','30,000건 (가정)','pend');for(let k=1;k<=3;k++){await back('S1-J',{label:'500건 조회',ms:F*.6});note('S1','대기 480 · 발송 20');await fly('S1-W','ext',{ms:F*.6})}}),
+  st('sum','검증할 지표','힙 사용량, GC 시간, 발송 처리량, 외부 응답 시간으로 확인해. 동시 발송 20은 서버마다, 이 발송 호출마다 따로 적용되는 값이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'5. 단일 배치의 지연·실패 전파와 중단 복구',scene:'batch',opt:{single:1},show:['S1','J','W'],tags:['code','risk','sol'],cls:['now'],
+  intro:'지금 재시도는 08시 실행 하나가 기다리면서 해. 그 실행이 멈추면 무슨 일이 생기는지 보고 대응을 붙여.',
+  steps:[
+  st('norm','#1 성공 · #2 실패','#1은 수락됐고 #2는 외부 서비스 오류로 실패했어.',['S1','J','W'],['S1-W','S1-J'],async()=>{await fly('S1-W','ext',{label:'#1 · #2 발송'});await back('S1-W',{cls:'bad',label:'#1 수락 · #2 실패'});setR('j1','수락','ok');setR('j2','실패 1회','bad')}),
+  st('norm','현재 재시도 정책','실패한 작업은 5분, 15분, 30분 뒤 최대 세 번 다시 보내고 정오를 넘기지 않아. 이 재시도는 같은 08시 실행이 기다리면서 해.',['S1','J'],['S1-J'],async()=>{await fly('S1-J','go',{label:'다음 시도 08:05'});setR('j2','재시도 대기 · 08:05','pend');note('S1','08:05까지 대기','warn')}),
+  st('prob','기다리는 중 서버 종료','배포나 장애로 서버가 08:03에 꺼졌어. 기다리던 08시 실행도 같이 사라져.',['S1'],[],async()=>{down('S1',1,'08:03 종료');await wait(900)}),
+  st('obs','이어갈 주체가 없음','서버가 다시 켜져도 08시 실행은 다음 날에야 돌아. #2는 재시도 대기로 남지만 정오까지 아무도 보내지 않아. 기다리는 동안 스케줄러 스레드를 잡고 있어서 다른 예약 작업도 밀릴 수 있어.',['S1','J'],[],async()=>{down('S1',0);note('S1','08:04 재시작 · 08시 실행 없음','bad');setR('j2','재시도 대기 · 아무도 안 보냄','bad');await wait(900)}),
+  st('fix','미완료 기록과 독립 실행자','대응은 미완료 작업을 DB에 남기고, 08시 실행과 따로 도는 실행자가 주기적으로 보낼 차례인 작업을 찾아 처리하는 거야. 재시도 간격과 정오 기한 같은 현재 정책은 그대로 둘 수 있어.',['X'],[],async()=>{reveal('X');await wait(900)}),
+  st('re','같은 장애로 다시 실행','같은 데이터로 다시 해. #1 수락, #2 실패, 08:03에 서버 종료, 08:04에 재시작까지 똑같아.',['S1','J','W'],['S1-W'],async()=>{resetData();await fly('S1-W','ext',{ms:F*.6});setR('j1','수락','ok');setR('j2','재시도 대기 · 08:05','pend');down('S1',1,'08:03 종료');await wait(700);down('S1',0);note('S1','08:04 재시작')}),
+  st('re','08:05에 실행자가 이어서 발송','실행자가 DB에서 08:05가 된 #2를 찾아 보내고 결과를 저장해.',['X','J','W'],['X-J','X-W'],async()=>{await back('X-J',{label:'08:05 작업 #2'});await fly('X-W','ext');await fly('X-J','go',{label:'결과 저장'});setR('j2','수락','ok');note('X','#2 이어서 처리','ok')}),
+  st('sum','해결 전후','해결 전에는 재시도가 실행과 함께 사라졌어. 해결 뒤에는 DB 기록에서 이어서 해. 실행자를 얼마나 자주 돌릴지는 미정이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'6. 폴링의 변화 없는 반복 조회와 갱신 지연',scene:'poll',opt:{single:1},show:['B1','B2','S1','ND'],tags:['code','perf','sol'],cls:['now','perf','front'],
+  intro:'지금 폴링은 서버 1대에서도 잘 동작해. 다만 변화가 없어도 계속 묻고, 새 알림은 늦게 보일 수 있어.',
+  steps:[
+  st('norm','30초마다 확인','두 화면이 30초마다 최신 알림 ID를 물어보고 같은 값을 받아.',['B1','B2','S1','ND'],['B1-S1','B2-S1','S1-B1','S1-B2'],async()=>{await both(fly('B1-S1'),fly('B2-S1'));await both(fly('S1-B1','back'),fly('S1-B2','back'))}),
+  st('prob','변화가 없어도 계속 요청','새 알림이 하루 몇 건뿐이어도 화면마다 30초에 한 번씩 요청해. 보이는 화면이 1,000개면(가정) 1초에 약 33번이야.',['B1','B2','S1'],['B1-S1','B2-S1'],async()=>{await both(fly('B1-S1',null,{ms:F*.6}),fly('B2-S1',null,{ms:F*.6}));await count('S1',0,33,1600,v=>'초당 요청 '+v+'번 (가정)')}),
+  st('obs','갱신 지연','새 알림이 저장돼도 다음 요청까지 최대 30초 늦게 보여.',['S1','ND','B1','B2'],['S1-ND'],async()=>{await fly('S1-ND','go',{label:'새 알림 저장'});setR('nd1','#13','ok');setR('nd2','2','ok');note('B1','아직 모름 · 최대 30초','warn');note('B2','아직 모름 · 최대 30초','warn')}),
+  st('fix','SSE 변경 신호 (후보)','대응 후보는 화면이 서버와 SSE 연결을 열어 두는 거야. 변화가 있을 때만 서버가 다시 조회하라고 알리고, 화면은 그때만 API로 최신 상태를 읽어.',['C1','C2'],[],async()=>{reveal('C1','C2');note('S1','');await wait(900)}),
+  st('re','같은 새 알림으로 다시 실행','같은 새 알림 #13이 저장돼. 서버가 연결된 두 화면에 바로 알리고, 화면이 최신 상태를 읽어.',['S1','ND','B1','B2'],['S1-ND','S1-B1','S1-B2','B1-S1','B2-S1'],
+   async()=>{resetData();await fly('S1-ND','go',{label:'새 알림 저장'});setR('nd1','#13','ok');setR('nd2','2','ok');await both(fly('S1-B1','ext',{label:'SSE 안내'}),fly('S1-B2','ext',{label:'SSE 안내'}));await both(fly('B1-S1','go',{label:'최신 상태 조회'}),fly('B2-S1','go',{label:'최신 상태 조회'}));await both(fly('S1-B1','back',{label:'응답'}),fly('S1-B2','back',{label:'응답'}));badge('B1',2);badge('B2',2)}),
+  st('obs','새로 생기는 책임','SSE는 연결을 계속 유지해야 해. 연결이 끊긴 동안 놓친 변경은 다시 연결할 때 최신 상태를 읽어서 채워야 해.',['B2','S1','C2'],['B2-S1','S1-B2'],async()=>{sse('C2',0);note('B2','연결 끊김','bad');await wait(900);sse('C2',1);await fly('B2-S1','go',{label:'재연결 · 최신 상태 조회'});await fly('S1-B2','back');note('B2','다시 맞춤','ok')}),
+  st('sum','검증할 지표','요청 수와 지연이 실제로 줄어드는지는 측정으로 확인해. 연결 수 유지 비용도 함께 봐. 폴링 오류 뒤 다시 시작하는 처리는 프론트 담당 영역이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'7. 구독 변경과 발송 사이 버전 검사 공백',scene:'sub',opt:{P:'서버 · 발송 처리',A:'서버 · 구독 요청'},show:['B1','P','A','W','SUB','J'],tags:['code','risk'],cls:['fix'],
+  intro:'서버 1대 안에서도 발송과 구독 갱신이 동시에 일어날 수 있어. 발송은 버전을 확인한 뒤 주소를 따로 한 번 더 읽어.',
+  steps:[
+  st('norm','버전이 같으면 발송','작업 #1은 v1 기준이고 구독도 v1이야. 버전이 같아서 보내.',['P','J','SUB'],['P-J','P-SUB'],async()=>{await back('P-J',{label:'작업 #1 (v1)'});await back('P-SUB',{label:'현재 v1'});note('P','v1 = v1 · 보내도 됨','ok')}),
+  st('prob','확인 직후 구독 갱신','그 순간 아이패드가 구독을 새로 받아 갱신 요청을 보냈어. 구독이 주소 B, v2로 바뀌어.',['B1','A','SUB'],['B1-A','A-SUB'],async()=>{await fly('B1-A','go',{label:'구독 갱신'});await fly('A-SUB');setR('sub','v2 · 주소 B · 활성','flash')}),
+  st('obs','v1 확인 · v2로 발송','발송 처리는 보낼 주소를 얻으려고 구독을 한 번 더 읽어. 이때 읽은 건 v2의 주소 B야. 확인한 버전과 실제로 보낸 구독이 달라.',['P','SUB','W','B1'],['P-SUB','P-W','W-B1'],async()=>{setR('sub',null,'');await back('P-SUB',{label:'주소 B (v2)'});await fly('P-W','ext');await fly('W-B1','ext');setR('j1','v1 기준 · v2로 발송됨','bad')}),
+  st('fix','실제 보낼 구독으로 검증','대응은 실제로 보낼 구독을 읽은 그 결과에서 활성 상태와 버전을 같이 확인하는 거야. 확인과 주소 읽기가 따로 놀지 않게 해.',['P'],[],async()=>{subt('P','보낼 구독에서 버전 확인');await wait(900)}),
+  st('re','같은 경합으로 다시 실행','같은 순서로 다시 해. 발송 전에 구독이 v2로 바뀌어.',['B1','A','SUB'],['B1-A','A-SUB'],async()=>{resetData();subt('P','보낼 구독에서 버전 확인');await fly('B1-A','go',{label:'구독 갱신'});await fly('A-SUB');setR('sub','v2 · 주소 B · 활성','ok')}),
+  st('re','v1 작업은 보내지 않음','발송 처리가 구독을 한 번 읽어 주소와 버전을 같이 봐. 작업은 v1 기준인데 지금은 v2라서 작업을 취소해.',['P','SUB','J'],['P-SUB','P-J'],async()=>{await back('P-SUB',{label:'v2 · 주소 B'});note('P','v1 ≠ v2 · 보내지 않음','ok');await fly('P-J','go',{label:'작업 취소'});setR('j1','v1 기준 · 취소','ok')}),
+  st('sum','정리','한 서버 안에서도 생기는 정합성 결함이야. 서버 수와 상관없이 같은 검증이 필요해. 후속 개별 수정으로 다뤄.',[],[],async()=>{await wait(600)})]},
+
+ {name:'8. 늦게 온 404·410이 갱신된 구독을 끔',scene:'sub',opt:{P:'서버 · 발송 처리',A:'서버 · 구독 요청'},show:['B1','P','A','W','SUB','J'],tags:['code','risk'],cls:['fix'],
+  intro:'404·410은 그 주소의 구독이 없어졌다는 뜻이야. 응답이 늦게 오면 이미 바뀐 새 구독까지 끌 수 있어.',
+  steps:[
+  st('norm','주소 A로 발송','작업 #1을 v1의 주소 A로 보냈어. 응답을 기다리는 중이야.',['P','W'],['P-W'],async()=>{await fly('P-W','ext',{label:'주소 A로 발송'});note('W','응답 준비 중')}),
+  st('prob','기다리는 사이 구독 갱신','그 사이 아이패드가 구독을 새로 받아 주소 B, v2로 바뀌었어.',['B1','A','SUB'],['B1-A','A-SUB'],async()=>{await fly('B1-A','go',{label:'구독 갱신'});await fly('A-SUB');setR('sub','v2 · 주소 B · 활성','ok')}),
+  st('prob','주소 A에 대한 410','외부 서비스가 주소 A는 없다고 410으로 답했어. 주소 A는 이미 버려졌으니 맞는 응답이야.',['W','P'],['P-W'],async()=>{note('W','');await back('P-W',{cls:'bad',label:'410 · 주소 A 없음'})}),
+  st('obs','새 구독이 꺼짐','발송 처리는 이 기기의 구독을 무효로 바꿔. 지금은 활성인지만 보고 버전은 비교하지 않아. 그래서 방금 받은 v2가 꺼져.',['P','SUB','B1'],['P-SUB'],async()=>{await fly('P-SUB','bad',{label:'무효 처리'});setR('sub','v2 · 주소 B · 무효','bad');note('B1','푸시 못 받음','bad')}),
+  st('fix','보낸 버전이 같을 때만 반영','대응은 404·410 결과를 저장할 때 보낼 때의 버전이 지금 버전과 같은지 조건으로 거는 거야. 다르면 아무것도 바꾸지 않아.',['P'],[],async()=>{subt('P','v1일 때만 무효 처리');await wait(900)}),
+  st('re','같은 순서로 다시 실행','주소 A 발송, 구독 갱신, 늦은 410까지 같은 순서로 다시 해.',['P','A','W','SUB'],['P-W','B1-A','A-SUB'],async()=>{resetData();subt('P','v1일 때만 무효 처리');await fly('P-W','ext',{label:'주소 A로 발송',ms:F*.6});await fly('B1-A','go',{ms:F*.6});await fly('A-SUB','go',{ms:F*.6});setR('sub','v2 · 주소 B · 활성','ok');await back('P-W',{cls:'bad',label:'410 · 주소 A 없음',ms:F*.6})}),
+  st('re','v2는 그대로','조건이 맞지 않아서 무효 처리가 반영되지 않아. 새 구독 v2는 활성으로 남아.',['P','SUB','B1'],['P-SUB'],async()=>{await fly('P-SUB','go',{label:'v1일 때만 무효'});note('P','지금 v2 · 변경 없음','ok');setR('sub','v2 · 주소 B · 활성','ok');note('B1','푸시 정상','ok')}),
+  st('sum','정리','모든 오류나 401에서 구독을 끄는 건 아니야. 404·410만 대상이고, 그때도 보낸 버전이 같을 때만 반영해.',[],[],async()=>{await wait(600)})]},
+
+ {name:'9. 동시 구독 갱신의 버전 덮어쓰기',scene:'sub',opt:{P:'서버 · 해제 요청',Psub:'요청 처리 ①',A:'서버 · 갱신 요청',Asub:'요청 처리 ②'},show:['B1','P','A','SUB'],tags:['code','risk','sol'],cls:['fix'],
+  intro:'구독 버전은 읽은 값에 1을 더해 저장해. 동시 변경을 막는 장치가 없어서 요청 두 개가 겹치면 하나가 사라질 수 있어.',
+  steps:[
+  st('norm','요청 하나면 정상','갱신 요청 하나는 v1을 읽고 v2로 저장해.',['A','SUB'],['A-SUB'],async()=>{await back('A-SUB',{label:'v1 읽음'});await fly('A-SUB','go',{label:'v2 저장'});setR('sub','v2 · 주소 B · 활성','ok')}),
+  st('prob','두 요청이 동시에 v1을 읽음','처음 상태로 돌려서 해제 요청과 갱신 요청이 거의 동시에 왔어. 둘 다 v1을 읽어.',['P','A','SUB'],['P-SUB','A-SUB'],async()=>{resetData();await both(back('P-SUB',{label:'v1 읽음'}),back('A-SUB',{label:'v1 읽음'}))}),
+  st('prob','각자 v2로 저장','각자 읽은 v1에 1을 더해 v2로 저장해. 나중에 저장한 값이 앞의 값을 덮어써.',['P','A','SUB'],['P-SUB','A-SUB'],async()=>{await both(fly('P-SUB','go',{label:'v2 저장'}),fly('A-SUB','go',{label:'v2 저장'}));setR('sub','v2 · 주소 B · 활성','bad')}),
+  st('obs','두 번 바뀌었는데 v2','변경은 두 번 있었는데 버전은 한 번만 올랐어. 버전으로 옛 작업과 새 구독을 구분하는 규칙이 흔들려.',['SUB'],[],async()=>{await flash('sub','bad')}),
+  st('fix','동시성 제어 (후보)','대응 후보는 DB에서 지금 값에 1을 더하는 한 번의 조건부 변경이나, 낙관적 잠금으로 늦게 저장한 쪽을 실패시키는 방식이야. 어느 쪽으로 할지는 아직 정하지 않았어. 여기서는 조건부 변경 예시를 보여 줘.',['SUB'],[],async()=>{rlabel('sub','U1 아이패드 구독 (조건부 변경)');await wait(900)}),
+  st('re','같은 동시 요청으로 다시 실행','같은 두 요청이 동시에 와. 이번에는 둘 다 DB에서 지금 값에 1을 더해서 차례로 v2, v3이 돼.',['P','A','SUB'],['P-SUB','A-SUB'],async()=>{resetData();rlabel('sub','U1 아이패드 구독 (조건부 변경)');await both(fly('P-SUB','go',{label:'버전 + 1'}),fly('A-SUB','go',{label:'버전 + 1'}));setR('sub','v3','ok')}),
+  st('sum','정리','결과 상태를 어느 요청 기준으로 남길지는 별도로 정해야 해. 이 결함은 후속 개별 수정으로 다루고, 방식은 미정이야.',[],[],async()=>{await wait(600)})]}
+];
+
+/* ===== ③ 다중 인스턴스 문제와 대응 ===== */
+const S3L=[
+ {name:'08시 동시 실행 → 같은 알림 중복 생성',scene:'batch',opt:{},show:['S1','RF','ND'],tags:['code','risk','sol'],cls:['now'],
+  intro:'서버가 늘었다고 모든 요청이 중복되지는 않아. 서버마다 스스로 시작하는 예약 작업이 겹칠 때 생기는 일을 봐.',
+  steps:[
+  st('norm','서버 1대일 때','S1이 냉장고 1의 임박 알림 1건과 수신자 기록 2건을 만들어.',['S1','ND'],['S1-ND'],async()=>{await fly('S1-ND');setR('nd1','1건','ok');setR('nd2','2건','ok')}),
+  st('prob','S2도 같은 08시 일정','처음 상태로 돌리고 서버를 2대로 늘렸어. 두 서버는 같은 코드와 같은 08시 일정을 가져서 각자 배치를 시작해.',['S1','S2'],[],async()=>{resetData();reveal('S2');note('S1','08:00 시작','warn');note('S2','08:00 시작','warn');await wait(900)}),
+  st('prob','둘 다 냉장고 1의 알림 저장','두 서버가 같은 냉장고 1을 읽고 각자 임박 알림을 저장해. 서로 상대가 만든 알림을 몰라.',['S1','S2','ND'],['S1-ND','S2-ND'],async()=>{await both(fly('S1-ND'),fly('S2-ND'));setR('nd1','2건 (같은 알림)','bad');setR('nd2','4건','bad')}),
+  st('obs','U1·U2 알림함에 같은 알림 2개','같은 알림이 두 번 보여. 이 알림으로 발송 작업도 두 벌 생겨.',['ND'],[],async()=>{await flash('nd1','bad')}),
+  st('fix','실행 조정과 생성 멱등성','두 장치를 붙여. 실행권 테이블로 08시 배치를 한 서버만 시작하게 해. 그리고 냉장고, 날짜, 알림 종류로 만든 키에 중복 방지 제약을 둬. 실행권은 같은 일을 두 번 시작하지 않게 하고, 키는 그래도 겹쳤을 때 두 번 저장되지 않게 해. 둘은 역할이 달라.',['L','ND'],[],async()=>{reveal('L');rlabel('nd1','알림 내용 (냉장고·날짜·종류 키)');await wait(900)}),
+  st('re','같은 조건으로 다시 실행','다시 두 서버가 08시에 함께 시작해. 둘 다 실행권을 요청하고 S1만 얻어. S2는 이번 실행을 건너뛰어.',['S1','S2','L'],['S1-L','S2-L'],async()=>{resetData();rlabel('nd1','알림 내용 (냉장고·날짜·종류 키)');await both(fly('S1-L'),fly('S2-L'));setR('lock','S1 · 08:10까지','ok');note('S1','실행권 얻음','ok');note('S2','건너뜀')}),
+  st('re','S1만 알림 저장','S1이 알림 1건과 수신자 기록 2건을 저장해.',['S1','ND'],['S1-ND'],async()=>{await fly('S1-ND');setR('nd1','1건','ok');setR('nd2','2건','ok')}),
+  st('re','실행권 기한이 지나 겹친 경우','S1이 느려서 실행권 기한이 지났고 S2가 실행권을 얻어 다시 시작했어. S2가 같은 알림을 저장하려 하지만 키가 같아서 DB가 막아.',['S2','L','ND'],['S2-L','S2-ND'],async()=>{await fly('S2-L');setR('lock','S2 · 기한 지나 얻음','pend');await fly('S2-ND','bad',{label:'같은 키 · 저장 거부'});note('S2','이미 있음 · 건너뜀','ok');setR('nd1','1건','ok')}),
+  st('sum','정리','해결 전에는 같은 알림이 2건이었어. 해결 뒤에는 1건이야. 실행권 기한을 몇 분으로 둘지는 미정이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'같은 발송 작업 동시 조회 → 중복 발송',scene:'batch',opt:{},show:['S1','J','W'],tags:['code','risk','sol'],cls:['now'],
+  intro:'발송 단계는 보낼 작업을 조회만 하고 가져간다는 표시를 남기지 않아. 두 서버가 같은 작업을 읽으면 어떻게 되는지 봐.',
+  steps:[
+  st('norm','서버 1대일 때','S1이 #1, #2를 한 번씩 보내.',['S1','J','W'],['S1-J','S1-W'],async()=>{setR('j1','대기','pend');setR('j2','대기','pend');await back('S1-J',{label:'#1 · #2'});await fly('S1-W','ext');setR('j1','수락','ok');setR('j2','수락','ok')}),
+  st('prob','두 서버가 같은 작업을 조회','처음 상태로 돌리고 S2를 더했어. 두 서버의 발송 단계가 같은 시각에 보낼 작업을 조회해서 #1, #2를 함께 읽어.',['S1','S2','J'],['S1-J','S2-J'],async()=>{resetData();reveal('S2');setR('j1','대기','pend');setR('j2','대기','pend');await both(back('S1-J',{label:'#1 · #2'}),back('S2-J',{label:'#1 · #2'}))}),
+  st('obs','같은 푸시가 두 번 감','두 서버가 둘 다 보내서 같은 푸시가 두 번 가. 실행 조정으로 08시 실행을 하나로 줄여도, 독립 실행자를 여러 서버에서 돌리면 다시 생기는 문제야.',['S1','S2','W'],['S1-W','S2-W'],async()=>{await both(fly('S1-W','ext'),fly('S2-W','ext'));note('W','#1 · #2 각각 2번','bad');setR('j1','2번 발송','bad');setR('j2','2번 발송','bad')}),
+  st('fix','원자적 선점 · 선점권 확인 · 회수','작업을 고를 때 누가 언제까지 처리 중인지를 조건부 변경으로 한 번에 기록해. 결과를 저장할 때 아직 내 선점인지 확인해. 기한이 지나도 결과가 없으면 다른 서버가 회수해.',['J'],[],async()=>{rlabel('j1','작업 #1 (선점 기록)');rlabel('j2','작업 #2 (선점 기록)');await wait(900)}),
+  st('re','같은 조건으로 다시 실행','같은 시각에 두 서버가 작업을 찾아. S1이 #1, #2를 먼저 선점해서 S2는 고를 작업이 없어.',['S1','S2','J'],['S1-J','S2-J'],async()=>{resetData();rlabel('j1','작업 #1 (선점 기록)');rlabel('j2','작업 #2 (선점 기록)');await fly('S1-J','go',{label:'#1 · #2 선점'});setR('j1','S1 처리 중 · 08:05까지','pend');setR('j2','S1 처리 중 · 08:05까지','pend');await fly('S2-J','go',{label:'고를 작업 없음'});note('S2','선점된 작업 건너뜀')}),
+  st('re','#1 발송 뒤 S1 종료','S1이 #1을 보내고 결과를 저장했어. #2를 보내기 전에 S1이 꺼졌어.',['S1','J','W'],['S1-W','S1-J'],async()=>{await fly('S1-W','ext',{label:'#1 발송'});await fly('S1-J','go',{label:'#1 결과 · 선점 확인'});setR('j1','수락','ok');down('S1',1)}),
+  st('re','기한이 지난 #2를 S2가 회수','#2의 선점 기한이 지나면 S2가 다시 선점해서 보내. 결과는 한 번씩만 저장돼.',['S2','J','W'],['S2-J','S2-W'],async()=>{await fly('S2-J','go',{label:'기한 지난 #2 선점'});setR('j2','S2 처리 중','pend');await fly('S2-W','ext');setR('j2','수락','ok');note('W','#1 · #2 각각 1번','ok')}),
+  st('sum','남는 한계','②의 1-B처럼 외부 발송은 성공했는데 결과 저장 전에 서버가 꺼지면, 회수한 서버가 다시 보낼 수 있어. 선점은 동시 중복을 막지만 이 가능성까지 없애지는 못해.',[],[],async()=>{await wait(600)})]},
+
+ {name:'서버별 발송 제한 → 전체 발송량 증가',scene:'batch',opt:{},show:['S1','W'],tags:['code','perf','sol'],cls:['now','perf'],
+  intro:'동시 발송 제한 20은 서버마다, 발송 호출마다 따로 적용돼. 서버가 늘면 전체 양이 어떻게 되는지 봐.',
+  steps:[
+  st('norm','서버 1대면 최대 20','S1 하나만 보내면 외부로 동시에 가는 요청은 최대 20개야.',['S1','W'],['S1-W'],async()=>{note('S1','동시 최대 20');await fly('S1-W','ext');note('W','동시 최대 20')}),
+  st('prob','서버 2대면 최대 40','S2를 더했어. 각 서버가 20씩 보내서 합은 최대 40이야. 서버가 N대면 20×N이 돼.',['S1','S2','W'],['S1-W','S2-W'],async()=>{reveal('S2');note('S2','동시 최대 20');await both(fly('S1-W','ext'),fly('S2-W','ext'));note('W','동시 최대 40','bad')}),
+  st('obs','어디에 영향을 주나','외부 서비스의 호출 제한에 걸리거나 우리 쪽 자원을 더 쓸 수 있어. 실제 한도와 영향은 확인 전이야.',['W'],[],async()=>{await wait(900)}),
+  st('fix','전체 호출량 관리 책임','서버 수와 상관없이 전체 동시 처리와 호출량을 정하는 책임이 필요해. 방법과 숫자는 아직 정하지 않았어.',['S1','S2'],[],async()=>{subt('S1','전체 한도에서 나눠 씀');subt('S2','전체 한도에서 나눠 씀');await wait(900)}),
+  st('re','같은 2대로 다시 실행','전체 한도를 30으로 가정하면 두 서버가 나눠 써서 합이 30을 넘지 않아.',['S1','S2','W'],['S1-W','S2-W'],async()=>{note('S1','동시 15 (가정)');note('S2','동시 15 (가정)');await both(fly('S1-W','ext'),fly('S2-W','ext'));note('W','합 30 이하 (가정)','ok')}),
+  st('sum','검증할 지표','외부 응답 코드, 처리량, 지연을 보고 한도를 정해. 효과는 측정 전이라 확정하지 않아.',[],[],async()=>{await wait(600)})]},
+
+ {name:'03시 동시 정리 → 중복 DB 작업과 락 대기',scene:'clean',opt:{},show:['S1','ND'],tags:['code','risk','sol'],cls:['now'],
+  intro:'03시 정리도 서버마다 스스로 시작해. 두 서버가 함께 정리할 때 무엇이 생기고 무엇은 안 생기는지 봐.',
+  steps:[
+  st('norm','서버 1대일 때','S1이 120건을 99건으로 줄이고 참조 없는 알림 내용을 지워.',['S1','ND'],['S1-ND'],async()=>{await fly('S1-ND');setR('rc','99건','ok');setR('nc','285건 (가정)','ok')}),
+  st('prob','두 서버가 함께 정리','처음 상태로 돌리고 S2를 더했어. 두 서버가 03시에 같은 기준으로 정리를 시작해.',['S1','S2','ND'],['S1-ND','S2-ND'],async()=>{resetData();reveal('S2');await both(fly('S1-ND'),fly('S2-ND'));note('S2','같은 행 대기 가능','warn');setR('rc','99건','ok')}),
+  st('obs','결과는 같고 일은 두 배','같은 기준이라 결과는 99건으로 같아. 더 많이 지워지지는 않아. 대신 같은 삭제를 두 번 시도해서 DB 작업이 늘고, 대상이 겹치면 한쪽이 기다릴 수 있어. 항상 기다리는 건 아니야.',['S1','S2'],[],async()=>{note('S1','삭제 시도 1회');note('S2','같은 삭제 1회 더','bad');await wait(900)}),
+  st('fix','실행 조정','08시 배치와 같은 실행권 테이블로 03시 정리도 한 서버만 시작하게 해.',['L'],[],async()=>{reveal('L');await wait(900)}),
+  st('re','같은 조건으로 다시 실행','두 서버가 실행권을 요청하고 S1만 얻어. S1만 정리해.',['S1','S2','L','ND'],['S1-L','S2-L','S1-ND'],async()=>{resetData();await both(fly('S1-L'),fly('S2-L'));setR('lock','S1 · 03:10까지','ok');note('S2','건너뜀');await fly('S1-ND');setR('rc','99건','ok');setR('nc','285건 (가정)','ok')}),
+  st('sum','정리','해결 전후 결과 건수는 같아. 달라지는 건 중복 작업과 대기 가능성이야.',[],[],async()=>{await wait(600)})]},
+
+ {name:'SSE 도입 시 처리 서버와 연결 서버 불일치',scene:'poll',opt:{},show:['B1','B2','S1','S2','ND'],tags:['risk','sol'],cls:['now'],
+  intro:'지금 폴링은 공통 DB를 읽어서 요청 서버가 달라도 알림이 빠지지 않아. 문제는 V2 후보인 SSE를 쓸 때 생겨.',
+  steps:[
+  st('norm','지금 폴링은 문제없음','아이패드 요청은 S1이, 노트북 요청은 S2가 받아도 같은 DB를 읽어서 결과가 같아.',['B1','B2','S1','S2','ND'],['B1-S1','B2-S2','S1-ND','S2-ND'],async()=>{await both(fly('B1-S1'),fly('B2-S2'));await both(fly('S1-ND'),fly('S2-ND'));note('B1','#12 · 같음');note('B2','#12 · 같음')}),
+  st('prob','SSE 후보를 쓰면','V2 후보처럼 화면이 SSE 연결을 열어. 아이패드는 S1과, 노트북은 S2와 연결돼. S1이 U1의 새 알림을 저장했어.',['S1','ND','C1','C2'],['S1-ND'],async()=>{resetData();reveal('C1','C2');await fly('S1-ND','go',{label:'새 알림 저장'});setR('nd1','#13','ok');setR('nd2','2','ok')}),
+  st('obs','노트북은 모름','S1은 자기가 가진 아이패드 연결로만 알릴 수 있어. 노트북 연결은 S2에 있어서 S2는 새 알림이 생긴 걸 몰라.',['S1','B1','S2','B2'],['S1-B1'],async()=>{await fly('S1-B1','ext',{label:'SSE 안내'});badge('B1',2);note('S2','알 방법 없음','bad');note('B2','새 알림 모름','bad')}),
+  st('fix','서버 간 신호','S1이 Redis Pub/Sub에 대상 사용자 U1 신호를 발행해. 구독 중인 서버가 모두 받고, 각 서버는 자기 연결 중 U1의 브라우저에만 알려.',['R'],[],async()=>{reveal('R');await wait(900)}),
+  st('re','같은 조건으로 다시 실행','같은 새 알림 #13이 S1에 저장돼. S1이 신호를 발행하고 S1, S2가 모두 받아.',['S1','ND','R','S2'],['S1-ND','S1-R','R-S2'],async()=>{resetData();await fly('S1-ND','go',{label:'새 알림 저장'});setR('nd1','#13','ok');setR('nd2','2','ok');await fly('S1-R','ext',{label:'대상 U1'});await both(back('S1-R',{cls:'ext',label:'신호 전달'}),fly('R-S2','ext'))}),
+  st('re','두 화면 모두 최신 상태로','각 서버가 SSE로 안내하고, 화면이 API로 최신 상태를 읽어 맞춰.',['S1','S2','B1','B2'],['S1-B1','S2-B2','B1-S1','B2-S2'],async()=>{await both(fly('S1-B1','ext',{label:'SSE 안내'}),fly('S2-B2','ext',{label:'SSE 안내'}));await both(fly('B1-S1','go',{label:'최신 상태 조회'}),fly('B2-S2','go',{label:'최신 상태 조회'}));badge('B1',2);badge('B2',2);note('B2','갱신됨','ok')}),
+  st('sum','남는 한계','Pub/Sub은 구독이 끊긴 동안의 신호를 보관하지 않아. 장애 중에도 바로 전달된다고 보장하지 않아. 이 복구는 ④의 누락 복구에서 봐.',[],[],async()=>{await wait(600)})]},
+
+ {name:'구독 갱신·발송 경합 (서버가 나뉜 경우)',scene:'sub',opt:{P:'서버 S1 · 발송 처리',A:'서버 S2 · 구독 요청',Acol:'var(--s2)'},show:['B1','P','A','W','SUB','J'],tags:['code','risk'],cls:['fix'],
+  intro:'②의 7·8·9번 경합은 서버 1대에서도 생겨. 발송은 S1, 구독 갱신은 S2가 맡으면 어떻게 되는지 봐.',
+  steps:[
+  st('norm','발송은 S1, 갱신은 S2','작업 #1은 v1 기준이야. S1이 버전을 확인했어.',['P','J','SUB'],['P-J','P-SUB'],async()=>{await back('P-J',{label:'작업 #1 (v1)'});await back('P-SUB',{label:'현재 v1'});note('P','v1 = v1','ok')}),
+  st('prob','S2가 구독 갱신','S2가 아이패드의 갱신 요청을 받아 구독을 v2로 바꿔.',['B1','A','SUB'],['B1-A','A-SUB'],async()=>{await fly('B1-A','go',{label:'구독 갱신'});await fly('A-SUB');setR('sub','v2 · 주소 B · 활성','flash')}),
+  st('obs','결과는 서버 1대와 같음','S1은 주소를 다시 읽어 v2로 보내. 원인은 서버 수가 아니라 확인하는 위치야.',['P','SUB','W'],['P-SUB','P-W'],async()=>{setR('sub',null,'');await back('P-SUB',{label:'주소 B (v2)'});await fly('P-W','ext');setR('j1','v1 기준 · v2로 발송됨','bad')}),
+  st('fix','DB 조건으로 검증','②에서 본 검증은 DB 조건으로 처리해. 보낼 구독에서 버전 확인, 같은 버전일 때만 404·410 반영, 원자적 버전 증가야. 그래서 서버 수와 상관없이 유지돼.',['P'],[],async()=>{subt('P','보낼 구독에서 버전 확인');await wait(900)}),
+  st('re','같은 경합으로 다시 실행','같은 순서로 다시 해. S2가 v2로 바꾼 뒤 S1이 구독을 한 번 읽고 보내지 않아.',['B1','A','SUB','P','J'],['B1-A','A-SUB','P-SUB','P-J'],async()=>{resetData();subt('P','보낼 구독에서 버전 확인');await fly('B1-A','go',{ms:F*.6});await fly('A-SUB','go',{ms:F*.6});setR('sub','v2 · 주소 B · 활성','ok');await back('P-SUB',{label:'v2 · 주소 B'});await fly('P-J','go',{label:'작업 취소'});setR('j1','v1 기준 · 취소','ok');note('P','보내지 않음','ok')}),
+  st('sum','정리','서버를 나눠도 새 문제가 생기는 건 아니야. 같은 검증이 모든 서버에서 지켜지는지가 중요해.',[],[],async()=>{await wait(600)})]}
+];
+
+/* ===== ④ V2 전체 개선 구조와 선택 A·B ===== */
+const V2BASE=['S1','F','ND'];
+const S4L=[
+ {name:'전체 연결 흐름',scene:'v2',opt:{},show:['S1'],tags:['sol'],cls:['now'],
+  intro:'②·③에서 본 해결 장치를 하나의 구조로 이어 봐. 처음에는 큰 흐름만 보여 주고 다음을 누를 때마다 장치가 하나씩 붙어.',
+  steps:[
+  st('flow','알림이 생길 일 발생','공유 냉장고 참여나 08시 배치처럼 알림이 생길 일이 S1에서 일어나.',['S1'],[],async()=>{note('S1','변경 요청 받음','warn');await wait(900)}),
+  st('flow','변경·알림·수신자·후속 기록 저장','변경, 알림, 수신자, 필요한 후속 기록을 같은 트랜잭션에 저장해. 저장 경계는 ②의 1-A에서 본 공백을 막아.',['S1','F','ND','O'],['S1-F','S1-ND','S1-O'],async()=>{reveal('F','ND','O');await both(fly('S1-F'),fly('S1-ND'),fly('S1-O'));setR('ob','#7 대기','pend')}),
+  st('flow','독립 실행자가 이어 처리','요청 처리와 따로 도는 실행자가 후속 기록을 읽어. ②의 5번에서 본 독립 실행자야. 선점은 ③에서 본 방식을 써.',['X','O'],['O-X'],async()=>{reveal('X');await fly('O-X')}),
+  st('flow','인앱 갱신과 푸시 발송','인앱은 Redis 신호를 거쳐 SSE로 알리고, 푸시는 작업을 만들어 외부 서비스로 보내. 서버 간 전달은 ③에서 본 장치야.',['X','R','S2','J','W'],['X-R','R-S2','X-J','X-W'],async()=>{reveal('R','S2','J','W','B2');await fly('X-R','ext');await fly('R-S2','ext');await fly('X-J');setR('jb1','푸시 작업 #7','pend');await fly('X-W','ext')}),
+  st('flow','결과와 브라우저 반영 확인','푸시는 결과를 저장하고, 브라우저는 최신 상태를 반영한 뒤 확인(ACK)을 보내.',['S2','B2','J'],['S2-B2','B2-S2'],async()=>{await fly('S2-B2','ext');await fly('B2-S2','go',{label:'반영 · ACK'});setR('jb1','수락','ok');setR('jb2','#7 U1 노트북 · 확인','ok')}),
+  st('flow','실패·미확인 복구','실패한 작업과 확인이 오지 않은 전달은 실행자가 기록을 보고 다시 처리해. 자세한 경우는 누락 복구 시나리오에서 하나씩 봐.',['X','J'],['X-J'],async()=>{await back('X-J',{label:'실패·미확인 조회'});note('X','기록에서 다시 처리','ok')}),
+  st('sum','장치를 처음 본 곳','실행권과 생성 키는 ③의 08시 동시 실행, 선점은 ③의 중복 발송, 저장 경계는 ②의 1-A, 독립 실행자는 ②의 5번, 서버 간 전달은 ③의 SSE, 버전 검증은 ②의 7~9번에서 봤어.',[],[],async()=>{await wait(600)})]},
+
+ {name:'저장과 아웃박스',scene:'v2',opt:{},show:['S1','F','ND','O','B2','B3','S2'],tags:['sol'],cls:['now'],
+  intro:'아웃박스는 전달할 일을 적어 두는 테이블이야. 변경과 같은 트랜잭션에 저장해서, 커밋 뒤 발행 전에 서버가 꺼져도 다시 처리할 수 있게 해.',
+  steps:[
+  st('flow','참여 요청','U3가 냉장고 1 참여를 요청했고 S1이 받았어. U1과 U2에게 알려야 해.',['S1'],[],async()=>{note('S1','U3 참여 요청','warn');await wait(900)}),
+  st('flow','한 트랜잭션에 넷을 기록','참여 변경, 알림, 수신자, 전달할 일 #7을 같은 DB 트랜잭션에 기록해. 알림은 있는데 전달할 일이 없는 상태는 생기지 않아.',['S1','F','ND','O'],['S1-F','S1-ND','S1-O'],async()=>{await both(fly('S1-F'),fly('S1-ND'),fly('S1-O'));setR('mem','U1 · U2 · U3','ok');setR('nd1','13건','ok');setR('nd2','U1 미읽음 2 · U2 미읽음 2','ok');setR('ob','#7 대기','pend')}),
+  st('prob','커밋 뒤 발행 전에 S1 종료','S1이 신호를 보내기 전에 꺼졌어. 아웃박스가 없으면 여기서 신호가 사라져.',['S1','O'],[],async()=>{down('S1',1);await flash('ob','pend')}),
+  st('fix','실행자가 기록에서 다시 처리','실행자가 아직 처리하지 않은 #7을 읽어 Redis에 발행하고 발행됨으로 표시해.',['X','O','R'],['O-X','X-R'],async()=>{reveal('X','R');await fly('O-X');await fly('X-R','ext');setR('ob','#7 발행됨','ok')}),
+  st('flow','S2가 연결된 화면에 안내','S2가 신호를 받아 자기에게 연결된 U1 노트북과 U2 아이패드에 안내하고, 화면이 최신 상태를 읽어.',['R','S2','B2','B3'],['R-S2','S2-B2','S2-B3'],async()=>{await fly('R-S2','ext');await both(fly('S2-B2','ext'),fly('S2-B3','ext'));badge('B2',2);badge('B3',2)}),
+  st('obs','발행 성공은 수신 완료가 아님','발행됨은 Redis에 넘겼다는 뜻이야. 구독이 끊긴 서버는 놓칠 수 있어서 브라우저 확인과 복구가 따로 필요해.',['O','R'],[],async()=>{note('R','발행 ≠ 화면 수신','warn');await wait(900)}),
+  st('sum','푸시 작업과 아웃박스','기존 푸시 작업은 발송과 재시도 기록이야. 아웃박스는 생성과 전달 사이 공백을 막는 기록이야. 역할이 달라서 무조건 합치지 않아. 08시 배치의 T1·T2를 유지한다면 빠진 작업을 찾아 만드는 경로가 따로 필요해.',[],[],async()=>{await wait(600)})]},
+
+ {name:'후속 작업 처리 (선택 A·B)',scene:'v2',opt:{},show:['S1','ND','O','X','J','W'],tags:['sol'],cls:['now'],
+  intro:'전달할 일을 실제 작업으로 바꿔 처리하는 방법은 아직 정하지 않았어. 같은 데이터와 같은 장애로 A와 B를 따라가 봐. 분기 단계에서 이전으로 돌아오면 다른 안을 고를 수 있어.',
+  steps:[
+  st('flow','같은 시작 조건','알림 #e1이 저장됐고 아웃박스에 #e1 후속 처리가 남아 있어. 처리 도중 실행자가 한 번 꺼지는 장애를 양쪽에 똑같이 넣어.',['ND','O'],[],async()=>{setR('nd1','13건','ok');setR('ob','#e1 대기','pend');await flash('ob','pend')}),
+  st('br','선택: 후속 작업을 어떻게 처리할까','아래에서 A나 B를 골라. 고르지 않으면 A로 진행해. 다음을 누르면 고른 안의 흐름을 끝까지 따라가.',[],[],async()=>{await wait(300)})],
+  branch:{
+   A:{name:'A · DB 작업 테이블',desc:'할 일을 DB에 두고 워커가 선점',steps:[
+    st('flow','할 일 저장','실행자가 #e1을 읽어 DB 작업 테이블에 인앱 전달과 푸시 작업을 저장해.',['O','X','J'],['O-X','X-J'],async()=>{await fly('O-X');await fly('X-J','go',{label:'작업 저장'});setR('jb1','#e1 작업 · 대기','pend');setR('ob','#e1 작업으로 옮김','ok')}),
+    st('flow','워커가 조회해 선점','워커가 작업을 조회하고 조건부 변경으로 선점해. 기한은 08:05야.',['X','J'],['X-J'],async()=>{await fly('X-J','go',{label:'조회·선점'});setR('jb1','#e1 워커 1 선점 · 08:05','pend')}),
+    st('prob','처리 중 워커 종료','워커 1이 처리하다 꺼졌어. 작업은 선점된 채로 DB에 남아.',['X','J'],[],async()=>{down('X',1,'워커 1 종료');await flash('jb1','pend')}),
+    st('fix','기한이 지나 다른 워커가 회수','선점 기한이 지나면 다른 워커가 작업을 다시 선점해. 같은 DB 기록을 보고 이어 해.',['X','J'],['X-J'],async()=>{down('X',0);subt('X','워커 2 (다른 서버여도 됨)');await fly('X-J','go',{label:'기한 지난 #e1 회수'});setR('jb1','#e1 · 워커 2 선점','pend')}),
+    st('flow','처리하고 결과·재시도 저장','워커 2가 인앱 신호를 발행하고 푸시를 보낸 뒤 결과를 저장해. 실패하면 재시도 시각을 적어.',['X','R','W','J'],['X-R','X-W','X-J'],async()=>{reveal('R');await fly('X-R','ext');await fly('X-W','ext');await fly('X-J','go',{label:'결과 저장'});setR('jb1','#e1 완료','ok')}),
+    st('sum','A의 특징','할 일이 DB 한 곳에 남아. 큐 완료라는 단계가 없어. 새 운영 요소는 없지만, 워커가 DB를 자주 조회해서 그 부하는 측정해야 해.',[],[],async()=>{await wait(600)})]},
+   B:{name:'B · 저장형 메시지 큐',desc:'큐에 넣고 소비 워커가 받아 DB에 저장',steps:[
+    st('flow','큐에 발행','발행자가 아웃박스의 #e1을 저장형 메시지 큐에 넣어.',['O','X','Q'],['O-X','X-Q'],async()=>{reveal('Q');await fly('O-X');await fly('X-Q','ext');qItem('#e1 대기','wait');setR('ob','#e1 큐로 발행','ok')}),
+    st('flow','소비 워커가 받음','소비 워커가 큐에서 #e1을 받아. 발행자와 소비자는 책임 구분이고 같은 서버여도 돼.',['Q','X'],['Q-X'],async()=>{await fly('Q-X','ext');qItem('#e1 처리 중','run')}),
+    st('prob','저장 전에 큐 완료를 하면','순서를 잘못 잡아서 DB 저장 전에 큐 완료를 먼저 하고 워커가 꺼졌다고 해 보자. #e1은 큐에서도 DB에서도 사라져. 그래서 이 순서는 쓰지 않아.',['X','Q','J'],[],async()=>{qItem('#e1 완료 처리됨','ok');down('X',1,'저장 전 종료');setR('jb1','없음 · 유실','bad');await wait(1200)}),
+    st('fix','저장한 뒤 큐 완료','올바른 순서로 다시 해. 소비 워커가 #e1을 이벤트 ID를 키로 DB에 저장한 뒤 큐 완료를 확인해.',['Q','X','J'],['Q-X','X-J'],async()=>{down('X',0);setR('jb1','없음');qItem('#e1 처리 중','run');await fly('X-J','go',{label:'이벤트 ID로 저장'});setR('jb1','#e1 작업 · 대기','pend')}),
+    st('prob','저장 뒤 완료 전에 종료','이번에는 DB에 저장한 뒤 큐 완료를 보내기 전에 워커가 꺼졌어. 큐는 #e1을 다시 전달해.',['X','Q'],['Q-X'],async()=>{down('X',1,'완료 전 종료');await wait(800);down('X',0);await fly('Q-X','ext',{label:'#e1 재전달'});qItem('#e1 재전달','wait')}),
+    st('fix','멱등 저장으로 중복 없음','같은 이벤트 ID라서 DB에 두 번 저장되지 않아. 이번에는 큐 완료까지 끝내.',['X','J','Q'],['X-J'],async()=>{await fly('X-J','go',{label:'같은 ID · 이미 있음'});setR('jb1','#e1 작업 · 대기 (1건)','pend');qItem('#e1 완료','ok')}),
+    st('flow','실행은 DB 작업에서 선점','실제 인앱 전달과 푸시는 DB 작업을 선점해서 처리해. 이 부분은 A와 같아.',['X','J','R','W'],['X-J','X-R','X-W'],async()=>{reveal('R');await fly('X-J','go',{label:'선점'});await fly('X-R','ext');await fly('X-W','ext');setR('jb1','#e1 완료','ok')}),
+    st('sum','B의 특징','할 일이 큐 메시지와 DB 작업 두 곳에 걸쳐. 큐 완료는 브라우저 반영 완료가 아니야. 큐 운영과 저장·재시도·확인 설정이 더 필요해. 큐 제품, 도입 여부, 비용과 성능 우열은 아직 미정이야.',[],[],async()=>{await wait(600)})]}}},
+
+ {name:'인앱 전달과 읽음 동기화',scene:'v2',opt:{},show:['B1','B2','B3','S1','S2','R','ND'],tags:['sol'],cls:['now'],
+  intro:'U1이 아이패드에서 알림을 읽으면 U1 노트북에도 반영하고 U2는 그대로 둬야 해.',
+  steps:[
+  st('flow','읽음과 변경 기록 저장','U1이 아이패드에서 읽었어. S1이 U1의 수신자 기록을 읽음으로 바꾸고, 읽음 변경 이벤트 #r3도 같이 저장해.',['B1','S1','ND','O'],['B1-S1','S1-ND','S1-O'],async()=>{reveal('O');await fly('B1-S1','go',{label:'읽음 요청 (API)'});await both(fly('S1-ND'),fly('S1-O'));setR('nd2','U1 미읽음 0 · U2 미읽음 1','ok');setR('ob','#r3 U1 읽음 변경','pend');badge('B1',0)}),
+  st('flow','Redis 신호 (대상 U1)','실행자가 #r3을 읽어 대상 사용자 U1 신호를 발행해. 신호에는 누구의 무엇이 바뀌었는지만 담아.',['O','X','R'],['O-X','X-R'],async()=>{reveal('X');await fly('O-X');await fly('X-R','ext',{label:'대상 U1 · #r3'});setR('ob','#r3 발행됨','ok')}),
+  st('flow','서버가 대상과 자기 연결 확인','구독 중인 서버가 모두 신호를 받아. 각 서버가 대상 사용자와 자기 SSE 연결을 비교해. S2는 U1 노트북 연결이 있고 U2 아이패드는 대상이 아니야. Redis가 권한 확인이나 대상 고르기를 대신하지 않아.',['R','S1','S2'],['R-S2'],async()=>{await fly('R-S2','ext');note('S2','U1 노트북만 대상','ok');note('S1','U1 아이패드: 이미 반영')}),
+  st('flow','안내 뒤 최신 상태 조회','S2가 노트북에 SSE로 안내하고, 노트북은 API로 최신 상태를 읽어 미읽음 0으로 맞춰. SSE는 서버에서 브라우저로만 가고, 읽음과 확인은 별도 API야.',['S2','B2','ND'],['S2-B2','B2-S2','S2-ND'],async()=>{await fly('S2-B2','ext');await fly('B2-S2');await fly('S2-ND');await back('S2-ND');badge('B2',0);note('B2','읽음 반영','ok')}),
+  st('flow','브라우저별 확인(ACK)','노트북이 #r3을 반영했다고 확인을 보내. 확인은 사람이 읽었다는 뜻이 아니라 화면이 반영했다는 뜻이야. 브라우저마다 따로 기록하고, 한 브라우저의 확인이 다른 브라우저를 대신하지 않아.',['B2','S2','J'],['B2-S2'],async()=>{reveal('J');await fly('B2-S2','go',{label:'#r3 ACK'});setR('jb2','#r3 U1 노트북 · 확인','ok')}),
+  st('sum','U2와 푸시','U2의 미읽음 1은 그대로야. 읽음 변경마다 웹 푸시를 만들지 않아. 알림 생성에 대한 확인이 나중의 읽음 변경까지 완료로 만들지는 않아.',['B3'],[],async()=>{note('B3','U2 미읽음 1 유지','ok');await wait(600)})]},
+
+ {name:'누락 복구 ① Redis 구독만 끊김',scene:'v2',opt:{},show:['B2','S1','S2','R','ND','X','J'],tags:['sol'],cls:['now'],
+  intro:'S2와 Redis 사이만 끊기고 노트북과 S2의 SSE는 멀쩡한 경우야. Pub/Sub은 끊긴 동안의 신호를 다시 주지 않아.',
+  steps:[
+  st('prob','S2의 구독만 끊김','S2와 Redis 사이 연결이 잠깐 끊겼어. 노트북의 SSE는 정상이야.',['S2','R'],[],async()=>{rsub('S2',0);await wait(900)}),
+  st('prob','끊긴 동안 발행된 신호','새 알림 #8이 저장되고 신호가 발행됐어. S2는 받지 못해. 노트북 전달 기록은 미확인으로 남아.',['S1','ND','R','J'],['S1-ND','S1-R'],async()=>{await fly('S1-ND');setR('nd1','13건','ok');setR('jb2','#8 U1 노트북 · 미확인','pend');await fly('S1-R','ext');note('S2','신호 못 받음','bad')}),
+  st('fix','구독 복구 때 재조회 안내','S2는 구독이 돌아오면 놓친 신호가 있었는지 알 수 없어. 그래서 자기에게 연결된 화면 모두에 다시 조회하라고 보내.',['S2','B2'],['S2-B2'],async()=>{rsub('S2',1);note('S2','구독 복구 · 재조회 안내','ok');await fly('S2-B2','ext',{label:'재조회 안내'})}),
+  st('fix','복구 실행자가 미확인 재전달','그래도 남은 미확인 전달은 실행자가 찾아서 다시 신호를 보내. 두 장치가 서로 다른 틈을 메워.',['X','J','R','S2'],['X-J','X-R','R-S2'],async()=>{await back('X-J',{label:'미확인 #8'});await fly('X-R','ext',{label:'재전달 · 대상 U1'});await fly('R-S2','ext')}),
+  st('flow','반영하고 확인','노트북이 최신 상태를 읽고 #8 확인을 보내.',['B2','S2','J'],['B2-S2'],async()=>{await fly('B2-S2','go',{label:'조회 · #8 ACK'});badge('B2',2);setR('jb2','#8 U1 노트북 · 확인','ok')})]},
+
+ {name:'누락 복구 ② 확인(ACK) 유실',scene:'v2',opt:{},show:['B1','S1','R','X','J'],tags:['sol'],cls:['now'],
+  intro:'화면은 반영했는데 확인이 도중에 사라진 경우야. 다시 보내더라도 같은 알림이 두 번 보이면 안 돼.',
+  steps:[
+  st('flow','안내 받고 반영','U1 아이패드가 #9 안내를 받아 최신 상태를 읽고 표시했어.',['S1','B1','J'],['S1-B1','B1-S1'],async()=>{setR('jb2','#9 U1 아이패드 · 미확인','pend');await fly('S1-B1','ext');await fly('B1-S1','go',{label:'최신 상태 조회'});badge('B1',2);note('B1','#9 표시')}),
+  st('prob','확인이 사라짐','확인을 보냈지만 중간에 사라졌어. DB에는 여전히 미확인이야.',['B1','S1'],['B1-S1'],async()=>{await fly('B1-S1','bad',{label:'#9 ACK 유실'});await flash('jb2','pend')}),
+  st('fix','실행자가 다시 안내','실행자가 미확인 #9를 찾아 다시 신호를 보내.',['X','J','R','S1','B1'],['X-J','X-R','S1-B1'],async()=>{await back('X-J',{label:'미확인 #9'});await fly('X-R','ext');await back('S1-R',{cls:'ext',label:'신호 전달'});await fly('S1-B1','ext')}),
+  st('fix','덧붙이지 않고 최신 상태로 맞춤','화면은 받은 알림을 목록에 덧붙이지 않고 최신 상태를 다시 읽어 맞춰. 그래서 #9가 두 번 보이지 않아. 이번 확인은 기록돼.',['B1','S1','J'],['B1-S1'],async()=>{await fly('B1-S1','go',{label:'조회 · #9 ACK'});note('B1','#9 그대로 1개','ok');badge('B1',2);setR('jb2','#9 U1 아이패드 · 확인','ok')})]},
+
+ {name:'누락 복구 ③ 오프라인 브라우저',scene:'v2',opt:{},show:['B3','S1','S2','ND','J'],tags:['sol'],cls:['now'],
+  intro:'U2 아이패드가 꺼져 있는 동안 알림이 생긴 경우야. 종료된 연결로 계속 다시 보내지 않아.',
+  steps:[
+  st('prob','U2 아이패드 오프라인','U2 아이패드가 꺼져 있어.',['B3'],[],async()=>{down('B3',1,'오프라인');await wait(800)}),
+  st('flow','알림 저장 · 미확인','새 알림이 저장되고 U2 아이패드 전달 기록은 미확인이야. 연결이 없으니 계속 다시 보내지 않아.',['S1','ND','J'],['S1-ND'],async()=>{await fly('S1-ND');setR('nd2','U1 미읽음 2 · U2 미읽음 2','ok');setR('jb2','#10 U2 아이패드 · 미확인','pend')}),
+  st('fix','다시 접속하면 최신 상태 복원','U2 아이패드가 다시 접속하면 SSE를 맺고 바로 최신 상태를 읽어 복원해. 현재 활성 냉장고만 보여 주는 정책은 그대로야.',['B3','S2','ND','J'],['B3-S2','S2-ND','S2-B3'],async()=>{down('B3',0);await fly('B3-S2','go',{label:'재접속 · 최신 상태 조회'});await fly('S2-ND');await back('S2-ND');await fly('S2-B3','back',{label:'응답'});badge('B3',2);setR('jb2','#10 U2 아이패드 · 확인','ok')}),
+  st('sum','미정','연결을 어떻게 식별하고 대체할지, 미확인 기록을 얼마나 보관할지는 아직 정하지 않았어.',[],[],async()=>{await wait(600)})]},
+
+ {name:'누락 복구 ④ 늦게 온 옛 응답',scene:'v2',opt:{},show:['B2','S2','ND'],tags:['sol'],cls:['now'],
+  intro:'조회 응답이 순서를 바꿔 도착해도 이미 읽은 알림을 다시 미읽음으로 되돌리면 안 돼.',
+  steps:[
+  st('flow','조회 ① 출발','노트북이 최신 상태를 조회했어. 이 응답은 상태 버전 5, 미읽음 1을 담고 있지만 늦게 도착해.',['B2','S2','ND'],['B2-S2'],async()=>{await fly('B2-S2','go',{label:'조회 ①'});setR('nd2','U1 미읽음 1 · 상태 버전 5','')}),
+  st('flow','그 사이 읽음 · 조회 ②','그 사이 U1이 아이패드에서 읽어 상태 버전 6이 됐고, 노트북이 다시 조회한 ②가 먼저 도착했어.',['S2','B2','ND'],['S2-B2'],async()=>{setR('nd2','U1 미읽음 0 · 상태 버전 6','ok');await fly('S2-B2','back',{label:'응답 ② · 버전 6'});badge('B2',0);note('B2','버전 6 · 미읽음 0','ok')}),
+  st('prob','옛 응답 ① 도착','버전 5 응답이 늦게 도착했어. 그대로 덮으면 미읽음 1로 되돌아가.',['S2','B2'],['S2-B2'],async()=>{await fly('S2-B2','bad',{label:'응답 ① · 버전 5'})}),
+  st('fix','더 오래된 버전은 버림','화면은 이미 가진 버전 6보다 오래된 응답은 반영하지 않아. 미읽음 0이 유지돼.',['B2'],[],async()=>{note('B2','버전 5 무시 · 미읽음 0 유지','ok');await wait(900)})]},
+
+ {name:'누락 복구 ⑤ 실행자 종료',scene:'v2',opt:{},show:['O','X','R'],tags:['sol'],cls:['now'],
+  intro:'전달할 일을 처리하던 실행자가 도중에 꺼진 경우야.',
+  steps:[
+  st('flow','#7 처리 중','실행자가 #7을 읽어 처리하기 시작했어.',['O','X'],['O-X'],async()=>{setR('ob','#7 대기','pend');await fly('O-X')}),
+  st('prob','발행 뒤 표시 전에 종료','실행자가 Redis에 발행은 했지만 발행됨으로 표시하기 전에 꺼졌어. DB에는 #7이 아직 대기야.',['X','R','O'],['X-R'],async()=>{await fly('X-R','ext');down('X',1);await flash('ob','pend')}),
+  st('fix','미완료 기록에서 재개','다시 시작한 실행자가 대기로 남은 #7을 다시 처리해. 같은 신호가 두 번 갈 수 있지만, 화면은 최신 상태를 다시 읽는 방식이라 목록이 두 번 늘지 않아.',['X','O','R'],['O-X','X-R'],async()=>{down('X',0);note('X','재시작','warn');await fly('O-X');await fly('X-R','ext',{label:'#7 다시 발행'});setR('ob','#7 발행됨','ok');note('X','')})]},
+
+ {name:'푸시·보관·작업량',scene:'v2',opt:{},show:['X','J','W','ND'],tags:['sol','perf'],cls:['now','perf'],
+  intro:'푸시는 작업 생성부터 결과 저장까지 ②·③의 장치를 차례로 거쳐. 보관과 작업량 정책도 같이 봐.',
+  steps:[
+  st('flow','작업 생성과 선점','실행자가 푸시 작업을 만들고, 보낼 때는 조건부 변경으로 선점해.',['X','J'],['X-J'],async()=>{await fly('X-J','go',{label:'작업 생성 · 선점'});setR('jb1','#p1 · 선점 · v2 기준','pend')}),
+  st('flow','최신 활성 구독과 버전 확인','실제로 보낼 구독을 읽은 결과에서 활성 상태와 버전을 확인해. 다르면 취소해.',['X'],[],async()=>{note('X','구독 v2 · 활성 확인','ok');await wait(900)}),
+  st('flow','외부 발송','외부 서비스로 보내. 제공자가 수락해도 단말이 실제로 받았다는 뜻은 아니야.',['X','W'],['X-W'],async()=>{await fly('X-W','ext');note('W','수락 ≠ 단말 수신','warn')}),
+  st('flow','결과·재시도 저장','결과를 저장할 때 선점이 아직 내 것인지 확인해. 실패면 재시도 시각을 적어. 404·410은 보낸 버전이 같을 때만 구독에 반영해.',['X','J'],['X-J'],async()=>{await fly('X-J','go',{label:'결과 저장'});setR('jb1','#p1 · 수락','ok')}),
+  st('obs','숨기지 않는 불확실성','외부는 성공했는데 결과 저장이 실패하면 결과를 모르는 작업으로 남겨. 다시 보내면 중복이 생길 수 있다는 걸 알고 처리해.',['J'],[],async()=>{setR('jb1','#p2 · 결과 모름','pend');await wait(900)}),
+  st('flow','작업량 제한','작업 조회, 생성, 발송, 복구를 모두 정한 양만큼만 해. 실제 숫자는 후속 실험으로 정해.',['X'],[],async()=>{note('X','한 번에 처리량 제한 (값 미정)');await wait(900)}),
+  st('sum','보관','03시 정리는 실행 조정으로 한 서버만 해. 화면에 보여 줄 99개 정책과 미확인 전달 기록의 보관은 나눠서 생각해. 최종 보관 기간은 미정이야.',['ND'],[],async()=>{note('ND','표시 99개 · 복구 기록 보관은 별도','warn');await wait(600)})]}
+];
+
+const SCREENS=[
+ {chip:'① 현재 흐름',title:'① 현재 단일 인스턴스 정상 흐름',menu:'처음 만든 알림 시뮬레이터 그대로야. 지금 코드 기준 흐름',lede:'지금 코드 기준이야. 개선 후보는 넣지 않았어. 서버는 1대, 화면 갱신은 30초 폴링이야.',list:S1L},
+ {chip:'② 단일 서버 문제',title:'② 단일 인스턴스에서도 가능한 문제와 대응',menu:'문제를 보고 같은 그림에 대응을 붙여 다시 실행',lede:'서버 1대에서도 생길 수 있는 문제야. 다음을 누르면 문제, 대응, 같은 조건 재실행 순서로 진행해. 성능 문제는 가설이라 효과를 확정하지 않아.',list:S2L},
+ {chip:'③ 다중 서버 문제',title:'③ 다중 인스턴스에서 추가·심화되는 문제와 대응',menu:'S1·S2 두 대에서 생기는 문제와 대응',lede:'서버를 S1·S2 두 대로 늘린 상황이야. 서버가 늘었다고 모든 일이 중복되지는 않아. 어떤 조건에서 생기는지 봐.',list:S3L},
+ {chip:'④ V2 전체 구조',title:'④ V2 전체 개선 구조와 선택 A·B',menu:'해결 장치를 하나로 잇고 미정 선택을 비교',lede:'②·③의 해결 장치를 하나의 구조로 이어. 모두 V2 후보이고 아직 구현된 게 아니야. A·B는 후속 작업 처리 시나리오의 분기 단계에서만 골라.',list:S4L}
+];
+
+/* ===== 쉬운 말 문장 덮어쓰기 ===== */
+const TXT={
+ 2:[
+  {name:'1-A. 알림은 저장됐는데 푸시 작업이 안 만들어짐',intro:'08시 배치는 알림 저장(T1)과 푸시 작업 만들기(T2)를 따로따로 저장해. 두 번째가 실패하면 어떻게 되는지 보고, 같은 상황을 해결 장치를 붙여 다시 돌려 봐.',
+   cmp:['알림은 보이는데 푸시 작업이 없어서 푸시가 영영 안 나가.','복구 실행자가 빠진 작업을 찾아 만들어서 푸시가 나가.'],
+   steps:[['알림 저장 성공 (T1)','냉장고 1의 알림과 받는 사람 기록을 한 번에 저장하고 확정했어. 이렇게 같이 저장하고 확정하는 묶음을 트랜잭션이라고 하고, 이 첫 번째 묶음을 T1이라고 불러.'],
+    ['푸시 작업 만들기 실패 (T2)','푸시 작업을 만드는 단계에서 DB 오류가 났어. 이 단계 저장은 취소되지만, 앞에서 확정된 알림은 그대로 남아.'],
+    ['알림은 보이는데 푸시는 안 나감','알림함에는 알림이 보여. 하지만 푸시 작업이 없어서 푸시는 안 나가. 다음 날 08시에는 그날 알림만 보니까 이 알림의 작업은 다시 안 만들어져.'],
+    ['빠진 작업을 찾아 채우는 장치','방법은 두 가지야. 알림과 푸시 작업을 한 번에 같이 저장하거나, 따로 저장하되 작업이 빠진 알림을 찾아 채우는 실행자를 두는 거야. 여기서는 두 번째를 보여 줘.'],
+    ['같은 상황으로 다시 실행','처음 상태로 돌려서 다시 해. 알림 저장은 성공하고 푸시 작업 만들기는 똑같이 실패해.'],
+    ['복구 실행자가 빠진 작업을 채움','복구 실행자가 오늘 알림 중 작업이 없는 알림을 찾아서 작업을 만들어. 이미 있는 작업은 또 만들지 않아.'],
+    ['해결 전후','해결 전에는 작업이 빠진 채로 끝났어. 해결 뒤에는 복구 실행자가 찾아서 채워. 며칠 전 알림까지 찾을지, 정오가 지난 알림도 보낼지는 아직 정하지 않았어.']]},
+  {name:'1-B. 푸시는 나갔는데 결과 저장이 실패함',intro:'푸시는 잘 나갔는데 "보냈음"을 저장하지 못한 경우야. 1-A와는 다른 상황이야.',
+   cmp:['DB에는 아직 안 보낸 작업으로 남아서 같은 푸시가 또 나가.','"보내는 중"을 먼저 적어 둬서 결과를 모르는 작업인 걸 알 수 있어. 그래도 중복 가능성은 남아.'],
+   steps:[['작업 #1 보내기','작업 #1을 외부 푸시 서비스로 보내.'],
+    ['보냈는데 결과 저장 실패','외부 서비스는 받았다고 답했어. 그런데 "보냈음"을 저장하는 단계(T3)가 실패했어.'],
+    ['DB에는 아직 안 보낸 작업','DB에는 #1이 아직 보낼 차례인 작업으로 남아. 같은 08시 실행이 다시 살펴보면 #1을 또 보내. DB만 봐서는 이미 나간 건지 알 수 없어.'],
+    ['보내기 전에 먼저 적어 두기','보내기 전에 "보내는 중"과 시각을 먼저 저장하는 거야. 결과 저장이 실패해도 "결과를 모르는 작업"이라는 사실이 DB에 남아.'],
+    ['같은 상황으로 다시 실행','처음 상태로 돌려서 다시 해. 이번에는 보내기 전에 #1을 "보내는 중"으로 적고 보내.'],
+    ['결과 저장 실패 뒤','결과 저장이 또 실패해도 #1은 "결과 모름"으로 남아. 바로 다시 보내지 않고, 정한 시간이 지나면 다시 보낼지 규칙대로 정해.'],
+    ['남는 한계','상태를 감추지 않고 관리할 수는 있어. 하지만 푸시가 두 번 나가는 걸 완전히 막지는 못해. 다른 서버가 작업을 맡는 장치가 있어도 마찬가지야.']]},
+  {name:'2. 냉장고가 많아지면 08시 배치가 오래 걸림',intro:'냉장고가 많아지면 알림 만드는 시간이 길어질 수 있다는 가정이야. 실제 시간은 아직 재 보지 않아서 효과를 단정하지 않아.',
+   cmp:['냉장고를 하나씩 다 처리해야 첫 푸시가 나가.','끝난 묶음부터 푸시를 보내기 시작해. 실제로 빨라지는지는 재 봐야 해.'],
+   steps:[['냉장고 3곳이면 금방','냉장고마다 차례대로 알림을 만들어. 3곳은 금방 끝나.'],
+    ['냉장고가 3,000곳이면','교육용 숫자로 냉장고가 3,000곳이면, 하나씩 차례로 처리해서 알림 만드는 시간이 길어져.'],
+    ['첫 푸시가 늦어질 수 있음','푸시 작업 만들기와 첫 푸시는 알림을 다 만든 뒤에 시작해. 그래서 첫 푸시가 늦어질 수 있어. 얼마나 늦는지는 아직 재 보지 않았어.'],
+    ['묶음으로 나누고 진행 위치 적기','냉장고를 정한 개수씩 묶어서 처리하고 어디까지 했는지 적어 두는 거야. 푸시 보내기는 따로 도는 실행자가 맡을 수 있어. 여러 개를 동시에 돌릴지는 재 본 뒤에 정해.'],
+    ['같은 물량으로 다시 실행','같은 3,000곳을 500곳씩 처리하고 묶음마다 진행 위치를 적어. 끝난 묶음의 작업은 실행자가 먼저 보내기 시작할 수 있어.'],
+    ['무엇으로 확인할까','효과는 아직 단정하지 않아. 냉장고 하나 처리 시간, 전체 시간, 첫 푸시까지 걸린 시간, DB 조회 시간으로 확인해. 3번, 5번 문제와 원인이 이어져 있을 수 있어.']]},
+  {name:'3. 푸시 작업을 한꺼번에 너무 많이 만듦',intro:'08시 배치는 오늘 보낼 푸시 작업을 한 번에 다 만들어 한 번에 저장해. 물량이 커질 때 생길 수 있는 일을 가정해서 봐.',
+   cmp:['작업을 전부 저장해야 첫 푸시가 나가고, 실패하면 전부 취소돼.','나눠서 저장한 묶음부터 보내. 실제 효과는 재 봐야 해.'],
+   steps:[['작업 3건을 한 번에 저장','오늘 알림과 푸시를 켠 기기를 짝지어 작업을 만들고 한 번에 저장해.'],
+    ['작업이 30,000건이면','교육용 숫자로 작업이 30,000건이면 그걸 전부 한 번에 저장해. 저장이 오래 걸릴 수 있다는 가정이야.'],
+    ['다 저장해야 첫 푸시 시작','이 저장이 끝나야 첫 푸시가 나가. 중간에 실패하면 전부 취소되고, 같은 실행에서 다시 만들지 않아. DB에 주는 영향은 재 봐야 해.'],
+    ['나눠 만들고 빠진 건 채우기','정한 개수씩 나눠 저장하고, 빠진 작업은 복구 실행자가 채우고, 보내기는 따로 도는 실행자가 맡는 거야.'],
+    ['같은 물량으로 다시 실행','같은 30,000건을 1,000건씩 나눠 저장해. 먼저 저장된 묶음부터 실행자가 보내기 시작해.'],
+    ['무엇으로 확인할까','저장에 걸린 시간, DB가 잡고 있는 시간, 첫 푸시까지 걸린 시간을 재서 묶음 크기를 정해. 2번 문제와 이어질 수 있지만 따로 떨어진 문제라고 단정하지 않아.']]},
+  {name:'4. 푸시를 한꺼번에 많이 보내면 서버나 외부 발송 서비스가 감당하기 어려워짐',intro:'푸시를 보낼 때 작업마다 가벼운 실행 단위(가상 스레드)를 하나씩 만들고, 동시에 보내는 건 20개로 막아. 작업이 많을 때를 가정해서 봐.',
+   cmp:['작업 30,000건을 한꺼번에 올려 두고 보내서, 서버 메모리와 외부 발송 서비스 모두 부담이 커질 수 있어.','가져오는 양과 동시에 보내는 양을 둘 다 제한해. 실제 영향은 재 봐야 해.'],
+   steps:[['작업마다 실행 단위 하나','보낼 작업 3건을 가져와서 작업마다 실행 단위를 하나씩 만들어. 동시에 보내는 건 20개까지야.'],
+    ['작업이 30,000건이면','교육용 숫자로 30,000건이면 전부 한 번에 가져오고 실행 단위도 30,000개 만들어. 그중 20개만 보내고 나머지는 차례를 기다려.'],
+    ['어디에 부담이 가나','기다리는 실행 단위와 작업 정보가 서버 메모리에 같이 올라와. 외부 발송 서비스에도 요청이 몰리고, 실패와 재시도가 늘 수 있어. 기다린다고 DB 연결을 잡고 있는 건 아니야. 얼마나 부담인지는 재 보기 전 가정이야.'],
+    ['가져오는 양 줄이기','한 번에 가져오는 작업 수를 정해 두고, 동시에 보내는 20개 제한은 그대로 두는 거야. 숫자는 실험해서 정해.'],
+    ['같은 물량으로 다시 실행','같은 30,000건을 500건씩 가져와서 20개씩 보내. 다 보내면 다음 500건을 가져와.'],
+    ['무엇으로 확인할까','메모리 사용량, 메모리 정리(GC) 시간, 보내는 속도, 외부 응답 시간과 오류 비율로 확인해. 20개 제한은 서버마다 따로 걸리는 숫자야.']]},
+  {name:'5. 재시도를 기다리다 서버가 꺼지면 푸시가 안 나감',intro:'지금 재시도는 08시 실행이 계속 기다리면서 해. 그 실행이 멈추면 어떻게 되는지 보고 해결 장치를 붙여 봐.',
+   cmp:['재시도를 기다리던 실행이 같이 사라져서 정오까지 아무도 안 보내.','DB에 남은 재시도를 따로 도는 실행자가 이어서 보내.'],
+   steps:[['#1 성공, #2 실패','#1은 잘 나갔고 #2는 외부 서비스 오류로 실패했어.'],
+    ['지금 재시도 방식','실패하면 5분, 15분, 30분 뒤에 최대 세 번 다시 보내고 정오를 넘기지 않아. 이 재시도는 같은 08시 실행이 기다리면서 해.'],
+    ['기다리는 중 서버 꺼짐','배포나 장애로 서버가 08:03에 꺼졌어. 기다리던 08시 실행도 같이 사라져.'],
+    ['이어서 보낼 주체가 없음','서버가 다시 켜져도 08시 실행은 다음 날에야 돌아. #2는 DB에 재시도 대기로 남지만 정오까지 아무도 안 보내. 기다리는 동안 예약 작업 실행 칸을 잡고 있어서 다른 예약 작업도 밀릴 수 있어.'],
+    ['따로 도는 실행자','남은 작업을 DB에 두고, 08시 실행과 따로 도는 실행자가 주기적으로 보낼 차례인 작업을 찾아 보내는 거야. 재시도 간격과 정오 기한은 그대로 둘 수 있어.'],
+    ['같은 상황으로 다시 실행','처음 상태로 돌려서 다시 해. #1 성공, #2 실패, 08:03 서버 꺼짐, 08:04 다시 켜짐까지 똑같아.'],
+    ['08:05에 실행자가 이어서 보냄','실행자가 DB에서 08:05가 된 #2를 찾아 보내고 결과를 저장해.'],
+    ['해결 전후','해결 전에는 재시도가 실행과 함께 사라졌어. 해결 뒤에는 DB 기록을 보고 이어서 해. 실행자를 얼마나 자주 돌릴지는 아직 정하지 않았어.']]},
+  {name:'6. 새 알림이 없어도 30초마다 계속 물어봄',intro:'지금 폴링은 서버 1대에서 잘 돌아가. 다만 새 알림이 없어도 계속 묻고, 새 알림은 늦게 보일 수 있어.',
+   cmp:['새 알림이 없어도 계속 묻고, 새 알림은 최대 30초 늦게 보여.','새 알림이 생길 때만 서버가 알려 줘서 바로 보여. 대신 연결을 유지해야 해.'],
+   steps:[['30초마다 확인','두 화면이 30초마다 최신 알림 번호를 물어보고 같은 값을 받아.'],
+    ['새 알림이 없어도 계속 물어봄','새 알림이 하루 몇 건뿐이어도 화면마다 30초에 한 번씩 물어. 열린 화면이 1,000개면(교육용 숫자) 1초에 약 33번이야.'],
+    ['새 알림이 늦게 보임','새 알림이 저장돼도 다음 질문 때까지 최대 30초 늦게 보여.'],
+    ['서버가 먼저 알려 주기 (SSE 후보)','화면과 서버가 연결을 열어 두고, 새 알림이 생기면 서버가 "다시 확인해"라고 알려 주는 거야. 화면은 그때만 최신 상태를 읽어. 서버가 화면으로 계속 알려 줄 수 있게 열어 두는 이 연결을 SSE라고 해.'],
+    ['같은 새 알림으로 다시 실행','같은 새 알림 #13이 저장돼. 서버가 두 화면에 바로 알리고, 화면이 최신 상태를 읽어.'],
+    ['새로 생기는 할 일','연결을 계속 열어 둬야 해. 연결이 끊긴 동안 놓친 알림은 다시 연결할 때 최신 상태를 읽어서 채워야 해.'],
+    ['무엇으로 확인할까','요청 수와 늦게 보이는 시간이 실제로 줄어드는지 재 봐야 해. 연결을 열어 두는 비용도 같이 봐. 폴링이 오류로 멈췄을 때 다시 시작하는 건 프론트 쪽 일이야.']]},
+  {name:'7. 구독이 바뀌었는데 이전 구독 정보로 발송을 시도함',intro:'서버 1대 안에서도 푸시 보내기와 구독 바꾸기가 동시에 일어날 수 있어. 보내는 쪽은 버전을 확인한 뒤 주소를 한 번 더 따로 읽어.',
+   cmp:['이전 구독(v1) 기준으로 만든 작업을, 확인 뒤 바뀐 구독(v2)으로 그대로 보내. 같은 기기 안의 일이지만 확인한 것과 보낸 대상이 달라.','보낼 구독을 읽을 때 버전도 같이 봐서, 이전 구독 기준 작업은 보내지 않고 취소해.'],
+   steps:[['버전이 같으면 보냄','작업 #1은 구독 v1일 때 만든 거고, 지금 구독도 v1이야. 같으니까 보내.'],
+    ['확인 직후 구독이 바뀜','그 순간 아이패드가 구독을 새로 받아서 바꿔 달라고 했어. 구독이 주소 B, v2로 바뀌어.'],
+    ['v1로 확인하고 v2로 보냄','보내는 쪽은 주소를 얻으려고 구독을 한 번 더 읽어. 이때 읽은 건 바뀐 v2의 주소 B야. 확인한 구독과 실제로 보낸 구독이 달라.'],
+    ['보낼 구독에서 같이 확인','실제로 보낼 구독을 읽을 때 버전과 상태도 같이 확인하는 거야. 확인과 주소 읽기를 따로 하지 않아.'],
+    ['같은 상황으로 다시 실행','처음 상태로 돌려서 같은 순서로 다시 해. 보내기 전에 구독이 v2로 바뀌어.'],
+    ['v1 작업은 안 보냄','보내는 쪽이 구독을 한 번 읽어서 주소와 버전을 같이 봐. 작업은 v1 기준인데 지금은 v2라서 작업을 취소해.'],
+    ['정리','서버 1대에서도 생기는 문제야. 서버 수와 상관없이 같은 확인이 필요해. 따로 고칠 버그로 다뤄.']]},
+  {name:'8. 늦게 온 "구독 없음" 응답이 새 구독을 꺼 버림',intro:'외부 서비스가 404·410으로 답하면 "그 주소의 구독은 없어졌다"는 뜻이야. 이 답이 늦게 오면 이미 바뀐 새 구독까지 꺼 버릴 수 있어.',
+   cmp:['옛 주소에 대한 늦은 응답 때문에 새 구독 v2가 꺼져.','보낼 때 버전과 지금 버전이 같을 때만 꺼서 v2는 그대로 살아 있어.'],
+   steps:[['주소 A로 보냄','작업 #1을 v1의 주소 A로 보냈어. 답을 기다리는 중이야.'],
+    ['기다리는 사이 구독 바뀜','그 사이 아이패드가 구독을 새로 받아서 주소 B, v2로 바뀌었어.'],
+    ['주소 A는 없다는 답','외부 서비스가 주소 A는 없다고(410) 답했어. 주소 A는 이미 버려졌으니 맞는 답이야.'],
+    ['새 구독이 꺼짐','보내는 쪽은 이 기기의 구독을 꺼 버려. 지금은 켜져 있는지만 보고 버전은 비교하지 않아. 그래서 방금 받은 v2가 꺼져.'],
+    ['버전이 같을 때만 끄기','"구독 없음" 결과를 저장할 때, 보낼 때의 버전이 지금 버전과 같을 때만 끄도록 조건을 거는 거야. 다르면 아무것도 바꾸지 않아.'],
+    ['같은 순서로 다시 실행','주소 A로 보내기, 구독 바뀜, 늦은 410까지 같은 순서로 다시 해.'],
+    ['v2는 그대로','조건이 안 맞아서 끄지 않아. 새 구독 v2는 켜진 채로 남아.'],
+    ['정리','모든 오류에서 구독을 끄는 건 아니야. 404·410일 때만 끄고, 그때도 보낸 버전이 같을 때만 반영해.']]},
+  {name:'9. 구독이 동시에 두 번 바뀌면 버전이 한 번만 오름',intro:'구독 버전은 읽은 값에 1을 더해서 저장해. 두 요청이 동시에 오면 하나가 덮어써져서 사라질 수 있어.',
+   cmp:['두 번 바뀌었는데 버전은 v2라서 변경 하나가 사라져.','DB에서 "지금 값 + 1"로 올려서 v3이 돼.'],
+   steps:[['요청 하나면 정상','구독 바꾸기 요청 하나는 v1을 읽고 v2로 저장해.'],
+    ['두 요청이 동시에 v1을 읽음','처음 상태로 돌려서, 구독 끄기와 바꾸기 요청이 거의 동시에 왔어. 둘 다 v1을 읽어.'],
+    ['각자 v2로 저장','각자 읽은 v1에 1을 더해 v2로 저장해. 나중에 저장한 값이 앞의 값을 덮어써.'],
+    ['두 번 바뀌었는데 v2','변경은 두 번 있었는데 버전은 한 번만 올랐어. 버전으로 옛 작업과 새 구독을 구분하기 어려워져.'],
+    ['동시에 와도 안 덮어쓰게','DB에서 "지금 값에 1 더하기"를 한 번에 하거나, 늦게 저장한 쪽을 실패시키는 방법이 있어. 어느 쪽으로 할지는 아직 정하지 않았어. 여기서는 첫 번째 방법을 보여 줘.'],
+    ['같은 동시 요청으로 다시 실행','같은 두 요청이 동시에 와. 이번에는 DB에서 지금 값에 1을 더해서 v2, v3 순서로 올라가.'],
+    ['정리','마지막 구독 상태를 어느 요청 기준으로 남길지도 따로 정해야 해. 따로 고칠 버그로 다루고, 방법은 아직 정하지 않았어.']]}
+ ],
+ 3:[
+  {name:'서버 두 대가 같은 알림을 두 번 만듦',intro:'서버가 늘었다고 모든 일이 두 번 일어나지는 않아. 서버마다 스스로 시작하는 예약 작업이 겹칠 때 생기는 일을 봐.',
+   cmp:['같은 알림이 2건 생겨서 알림함에 두 번 보여.','실행권으로 한 서버만 돌고, 겹쳐도 같은 키는 DB가 막아서 1건이야.'],
+   steps:[['서버 1대일 때','S1이 냉장고 1의 임박 알림 1건과 받는 사람 기록 2건을 만들어.'],
+    ['S2도 같은 08시 일정','처음 상태로 돌리고 서버를 2대로 늘렸어. 두 서버가 같은 코드와 같은 08시 일정을 가져서 각자 배치를 시작해.'],
+    ['둘 다 같은 알림 저장','두 서버가 같은 냉장고 1을 보고 각자 임박 알림을 저장해. 서로 상대가 만든 걸 몰라.'],
+    ['같은 알림이 두 개','U1·U2 알림함에 같은 알림이 두 번 보여. 이 알림으로 푸시 작업도 두 벌 생겨.'],
+    ['실행권과 중복 막는 키','두 가지를 붙여. 하나는 "08시 배치는 내가 한다"는 실행권을 한 서버만 갖게 하는 거야. 다른 하나는 냉장고·날짜·알림 종류가 같으면 DB가 두 번째 저장을 막게 하는 거야. 실행권은 두 번 시작하지 않게 하고, 키는 그래도 겹쳤을 때 두 번 저장되지 않게 해. 여러 번 해도 한 번 한 것과 결과가 같은 성질을 멱등성이라고 해.'],
+    ['같은 상황으로 다시 실행','다시 두 서버가 08시에 함께 시작해. 둘 다 실행권을 달라고 하고 S1만 얻어. S2는 이번엔 건너뛰어.'],
+    ['S1만 알림 저장','S1이 알림 1건과 받는 사람 기록 2건을 저장해.'],
+    ['실행권 기한이 지나 겹친 경우','S1이 느려서 실행권 기한이 지났고, S2가 실행권을 얻어 다시 시작했어. S2가 같은 알림을 저장하려 하지만 키가 같아서 DB가 막아.'],
+    ['정리','해결 전에는 같은 알림이 2건이었어. 해결 뒤에는 1건이야. 실행권 기한을 몇 분으로 할지는 아직 정하지 않았어.']]},
+  {name:'서버 두 대가 같은 푸시를 두 번 보냄',intro:'푸시를 보낼 때 보낼 작업을 읽기만 하고 "내가 맡았다"는 표시는 안 해. 두 서버가 같은 작업을 읽으면 어떻게 되는지 봐.',
+   cmp:['두 서버가 같은 작업을 읽어서 같은 푸시가 두 번 나가.','맡은 서버를 표시해서 한 번씩만 나가고, 꺼진 서버의 작업은 다른 서버가 이어받아.'],
+   steps:[['서버 1대일 때','S1이 #1, #2를 한 번씩 보내.'],
+    ['두 서버가 같은 작업을 읽음','처음 상태로 돌리고 S2를 더했어. 두 서버가 같은 시각에 보낼 작업을 찾아서 #1, #2를 같이 읽어.'],
+    ['같은 푸시가 두 번','두 서버가 둘 다 보내서 같은 푸시가 두 번 나가. 08시 실행을 하나로 줄여도, 따로 도는 실행자를 여러 서버에서 돌리면 다시 생기는 문제야.'],
+    ['"내가 맡았다" 표시하기','작업을 고를 때 "S1이 08:05까지 맡음"처럼 한 번에 표시해. 결과를 저장할 때 아직 내가 맡은 게 맞는지 확인해. 기한이 지나도 결과가 없으면 다른 서버가 가져가. 이렇게 맡았다고 먼저 표시하는 걸 선점이라고 해.'],
+    ['같은 상황으로 다시 실행','같은 시각에 두 서버가 작업을 찾아. S1이 #1, #2를 먼저 맡아서 S2는 고를 작업이 없어.'],
+    ['#1을 보내고 S1 꺼짐','S1이 #1을 보내고 결과를 저장했어. #2를 보내기 전에 S1이 꺼졌어.'],
+    ['기한 지난 #2를 S2가 가져감','#2를 맡은 기한이 지나면 S2가 다시 맡아서 보내. 결과는 한 번씩만 저장돼.'],
+    ['남는 한계','②의 1-B처럼 푸시는 나갔는데 결과 저장 전에 서버가 꺼지면, 이어받은 서버가 다시 보낼 수 있어. 맡음 표시는 동시에 두 번 보내는 건 막지만 이 경우까지 없애지는 못해.']]},
+  {name:'서버가 늘면 한꺼번에 나가는 푸시도 늘어남',intro:'동시에 보내는 푸시 20개 제한은 서버마다 따로 걸려. 서버가 늘면 전체 양이 어떻게 되는지 봐.',
+   cmp:['서버 2대면 동시에 최대 40개가 나가.','전체 한도를 정해 서버들이 나눠 써. 숫자는 아직 정하지 않았어.'],
+   steps:[['서버 1대면 최대 20','S1 하나만 보내면 외부로 동시에 나가는 푸시는 최대 20개야.'],
+    ['서버 2대면 최대 40','S2를 더했어. 서버마다 20개씩이라 합치면 최대 40개야. 서버가 N대면 20×N이 돼.'],
+    ['어디에 영향을 주나','외부 서비스가 정한 한도에 걸리거나 우리 서버 자원을 더 쓸 수 있어. 실제 한도와 영향은 아직 확인 전이야.'],
+    ['전체 한도 정하기','서버 수와 상관없이 전체로 동시에 몇 개까지 보낼지 정하는 장치가 필요해. 방법과 숫자는 아직 정하지 않았어.'],
+    ['같은 2대로 다시 실행','전체 한도를 30으로 가정하면 두 서버가 나눠 써서 합이 30을 넘지 않아.'],
+    ['무엇으로 확인할까','외부 응답 코드, 보내는 속도, 늦어지는 시간을 보고 한도를 정해. 효과는 재 보기 전이라 단정하지 않아.']]},
+  {name:'서버 두 대가 같은 정리를 두 번 함',intro:'03시 정리도 서버마다 스스로 시작해. 두 서버가 같이 정리하면 무엇이 생기고 무엇은 안 생기는지 봐.',
+   cmp:['결과는 99건으로 같지만 같은 삭제를 두 번 하고 서로 기다릴 수 있어.','한 서버만 정리해서 삭제를 한 번만 해.'],
+   steps:[['서버 1대일 때','S1이 120건을 99건으로 줄이고, 아무도 안 쓰는 알림 내용을 지워.'],
+    ['두 서버가 같이 정리','처음 상태로 돌리고 S2를 더했어. 두 서버가 03시에 같은 기준으로 정리를 시작해.'],
+    ['결과는 같고 일은 두 배','기준이 같아서 결과는 99건으로 같아. 더 많이 지워지지는 않아. 대신 같은 삭제를 두 번 해서 DB 일이 늘고, 같은 줄을 지우려 하면 한쪽이 기다릴 수 있어. 항상 기다리는 건 아니야.'],
+    ['실행권으로 한 서버만','08시 배치와 같은 실행권으로 03시 정리도 한 서버만 하게 해.'],
+    ['같은 상황으로 다시 실행','두 서버가 실행권을 달라고 하고 S1만 얻어. S1만 정리해.'],
+    ['정리','해결 전후 남는 건수는 같아. 달라지는 건 두 번 하는 일과 기다릴 가능성이야.']]},
+  {name:'알림을 만든 서버와 화면이 SSE로 연결된 서버가 다름',intro:'지금 폴링은 모두 같은 DB를 읽어서, 요청이 어느 서버로 가도 알림이 빠지지 않아. 문제는 V2 후보인 SSE를 쓸 때 생겨.',
+   cmp:['알림은 S1이 만들었는데 노트북은 S2와 SSE로 연결돼 있어. S1은 자기와 연결된 아이패드에만 알릴 수 있어서 노트북은 몰라.','Redis로 모든 서버에 알려서 두 화면 다 바로 맞춰져.'],
+   steps:[['지금 폴링은 괜찮음','아이패드 요청은 S1이, 노트북 요청은 S2가 받아도 같은 DB를 읽어서 결과가 같아.'],
+    ['SSE를 쓰면','V2 후보처럼 화면이 서버와 연결(SSE)을 열어. 아이패드는 S1, 노트북은 S2와 연결돼. S1이 U1의 새 알림을 저장했어.'],
+    ['노트북은 모름','S1은 자기와 연결된 아이패드에만 알릴 수 있어. 노트북 연결은 S2에 있어서, S2는 새 알림이 생긴 걸 몰라.'],
+    ['서버끼리 알려 주기','S1이 Redis에 "U1에게 새 알림"이라고 알려. Redis에서 듣고 있는 모두에게 한 번에 전하는 기능을 Pub/Sub이라고 해. 듣고 있는 서버가 모두 받고, 각 서버는 자기와 연결된 U1 화면에만 알려.'],
+    ['같은 상황으로 다시 실행','같은 새 알림 #13이 S1에 저장돼. S1이 Redis에 알리고 S1, S2가 모두 받아.'],
+    ['두 화면 모두 최신으로','각 서버가 연결된 화면에 알리고, 화면이 최신 상태를 읽어서 맞춰.'],
+    ['남는 한계','Redis가 서버에 전하는 신호는 끊긴 동안 쌓아 두지 않아. 장애 중에도 바로 전달된다고 보장하지 않아. 이 복구는 ④의 "놓친 알림 되찾기"에서 봐.']]},
+  {name:'서버가 나뉘어도 구독 문제는 똑같이 생김',intro:'②의 7·8·9번 구독 문제는 서버 1대에서도 생겨. 보내기는 S1, 구독 바꾸기는 S2가 맡으면 어떻게 되는지 봐.',
+   cmp:['S1은 v1로 확인했는데 S2가 바꾼 v2 주소로 보내.','보낼 주소를 읽을 때 버전도 같이 봐서 안 보내.'],
+   steps:[['보내기는 S1, 바꾸기는 S2','작업 #1은 v1 기준이야. S1이 버전을 확인했어.'],
+    ['S2가 구독을 바꿈','S2가 아이패드의 요청을 받아 구독을 v2로 바꿔.'],
+    ['결과는 서버 1대일 때와 같음','S1은 주소를 다시 읽어서 v2로 보내. 원인은 서버 수가 아니라 확인하는 위치야.'],
+    ['DB 조건으로 확인','②에서 본 확인들은 DB에 조건을 거는 방식이야. 그래서 서버가 몇 대든 똑같이 지켜져.'],
+    ['같은 상황으로 다시 실행','같은 순서로 다시 해. S2가 v2로 바꾼 뒤, S1이 구독을 한 번 읽고 보내지 않아.'],
+    ['정리','서버를 나눈다고 새 문제가 생기는 건 아니야. 같은 확인을 모든 서버가 지키는 게 중요해.']]}
+ ],
+ 4:[
+  {name:'V2 전체 흐름 한눈에 보기',intro:'②·③에서 본 해결 장치를 하나로 이어 봐. 처음엔 큰 흐름만 보이고, 다음을 누를 때마다 장치가 하나씩 붙어.',
+   steps:[['알림이 생길 일','공유 냉장고 참여나 08시 배치처럼 알림이 생길 일이 S1에서 일어나.'],
+    ['변경과 알림, 할 일을 함께 저장','바뀐 내용, 알림, 받는 사람, 이어서 할 일을 한 번에 같이 저장해. ②의 1-A에서 본 빈틈을 막아.'],
+    ['따로 도는 실행자가 이어서 처리','요청 처리와 따로 도는 실행자가 "할 일"을 읽어. ②의 5번에서 본 장치야. 작업을 맡을 때는 ③에서 본 "내가 맡았다" 표시를 써.'],
+    ['화면 갱신과 푸시 보내기','화면은 Redis 신호를 거쳐 SSE로 알리고, 푸시는 작업을 만들어 외부 서비스로 보내. 서버끼리 알리는 건 ③에서 본 장치야.'],
+    ['결과와 화면 반영 확인','푸시는 결과를 저장하고, 화면은 최신 상태를 반영한 뒤 서버에 반영 확인(ACK)을 보내. 이 확인이 와야 전달이 끝난 걸로 쳐.'],
+    ['실패와 확인 없는 것 다시 처리','실패한 작업과 반영 확인이 안 온 전달은 실행자가 기록을 보고 다시 처리해. 자세한 경우는 "놓친 알림 되찾기"에서 하나씩 봐.'],
+    ['장치를 처음 본 곳','실행권과 중복 막는 키는 ③의 첫 번째, 맡음 표시는 ③의 두 번째, 함께 저장은 ②의 1-A, 따로 도는 실행자는 ②의 5번, 서버끼리 알리기는 ③의 SSE, 버전 확인은 ②의 7~9번에서 봤어.']]},
+  {name:'저장 직후 서버가 꺼져도 알림을 놓치지 않기',cmp:['저장 직후 서버가 꺼지면, 다른 화면에 알릴 신호가 그대로 사라져.','보낼 일을 같이 저장해 둬서 실행자가 기록을 보고 다시 보내.'],intro:'아웃박스는 "보낼 일"을 적어 두는 테이블이야. 바뀐 내용과 한 번에 같이 저장해서, 저장 직후 서버가 꺼져도 다시 처리할 수 있게 해.',
+   steps:[['참여 요청','U3가 냉장고 1 참여를 요청했고 S1이 받았어. U1과 U2에게 알려야 해.'],
+    ['네 가지를 한 번에 저장','참여 변경, 알림, 받는 사람, 보낼 일 #7을 한 번에 같이 저장해. 알림은 있는데 보낼 일이 없는 상태는 생기지 않아.'],
+    ['저장 직후 알리기 전에 S1 꺼짐','S1이 신호를 보내기 전에 꺼졌어. 아웃박스가 없으면 여기서 신호가 사라져.'],
+    ['실행자가 기록을 보고 다시 처리','실행자가 아직 처리 안 된 #7을 읽어서 Redis에 알리고 "보냄"으로 표시해.'],
+    ['S2가 연결된 화면에 알림','S2가 신호를 받아서 자기와 연결된 U1 노트북과 U2 아이패드에 알리고, 화면이 최신 상태를 읽어.'],
+    ['보냈다고 화면이 받은 건 아님','"보냄"은 Redis에 넘겼다는 뜻이야. 듣고 있지 않던 서버는 놓칠 수 있어서 화면의 반영 확인과 복구가 따로 필요해.'],
+    ['푸시 작업과 아웃박스는 역할이 다름','기존 푸시 작업은 보내기와 재시도 기록이야. 아웃박스는 저장과 알리기 사이의 빈틈을 막는 기록이야. 역할이 달라서 무조건 합치지 않아. 08시 배치를 지금처럼 나눠 저장한다면 빠진 작업을 찾아 채우는 장치가 따로 필요해.']]},
+  {name:'저장한 뒤 할 일을 누가 처리할까 (A·B 비교)',cmpL:['A · DB 작업 테이블','B · 저장형 메시지 큐'],cmp:['할 일이 DB 한 곳에 있고 워커가 맡아서 처리해. 워커가 꺼지면 기한 뒤 다른 워커가 가져가.','큐에 넣고, 받은 워커가 DB에 저장한 뒤 큐에 완료를 알려. 이 순서를 지키고 같은 번호는 한 번만 저장해.'],intro:'"보낼 일"을 실제 작업으로 바꿔 처리하는 방법은 아직 정하지 않았어. 같은 데이터와 같은 장애로 A와 B를 따라가 봐. 선택 단계로 돌아오면 다른 안을 고를 수 있어.',
+   steps:[['같은 시작 조건','알림 하나가 저장됐고, 아웃박스에 "이 알림을 화면과 푸시로 전달해야 함" 기록이 남아 있어. 이 기록 번호를 #e1이라고 할게. 이 기록을 누가 실제 작업으로 바꿔 처리하는지가 A와 B의 차이야. 두 방식 모두 처리하던 프로그램이 도중에 한 번 꺼지는 상황을 똑같이 넣어서 비교해.'],
+    ['A와 B 중 고르기','아래에서 A나 B를 골라. 안 고르면 A로 가. 다음을 누르면 고른 안을 끝까지 따라가.']],
+   branch:{A:{name:'A · DB 작업 테이블',desc:'할 일을 DB에 두고 워커가 맡아 처리',steps:[
+     ['할 일 저장','독립 실행자가 아웃박스의 #e1 기록을 읽어서, DB 작업 테이블에 "화면에 알리기"와 "푸시 보내기" 작업을 저장해.'],
+     ['워커가 찾아서 맡음','작업을 가져가서 실제로 처리하는 프로그램을 워커라고 해. 워커 1이 작업을 찾아 "워커 1이 08:05까지 맡음"으로 표시해.'],
+     ['처리 중 워커 꺼짐','워커 1이 처리하다 꺼졌어. 작업은 맡은 표시가 된 채로 DB에 남아.'],
+     ['기한이 지나 다른 워커가 가져감','맡은 기한이 지나면 다른 워커가 다시 맡아. 같은 DB 기록을 보고 이어서 해.'],
+     ['처리하고 결과 저장','워커 2가 화면 알림 신호를 보내고 푸시를 보낸 뒤 결과를 저장해. 실패하면 다시 보낼 시각을 적어.'],
+     ['A의 특징','할 일이 DB 한 곳에만 있어. 큐 완료 같은 단계가 없어. 새로 운영할 장치는 없지만, 워커가 DB를 자주 조회해서 그 부담은 재 봐야 해.']]},
+    B:{name:'B · 저장형 메시지 큐',desc:'큐에 넣고 받는 워커가 DB에 저장',steps:[
+     ['큐에 넣기','독립 실행자가 아웃박스의 #e1 기록을 읽어서 메시지 큐에 넣어. 메시지 큐는 받는 쪽이 "다 처리했다"고 알릴 때까지 메시지를 지우지 않고 보관하는 장치야.'],
+     ['받는 워커가 꺼냄','큐에서 #e1을 꺼내 처리하는 프로그램을 워커라고 해. 그림에서는 독립 실행자 상자가 넣기와 꺼내기를 둘 다 맡아. 실제로는 같은 서버여도 되고 다른 서버여도 돼.'],
+     ['저장 전에 "완료"를 하면','순서를 잘못 잡아서, DB에 저장하기 전에 큐에 "완료"를 먼저 알리고 워커가 꺼졌다고 해 보자. #e1은 큐에서도 DB에서도 사라져. 그래서 이 순서는 쓰지 않아.'],
+     ['저장한 뒤 "완료"','올바른 순서로 다시 해. 받는 워커가 #e1을 이벤트 번호를 키로 DB에 저장한 뒤 큐에 "완료"를 알려.'],
+     ['저장했는데 "완료" 전에 꺼짐','이번에는 DB에 저장한 뒤 "완료"를 알리기 전에 워커가 꺼졌어. 큐가 #e1을 다시 줘.'],
+     ['같은 번호라 두 번 저장 안 됨','같은 이벤트 번호라서 DB에 두 번 저장되지 않아. 이걸 멱등 저장이라고 해. 이번에는 "완료"까지 끝내.'],
+     ['실제 처리는 A와 같음','실제 화면 알림과 푸시는 DB 작업을 맡아서 처리해. 이 부분은 A와 같아.'],
+     ['B의 특징','할 일이 큐와 DB 두 곳에 걸쳐 있어. 큐의 "완료"가 화면에 보였다는 뜻은 아니야. 큐를 운영하고 설정할 일이 더 생겨. 어떤 큐를 쓸지, 쓸지 말지, 비용과 성능은 아직 정하지 않았어.']]}}},
+  {name:'한 기기에서 읽으면 내 다른 기기에도 반영하기',cmp:['지금은 내 다른 기기가 다음 30초 확인 때까지 안 읽음으로 보여.','U1의 다른 기기에만 바로 알려서 읽음으로 맞추고, U2는 그대로 둬.'],intro:'U1이 아이패드에서 알림을 읽으면 U1 노트북에도 읽음으로 보여야 하고, U2는 그대로여야 해.',
+   steps:[['읽음 저장과 변경 기록','U1이 아이패드에서 읽었어. S1이 U1의 받는 사람 기록을 읽음으로 바꾸고, "U1 읽음 변경 #r3"도 같이 저장해.'],
+    ['U1 대상 신호','실행자가 #r3을 읽어 "U1의 읽음이 바뀌었다"는 신호를 Redis에 보내. 신호에는 누구의 무엇이 바뀌었는지만 담아.'],
+    ['서버가 대상과 자기 연결 확인','듣고 있는 서버가 모두 신호를 받아. 각 서버가 대상 사용자와 자기 연결을 비교해. S2에는 U1 노트북 연결이 있고, U2 아이패드는 대상이 아니야. 누구에게 보낼지는 Redis가 아니라 서버가 판단해.'],
+    ['알림 받고 최신 상태 읽기','S2가 노트북에 알리고, 노트북은 최신 상태를 읽어서 미읽음 0으로 맞춰. SSE는 서버에서 화면으로만 가고, 읽음과 반영 확인은 화면이 따로 요청으로 보내.'],
+    ['기기별 반영 확인','노트북이 #r3을 반영했다고 반영 확인(ACK)을 보내. 이건 사람이 읽었다는 뜻이 아니라 화면에 반영했다는 뜻이야. 기기마다 따로 기록하고, 한 기기의 확인이 다른 기기를 대신하지 않아.'],
+    ['U2와 푸시','U2의 미읽음 1은 그대로야. 읽음이 바뀔 때마다 푸시를 보내지 않아. 알림이 생겼을 때의 반영 확인이 나중 읽음 변경까지 끝난 걸로 치지 않아.']]},
+  {name:'놓친 알림 되찾기 ① 서버끼리 주고받는 신호가 잠깐 끊김',cmp:['S2가 신호를 놓쳐서 노트북이 새 알림을 몰라.','다시 연결될 때 다시 확인하라고 알리고, 실행자가 확인 안 된 전달을 다시 보내.'],intro:'S2와 Redis 사이만 끊기고, 노트북과 S2 연결은 멀쩡한 경우야. Redis는 끊긴 동안의 신호를 다시 주지 않아.',
+   steps:[['S2만 신호를 못 들음','S2와 Redis 사이 연결이 잠깐 끊겼어. 노트북과 S2 연결은 정상이야.'],
+    ['끊긴 동안 보낸 신호','새 알림 #8이 저장되고 신호가 나갔어. S2는 못 받아. 노트북 전달 기록은 "확인 안 됨"으로 남아.'],
+    ['다시 연결되면 "다시 확인해"','S2는 다시 연결돼도 놓친 신호가 있었는지 몰라. 그래서 자기와 연결된 화면 모두에 다시 확인하라고 알려.'],
+    ['실행자가 확인 안 된 걸 다시 보냄','그래도 남은 "확인 안 됨"은 실행자가 찾아서 신호를 다시 보내. 두 장치가 서로 다른 빈틈을 메워.'],
+    ['반영하고 확인 보내기','노트북이 최신 상태를 읽고 #8에 대해 반영 확인을 보내.']]},
+  {name:'놓친 알림 되찾기 ② 화면은 갱신됐는데 서버가 그 사실을 확인하지 못함',cmp:['반영 확인이 사라져서 서버는 전달이 끝났는지 몰라.','다시 알리되 화면은 최신 상태로 맞춰서 알림이 두 번 보이지 않고, 이번 확인은 기록돼.'],intro:'V2에서는 화면이 최신 상태를 반영하고 그 사실을 서버에 알려야(반영 확인, ACK) 전달이 끝난 걸로 쳐. 화면은 갱신됐는데 이 확인이 중간에 사라진 경우야. 다시 알리더라도 같은 알림이 두 번 보이면 안 돼.',
+   steps:[['알림 받고 반영','U1 아이패드가 #9 알림을 받아서 최신 상태를 읽고 보여 줬어.'],
+    ['반영 확인이 사라짐','화면이 반영 확인을 보냈는데 중간에 사라졌어. 서버 기록에는 아직 "확인 안 됨"이라 전달이 끝났는지 몰라.'],
+    ['실행자가 다시 알림','실행자가 "확인 안 됨"인 #9를 찾아 다시 신호를 보내.'],
+    ['덧붙이지 않고 최신으로 맞춤','화면은 받은 알림을 목록에 덧붙이지 않고 최신 상태를 다시 읽어서 맞춰. 그래서 #9가 두 번 보이지 않아. 이번 반영 확인은 기록돼서 전달이 끝난 걸로 쳐.']]},
+  {name:'놓친 알림 되찾기 ③ 기기가 꺼져 있었음',cmp:['꺼진 기기에는 알릴 방법이 없어.','계속 다시 보내지 않고, 다시 켜질 때 최신 상태로 맞춰.'],intro:'U2 아이패드가 꺼져 있는 동안 알림이 생긴 경우야. 꺼진 기기에 계속 다시 보내지는 않아.',
+   steps:[['U2 아이패드 꺼짐','U2 아이패드가 꺼져 있어.'],
+    ['알림 저장 · 확인 안 됨','새 알림이 저장되고 U2 아이패드 전달 기록은 "확인 안 됨"이야. 연결이 없으니 계속 다시 보내지 않아.'],
+    ['다시 켜지면 최신 상태로','U2 아이패드가 다시 접속하면 연결을 맺고 바로 최신 상태를 읽어서 맞춰. 지금 쓰는 냉장고만 보여 주는 방식은 그대로야.'],
+    ['아직 정하지 않은 것','기기 연결을 어떻게 구분할지, "확인 안 됨" 기록을 얼마나 둘지는 아직 정하지 않았어.']]},
+  {name:'놓친 알림 되찾기 ④ 늦게 온 예전 응답이 읽음을 되돌리려 함',cmp:['늦게 온 예전 답이 읽은 알림을 다시 안 읽음으로 되돌려.','더 오래된 버전의 답은 버려서 읽음이 유지돼.'],intro:'조회 응답이 순서가 바뀌어 도착해도, 이미 읽은 알림을 다시 안 읽음으로 되돌리면 안 돼.',
+   steps:[['조회 ① 출발','노트북이 최신 상태를 물어봤어. 이 답은 "버전 5, 미읽음 1"인데 늦게 도착해.'],
+    ['그 사이 읽음, 조회 ②','그 사이 U1이 아이패드에서 읽어서 버전 6이 됐어. 노트북이 다시 물어본 ②의 답이 먼저 도착했어.'],
+    ['예전 답 ① 도착','버전 5 답이 늦게 도착했어. 그대로 덮으면 미읽음 1로 되돌아가.'],
+    ['더 오래된 버전은 버림','화면은 이미 가진 버전 6보다 오래된 답은 반영하지 않아. 미읽음 0이 유지돼.']]},
+  {name:'놓친 알림 되찾기 ⑤ 처리하던 실행자가 꺼짐',cmp:['신호를 보내고 "보냄" 표시 전에 꺼지면, 그 일이 끝났는지 기록에 남지 않아.','남은 기록에서 다시 하고, 화면은 최신 상태로 맞춰서 목록이 두 번 늘지 않아.'],intro:'보낼 일을 처리하던 실행자가 도중에 꺼진 경우야.',
+   steps:[['#7 처리 시작','실행자가 #7을 읽어서 처리하기 시작했어.'],
+    ['보낸 뒤 표시 전에 꺼짐','실행자가 Redis에 신호는 보냈는데 "보냄"으로 표시하기 전에 꺼졌어. DB에는 #7이 아직 "대기"야.'],
+    ['남은 기록에서 다시 시작','다시 켜진 실행자가 "대기"로 남은 #7을 다시 처리해. 같은 신호가 두 번 갈 수 있지만, 화면은 최신 상태를 다시 읽는 방식이라 목록이 두 번 늘지 않아.']]},
+  {name:'푸시 보내기와 알림 보관',cmp:['옛 구독으로 보내기, 두 번 보내기, 결과 모름이 섞이면 푸시 상태를 믿기 어려워.','맡음 표시, 구독 버전 확인, 결과 모름 기록, 처리량 제한을 차례로 거쳐.'],intro:'푸시는 작업 만들기부터 결과 저장까지 ②·③의 장치를 차례로 거쳐. 보관과 처리량 정책도 같이 봐.',
+   steps:[['작업 만들고 맡기','실행자가 푸시 작업을 만들고, 보낼 때는 "내가 맡음"으로 표시해.'],
+    ['구독이 살아 있고 버전이 맞는지','실제로 보낼 구독을 읽을 때 켜져 있는지와 버전을 같이 확인해. 다르면 취소해.'],
+    ['외부로 보내기','외부 서비스로 보내. 서비스가 받았다고 해도 휴대폰에 실제로 떴다는 뜻은 아니야.'],
+    ['결과와 재시도 저장','결과를 저장할 때 아직 내가 맡은 게 맞는지 확인해. 실패면 다시 보낼 시각을 적어. "구독 없음"(404·410)은 보낸 버전이 같을 때만 구독에 반영해.'],
+    ['감추지 않는 "결과 모름"','외부는 성공했는데 결과 저장이 실패하면 "결과 모름"으로 남겨. 다시 보내면 두 번 갈 수 있다는 걸 알고 처리해.'],
+    ['한 번에 처리하는 양 제한','작업 찾기, 만들기, 보내기, 복구를 모두 정한 양만큼만 해. 숫자는 실험해서 정해.'],
+    ['보관','03시 정리는 실행권으로 한 서버만 해. 화면에 보여 줄 99개와, 복구용 "확인 안 됨" 기록을 얼마나 둘지는 따로 생각해. 보관 기간은 아직 정하지 않았어.']]}
+ ]
+};
+(function(){const L={2:S2L,3:S3L,4:S4L};
+ for(const k in TXT){TXT[k].forEach((t,i)=>{const s=L[k][i];if(!s)throw new Error('no scenario '+k+'.'+i);s.name=t.name;s.intro=t.intro;if(t.cmp)s.cmp=t.cmp;if(t.cmpL)s.cmpL=t.cmpL;
+  if(t.steps.length!==s.steps.length)throw new Error('step count '+k+'.'+i+' '+t.steps.length+'≠'+s.steps.length);
+  t.steps.forEach(([c,d],j)=>{s.steps[j].c=c;s.steps[j].d=d});
+  if(t.branch)['A','B'].forEach(ab=>{const tb=t.branch[ab],sb=s.branch[ab];sb.name=tb.name;sb.desc=tb.desc;
+    if(tb.steps.length!==sb.steps.length)throw new Error('branch count '+k+'.'+i+ab);tb.steps.forEach(([c,d],j)=>{sb.steps[j].c=c;sb.steps[j].d=d})})})}})();
+
+/* ---------- controller ---------- */
+const PH={norm:['p-norm','정상'],prob:['p-prob','문제'],obs:['p-obs','관찰'],fix:['p-fix','해결 장치'],re:['p-re','다시 실행'],sum:['p-sum','정리'],flow:['p-norm','흐름'],br:['p-fix','선택']};
+const TAGN={code:['code','코드 확인'],risk:['risk','구조적 위험'],perf:['perf','성능 가설'],sol:['sol','해결 후보'],plan:['sol','V2 계획']};
+const CLSN={now:'지금 구조에 반영',perf:'후속 성능 검증',fix:'후속 개별 수정',front:'프론트 담당 영역'};
+const SS=SCREENS.map(()=>({sc:0,i:-1,ab:'A'}));
+let cur=0;
+const scr=()=>SCREENS[cur],sst=()=>SS[cur],scen=()=>scr().list[sst().sc];
+function stepsOf(){const s=scen();return s.branch?s.steps.concat(s.branch[sst().ab].steps):s.steps}
+const vkey=()=>scen().branch?sst().ab:'-';
+const posKey=s=>cur+':'+s.scene+':'+(s.opt&&s.opt.single?'s':'m');
+const USED={};
+function build(mode){[NODES,EDGES,PK,TAGS,CONNS].forEach(g=>g.innerHTML='');N={};E={};R={};const s=scen(),k=posKey(s);
+  if(mode==='raw'){buildScene(s.scene,s.opt||{},null);Object.keys(N).forEach(id=>setVis(id,s.show.includes(id)));updEdges();return}
+  buildScene(s.scene,s.opt||{},USED[k]||null,k);const fv=(s.vis||{})[vkey()];Object.keys(N).forEach(id=>setVis(id,fv?fv.has(id):s.show.includes(id)));updEdges()}
+async function computeUsed(){const s0=scen(),k=posKey(s0);if(USED[k])return;const st0=sst(),keep=[st0.sc,st0.ab];const U=new Set();
+  const list=scr().list;for(let i=0;i<list.length;i++){const sc=list[i];if(posKey(sc)!==k)continue;for(const ab of sc.branch?['A','B']:['-']){
+    st0.sc=i;if(ab!=='-')st0.ab=ab;const t={dead:false,fast:true};tok=t;build('raw');try{for(const x of stepsOf())await x.run()}catch(e){if(e!==STOP)throw e}
+    const v=new Set(Object.keys(N).filter(id=>N[id].vis));sc.vis=sc.vis||{};sc.vis[sc.branch?ab:'-']=v;v.forEach(id=>U.add(id))}}
+  st0.sc=keep[0];st0.ab=keep[1];USED[k]=U}
+function hl(step,edges){Object.keys(N).forEach(id=>{if(!N[id].isConn)N[id].g.classList.toggle('on',!!step&&step.n.includes(id))});
+  Object.keys(E).forEach(id=>{const e=E[id];const on=!!edges&&!!step&&step.e.includes(id)&&!e.p.classList.contains('dim');e.p.classList.toggle('on',on);
+    if(on){e.t.textContent=e.label;fitTag(id)}e.tg.classList.toggle('show',on&&!!e.label)});declutter()}
+function setWhat(text){const box=$('nows');box.innerHTML='';const ul=document.createElement('ul');ul.className='flow';
+  text.split(/(?<=[.?!])\s+/).filter(Boolean).forEach(line=>{const li=document.createElement('li');li.textContent=line;ul.appendChild(li)});box.appendChild(ul)}
+function renderList(){const L=$('list');L.innerHTML='';const steps=stepsOf(),i=sst().i;let lastp=null;
+  steps.forEach((s,j)=>{
+    const li=document.createElement('li');li.className=j<i?'done':j===i?'on':'';li.innerHTML='<b>'+(j+1)+'</b><span></span>';li.lastChild.textContent=s.c;
+    li.tabIndex=0;li.title='이 단계로 이동';li.onclick=()=>{if(!auto)paused=false;goTo(j)};li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();goTo(j)}};L.appendChild(li);
+    if(j===i)setTimeout(()=>{const top=li.offsetTop-L.offsetTop;if(top<L.scrollTop||top>L.scrollTop+L.clientHeight-40)L.scrollTop=Math.max(0,top-80)},0)})}
+function renderChips(){const c=$('chips');c.innerHTML='';const s=scen();
+  (s.tags||[]).forEach(t=>{const sp=document.createElement('span');sp.className='chip '+TAGN[t][0];sp.textContent=TAGN[t][1];c.appendChild(sp)});
+  (s.cls||[]).forEach(t=>{const sp=document.createElement('span');sp.className='chip cls';sp.textContent=CLSN[t];c.appendChild(sp)})}
+function renderStepUI(){const steps=stepsOf(),i=sst().i,s=scen();const ab=$('abrow');ab.hidden=true;
+  $('prev').disabled=i<0;$('next').disabled=i>=steps.length-1;$('next').textContent=i<0?'시작':'다음';
+  if(i<0){$('nowk').innerHTML='';$('nowk').textContent=steps.length+'단계';$('nowc').textContent=s.name;setWhat(s.intro);$('whatbox').classList.add('idle')}
+  else{const st=steps[i];const k=$('nowk');k.innerHTML='';const ph=document.createElement('span');ph.className='ph '+PH[st.p][0];ph.textContent=PH[st.p][1];k.appendChild(ph);
+    k.appendChild(document.createTextNode((i+1)+' / '+steps.length));$('nowc').textContent=st.c;setWhat(st.d);$('whatbox').classList.remove('idle');
+    if(st.p==='br'&&s.branch){ab.hidden=false;ab.innerHTML='';['A','B'].forEach(k2=>{const b=document.createElement('button');b.className=sst().ab===k2?'sel':'';
+      b.innerHTML='<b></b><span></span>';b.firstChild.textContent=s.branch[k2].name;b.lastChild.textContent=s.branch[k2].desc;
+      b.onclick=()=>{sst().ab=k2;renderList();renderStepUI();renderCanvasNote()};ab.appendChild(b)})}}
+  renderList();renderPhases();renderCmp();renderInfo()}
+function renderInfo(){const b=$('info'),s=scen();b.innerHTML='';const t=document.createElement('span');const k=document.createElement('b');k.textContent='상황 ';t.appendChild(k);t.appendChild(document.createTextNode(s.intro||''));b.appendChild(t)}
+function macro(p){return p==='fix'?2:(p==='re'||p==='sum')?3:1}
+function renderPhases(){const box=$('phases');box.innerHTML='';const st=stepsOf(),i=sst().i,m=i<0?0:macro(st[i].p);box.hidden=!st.some(x=>x.p==='re');if(box.hidden)return;
+  [['문제',1],['해결 장치',2],['다시 실행',3]].forEach(([l,k],n)=>{if(n){const a=document.createElement('span');a.className='ar';a.textContent='→';box.appendChild(a)}
+    const s=document.createElement('span');s.className='pp p'+k+(k===m?' on':k<m?' done':'');s.textContent=l;box.appendChild(s)})}
+function renderCmp(){const box=$('cmp'),s=scen();if(!s||!s.cmp){box.hidden=true;return}box.hidden=false;const st=stepsOf(),i=sst().i;
+  const L=s.cmpL||['문제','해결책'];$('cmpLa').textContent=L[0];$('cmpLb').textContent=L[1];$('cmpA').textContent=s.cmp[0];box.classList.toggle('ab',!!s.cmpL);$('cmpB').textContent=s.cmp[1];
+  let a=false,b=false;if(s.cmpL){if(i>=0&&st[i].p!=='br'&&i>=s.steps.length){a=sst().ab==='A';b=!a}}
+  else if(i>=0){const p=st[i].p;a=p==='prob'||p==='obs';b=p==='fix'||p==='re'}
+  box.querySelector('.bf').classList.toggle('on',a);box.querySelector('.af').classList.toggle('on',b)}
+function renderCanvasNote(){}
+function bboxView(){const a=NODES.getBBox(),b=EDGES.getBBox();if(!a.width)return null;let x0=Math.min(a.x,b.width?b.x:a.x)-24;let y0=Math.min(a.y,b.height?b.y:a.y)-24,x1=Math.max(a.x+a.width,b.x+b.width)+24;let y1=Math.max(a.y+a.height,b.y+b.height)+24;
+  Object.keys(E).forEach(k=>{const e=E[k];if(e.p.classList.contains('hide')||e.p.classList.contains('dim')||!e.label)return;const t0=e.t.textContent;e.t.textContent=e.label;fitTag(k);const rx=+e.r.getAttribute('x'),rw=+e.r.getAttribute('width'),ry=+e.r.getAttribute('y');e.t.textContent=t0;if(t0)fitTag(k);if(!rw)return;
+    x0=Math.min(x0,rx-50);x1=Math.max(x1,rx+rw+50);y0=Math.min(y0,ry-12);y1=Math.max(y1,ry+36)});
+  let w=x1-x0,h=y1-y0;const mw=1280,mh=640;let X=x0,Y=y0;if(w<mw){X-=(mw-w)/2;w=mw}if(h<mh){Y-=(mh-h)/2;h=mh}return X+' '+Y+' '+w+' '+h}
+async function fitOf(){const s=scen(),key=s.branch?sst().ab:'-';s.fit=s.fit||{};if(s.fit[key])return s.fit[key];
+  await computeUsed();const t={dead:false,fast:true};tok=t;
+  build();try{for(const st of stepsOf()){if(t.dead)break;await st.run()}}catch(e){if(e!==STOP&&!t.dead)throw e}
+  if(t.dead)return null;let v=null;try{v=bboxView()}catch(e){}s.fit[key]=v;return v}
+let goSeq=0;
+async function goTo(i,quiet){tok.dead=true;const my=++goSeq;const fit=await fitOf();if(my!==goSeq)return;const t={dead:false,fast:true};tok=t;sst().i=i;build();if(fit){const p=fit.split(' ').map(Number);const w=Math.max(p[2],600);SVG.setAttribute('viewBox',p[0]+' '+p[1]+' '+w+' '+p[3]);}renderStepUI();const steps=stepsOf();
+  try{for(let j=0;j<i;j++){if(t.dead)return;await steps[j].run()}if(t.dead)return;
+    if(i>=0){if(!quiet)t.fast=false;hl(steps[i]);if(!quiet&&!steps[i].e.length)steps[i].n.forEach(id=>{const n=N[id];if(n&&!n.isConn){n.g.classList.remove('pulse');void n.g.getBoundingClientRect();n.g.classList.add('pulse')}});const t0=performance.now();FLOWN=0;REC=t.fast?[]:null;await steps[i].run();const rec=REC;REC=null;if(!t.dead){if(rec&&rec.length)rec.forEach(([k,lab])=>{if(lab)tag(k,lab);else E[k].p.classList.add('on');if(E[k].isConn)E[k].p.classList.add('flow')});else if(t.fast||FLOWN===0)hl(steps[i],1)}
+      if(auto&&!t.dead){if(i>=steps.length-1){auto=false;paused=false;btnPlay();return}
+        const v=(performance.now()-t0)*speed;await wait(Math.max(1800,4800-v));if(!t.dead&&auto)goTo(i+1)}}else hl(null)}
+  catch(e){if(e!==STOP&&!t.dead)throw e}}
+function btnPlay(){$('play').textContent=auto&&!paused?'일시정지':'재생'}
+function manual(f){return()=>{auto=false;paused=false;btnPlay();f()}}
+function renderScreen(){$('legacy').hidden=true;$('main').hidden=false;const S=scr();
+  document.querySelectorAll('#scr button').forEach((b,k)=>b.classList.toggle('sel',k===cur));
+  document.querySelectorAll('#dlist button').forEach((b,k)=>b.classList.toggle('sel',k===cur));
+  $('stitle').textContent=S.title;$('slede').textContent=S.lede;
+  const sel=$('sel');sel.innerHTML='';S.list.forEach((s,k)=>{const o=document.createElement('option');o.value=k;o.textContent=s.name;sel.appendChild(o)});sel.value=sst().sc;
+  renderChips();goTo(sst().i,true)}
+function goScreen(k){auto=false;paused=false;btnPlay();cur=k;try{localStorage.setItem('dmz-sim',String(k))}catch(e){}if(location.hash!=='#s'+(k+1))history.replaceState(null,'','#s'+(k+1));renderScreen()}
+SCREENS.forEach((S,k)=>{const b=document.createElement('button');b.textContent=S.chip;b.onclick=()=>k===0?goLegacy():goScreen(k);if(k===0)b.dataset.legacy='1';$('scr').appendChild(b);
+  const d=document.createElement('button');d.innerHTML='<b></b><span></span>';d.firstChild.textContent=S.title;d.lastChild.textContent=S.menu;d.onclick=()=>{k===0?goLegacy():goScreen(k);setOpen(false)};$('dlist').appendChild(d)});
+function goLegacy(){auto=false;paused=false;btnPlay();tok.dead=true;cur=-1;
+  document.querySelectorAll('#scr button').forEach(b=>b.classList.toggle('sel',b.dataset.legacy==='1'));document.querySelectorAll('#dlist button').forEach((b,k)=>b.classList.toggle('sel',k===0));
+  const f=$('legacy');if(!f.getAttribute('src'))f.setAttribute('src','legacy.html');f.hidden=false;$('main').hidden=true;
+  try{localStorage.setItem('dmz-sim','0')}catch(e){}history.replaceState(null,'','#s1')}
+function setOpen(v){document.body.classList.toggle('open',v);$('ham').setAttribute('aria-expanded',v);if(v){const s=$('dlist').querySelector('.sel');s&&s.focus()}}
+$('ham').onclick=()=>setOpen(!document.body.classList.contains('open'));$('shade').onclick=()=>setOpen(false);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setOpen(false)});
+$('sel').onchange=e=>{auto=false;paused=false;btnPlay();const st=sst();st.sc=+e.target.value;st.i=-1;st.ab='A';renderChips();goTo(-1)};
+$('prev').onclick=manual(()=>{if(sst().i>-1)goTo(sst().i-1)});
+$('next').onclick=manual(()=>{if(sst().i<stepsOf().length-1)goTo(sst().i+1)});
+$('home').onclick=manual(()=>goTo(-1));
+$('speed').onchange=e=>{speed=+e.target.value};
+$('play').onclick=()=>{if(!auto){auto=true;paused=false;btnPlay();const n=stepsOf().length;goTo(sst().i>=n-1?0:sst().i+1);return}paused=!paused;btnPlay()};
+(function(){let k=0;const h=location.hash.match(/^#s([1-4])$/);if(h)k=+h[1]-1;else{try{const s=localStorage.getItem('dmz-sim');const v=+s;if(v>=0&&v<4)k=v}catch(e){}}if(k===0)goLegacy();else goScreen(k)})();
+
+</script>
+</body></html>
