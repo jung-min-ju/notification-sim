@@ -50,6 +50,8 @@ button:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
 #curve{width:100%;min-width:560px;height:auto;display:block}
 svg text{font-family:var(--f-ui)}
 @media (max-width:640px){.duo{grid-template-columns:1fr}}
+body.embed h1,body.embed .lead,body.embed .tabs{display:none}
+body.embed .wrap{padding-top:4px;padding-bottom:4px}
 </style>
 </head>
 <body>
@@ -184,7 +186,7 @@ function draw(kind,tt){
     });
     if(tt>=ft+MV&&tt<E)label(g,'재시도까지 '+Math.ceil(E-tt)+'초',QX+150,236,ink3,11.5,600,'center');
     const blocked=kind==='cur'&&tt>=E&&tt<sim.retryStart;
-    if(blocked){g.strokeStyle=bad;g.lineWidth=3;g.beginPath();g.moveTo(222,216);g.lineTo(222,252);g.stroke();label(g,'못 들어감',226,210,bad,11.5,700,'left')}
+    if(blocked){g.strokeStyle=bad;g.lineWidth=3;g.beginPath();g.moveTo(222,216);g.lineTo(222,252);g.stroke();label(g,'못 들어감',230,250,bad,11.5,700,'left')}
   }
   // 이동·처리·나감
   sim.jobs.forEach(o=>{
@@ -274,7 +276,11 @@ function loop(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(playing){t+
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'일시정지':'재생'};
 $('again').onclick=()=>{t=0;render()};
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{SC=b.dataset.s;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));setup()});
+const QS=new URLSearchParams(location.search),EMBED=QS.has('embed');
+if(QS.get('s')&&TEXT[QS.get('s')]){SC=QS.get('s');document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.s===SC))}
+if(EMBED)document.body.classList.add('embed');
 setup();
+if(EMBED&&'IntersectionObserver' in window){let seen=false;playing=false;$('play').textContent='재생';new IntersectionObserver(es=>{const v=es[0].isIntersecting;if(v&&!seen){seen=true;t=0}playing=v;$('play').textContent=v?'일시정지':'재생'},{threshold:.2}).observe(document.body)}
 window.__sim={set:v=>{t=v;render()}};
 if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;$('play').textContent='재생';t=E+60;render()}
 requestAnimationFrame(n=>{last=n;requestAnimationFrame(loop)});
