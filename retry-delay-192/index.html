@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>푸시 발송 구조 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 레이아웃: 본문 폭 한 단. 상황 탭 → 움직이는 흐름 그림(두 구조 나란히) → 시간표 */
+:root{
+  --bg:#ffffff; --card:#ffffff; --ink:#1f2328; --ink2:#59636e; --ink3:#8c959f; --line:#d8dee4; --soft:#f6f8fa; --grid:#eef1f4;
+  --cur:#c2571a; --wrk:#2b66c9; --retry:#c98f00; --bad:#cf222e; --bad-bg:#ffebe9; --ok:#1a7f37;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117; --card:#0d1117; --ink:#e6edf3; --ink2:#9da7b3; --ink3:#6e7781; --line:#30363d; --soft:#161b22; --grid:#21262d;
+  --cur:#d0662c; --wrk:#5a8ae0; --retry:#e0b040; --bad:#ff7b72; --bad-bg:#3a1d1d; --ok:#56d364; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --card:#0d1117; --ink:#e6edf3; --ink2:#9da7b3; --ink3:#6e7781; --line:#30363d; --soft:#161b22; --grid:#21262d;
+  --cur:#d0662c; --wrk:#5a8ae0; --retry:#e0b040; --bad:#ff7b72; --bad-bg:#3a1d1d; --ok:#56d364; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.7;word-break:keep-all}
+.wrap{max-width:880px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:flex;flex-direction:column;gap:18px}
+h1{font-size:24px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--ink2)}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tabs button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:999px;padding:5px 14px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.fig{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:18px 18px 14px;display:flex;flex-direction:column;gap:12px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--ink2)}
+.ctl button{font:inherit;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:6px;padding:3px 12px;cursor:pointer}
+.ctl .clock{margin-left:auto;font-size:14px;color:var(--ink)}
+button:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.side{display:flex;flex-direction:column;gap:4px;min-width:0}
+.side h3{margin:0;font-size:15px}
+.side .st{font-size:13px;min-height:1.6em}
+.side canvas{width:100%;height:auto;aspect-ratio:500/260;display:block}
+.cap{font-size:13.5px;color:var(--ink2);text-align:center;min-height:2.8em;display:flex;align-items:center;justify-content:center;gap:6px}
+.cap i{font-style:normal;color:var(--ink3)}
+.key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink3)}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key b{width:10px;height:10px;border-radius:50%;display:inline-block}
+#tlwrap{overflow-x:auto}
+#curve{width:100%;min-width:560px;height:auto;display:block}
+svg text{font-family:var(--f-ui)}
+@media (max-width:640px){.duo{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>푸시 발송 구조 비교</h1>
+  <p class="lead" id="lead"></p>
+  <div class="tabs" role="group" aria-label="상황">
+    <button data-s="restart" aria-pressed="true">1. 발송 중 서버 재시작</button>
+    <button data-s="dup" aria-pressed="false">2. 서버 2대</button>
+    <button data-s="mem" aria-pressed="false">3. 메모리에 올리는 양</button>
+    <button data-s="retry" aria-pressed="false">4. 재시도 지연 (#192)</button>
+  </div>
+
+  <div class="fig">
+    <div class="ctl">
+      <button id="play">일시정지</button>
+      <button id="again">처음부터</button>
+      <span>냉장고 1,000곳 · 발송 작업 32,000건</span>
+      <span class="clock num" id="clk">08:00:00</span>
+    </div>
+    <div class="duo">
+      <div class="side"><h3 style="color:var(--cur)">현재 구조</h3><span class="st" id="st-cur"></span><canvas id="cv-cur" width="1000" height="520" aria-label="현재 구조 흐름"></canvas></div>
+      <div class="side"><h3 style="color:var(--wrk)">DB 워커 구조</h3><span class="st" id="st-wrk"></span><canvas id="cv-wrk" width="1000" height="520" aria-label="DB 워커 구조 흐름"></canvas></div>
+    </div>
+    <div class="key" id="key"></div>
+    <p class="cap" id="cap"></p>
+  </div>
+
+  <div class="fig">
+    <div id="tlwrap"><svg id="curve" viewBox="0 0 700 200" role="img" aria-label="시간표"></svg></div>
+    <p class="cap" id="cap2"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const N=32000,T=453.788,C=20,SPEED=24,PER=200,RPER=5;
+const rate=N/T,e=C/rate,E=300+e;
+const R=180,DOWN=20,LEASE=40;               // 08:03 재시작, 20초 뒤 다시 뜸, 처리 중이던 작업은 점유 만료 뒤 회수
+const NT=N/PER, PROC=T/(NT/C+0.95), RPROC=4, MV=7;
+const clock=tt=>{const s=Math.max(0,Math.floor(tt));return '08:'+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let SC='restart';
+
+/* 일정 계산: 칸이 비는 순서대로 작업 묶음을 배정 */
+function simulate(kind,sc){
+  const servers=sc==='dup'?2:1, jobs=[];
+  const mkFree=()=>[...Array(C)].map((_,j)=>j*PROC/C);
+  if(kind==='cur'){
+    for(let s=0;s<servers;s++){
+      const free=mkFree();let next=0,stopped=false;
+      while(next<NT&&!stopped){
+        let j=0;for(let i=1;i<C;i++)if(free[i]<free[j])j=i;
+        const t0=free[j];
+        if(sc==='restart'&&t0>=R){stopped=true;break}
+        const o={type:'f',srv:s,slot:j,i:next,start:t0,end:t0+PROC,fate:'ok'};
+        if(sc==='restart'&&o.end>R){o.end=R;o.fate='lost'}
+        jobs.push(o);free[j]=o.end;next++;
+      }
+      if(sc==='retry'){const st=Math.max(...free);for(let r=0;r<4;r++){let j=r;jobs.push({type:'r',srv:0,slot:j,i:r,start:Math.max(st,T),end:Math.max(st,T)+RPROC,fate:'ok'})}}
+    }
+  }else{
+    const free=[];for(let s=0;s<servers;s++)mkFree().forEach(f=>free.push(f));
+    const queue=[...Array(NT)].map((_,i)=>({i,at:0}));let retry=0;
+    while(queue.length||(sc==='retry'&&retry<4)){
+      let j=0;for(let i=1;i<free.length;i++)if(free[i]<free[j])j=i;
+      let t0=free[j];
+      if(sc==='restart'&&t0>=R&&t0<R+DOWN){free[j]=R+DOWN;continue}
+      if(sc==='retry'&&retry<4&&t0>=E){jobs.push({type:'r',srv:0,slot:j,i:retry,start:t0,end:t0+RPROC,fate:'ok'});free[j]=t0+RPROC;retry++;continue}
+      if(!queue.length){free[j]=E;continue}
+      let k=queue.findIndex(q=>q.at<=t0);
+      if(k<0){free[j]=Math.min(...queue.map(q=>q.at));continue}
+      const q=queue.splice(k,1)[0];
+      const o={type:'f',srv:Math.floor(j/C),slot:j%C,i:q.i,start:t0,end:t0+PROC,fate:'ok'};
+      if(sc==='restart'&&t0<R&&o.end>R){o.end=R;o.fate='lost';queue.unshift({i:q.i,at:R+DOWN+LEASE})}
+      jobs.push(o);free[j]=o.end;
+    }
+  }
+  const okEnd=jobs.filter(o=>o.type==='f'&&o.fate==='ok').map(o=>o.end);
+  return {jobs,servers,firstDone:okEnd.length?Math.max(...okEnd):0,retryStart:(jobs.find(o=>o.type==='r')||{}).start};
+}
+let SIM;
+function build(){SIM={cur:simulate('cur',SC),wrk:simulate('wrk',SC)};SIM.end=SC==='dup'?500:SC==='restart'?560:500}
+
+/* 그리기 (논리 500 x 260) */
+const QX=8,QY=34,QC=16,QG=10.2,QGY=9.2;
+const qPos=i=>[QX+16+(i%QC)*QG,QY+8+Math.floor(i/QC)*QGY];
+const rPos=i=>[QX+24+i*26,232];
+const PX=430,PY=130;
+function sPos(srv,j,servers){if(servers===1)return [268+(j%4)*36,56+Math.floor(j/4)*36];return [268+(j%5)*22,52+Math.floor(j/5)*20+srv*112]}
+const lerp=(a,b,u)=>a+(b-a)*u, ease=u=>u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+function box(g,x,y,w,h,stroke,fill){g.beginPath();g.roundRect(x,y,w,h,8);if(fill){g.fillStyle=fill;g.fill()}g.strokeStyle=stroke;g.lineWidth=1.2;g.stroke()}
+function label(g,s,x,y,col,size,weight,align){g.font=`${weight||600} ${size||13}px ${css('--f-ui')}`;g.fillStyle=col;g.textAlign=align||'left';g.fillText(s,x,y)}
+function dot(g,x,y,r,col,a){g.globalAlpha=a==null?1:a;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fillStyle=col;g.fill();g.globalAlpha=1}
+function draw(kind,tt){
+  const sim=SIM[kind],cv=$('cv-'+kind),g=cv.getContext('2d');g.setTransform(2,0,0,2,0,0);g.clearRect(0,0,500,260);
+  const ink=css('--ink'),ink2=css('--ink2'),ink3=css('--ink3'),line=css('--line'),soft=css('--soft'),grid=css('--grid'),col=css('--'+kind),ry=css('--retry'),bad=css('--bad');
+  const down=SC==='restart'&&tt>=R&&(kind==='cur'||tt<R+DOWN);
+  const qTitle=kind==='cur'?(SC==='restart'&&tt>=R?'DB에 대기로 남은 작업':'실행기에 한꺼번에 넣은 작업'):'DB에서 꺼낼 작업';
+  label(g,qTitle,QX,22,ink2);box(g,QX,QY-4,186,140,line,SC==='mem'&&kind==='cur'?css('--bad-bg'):soft);
+  if(SC==='retry'){label(g,'재시도할 작업',QX,206,ink2);box(g,QX,214,186,40,line,soft)}
+  if(SC==='mem'){label(g,'서버 메모리에 올린 작업',QX,206,ink2);box(g,QX,214,186,40,line,soft)}
+  // 발송 칸
+  if(sim.servers===1){label(g,'서버 · 보내는 중 (20칸)',322,22,ink2,13,600,'center');box(g,250,QY-4,144,(SC==='retry'?190:190),down?bad:col,null)}
+  else{[0,1].forEach(s=>{label(g,`서버 S${s+1} · 20칸`,312,22+s*112,ink2,12.5,600,'center');box(g,252,QY-4+s*112,120,96,col,null)})}
+  for(let s=0;s<sim.servers;s++)for(let j=0;j<C;j++){const [x,y]=sPos(s,j,sim.servers);const h=sim.servers===1?26:16;g.beginPath();g.roundRect(x-h/2,y-h/2,h,h,5);g.fillStyle=grid;g.fill()}
+  if(down){g.fillStyle=css('--bad-bg');g.globalAlpha=.85;g.fillRect(251,QY-3,142,188);g.globalAlpha=1;
+    label(g,kind==='cur'||tt<R+DOWN?'서버 재시작':'',322,QY+90,bad,14,700,'center');
+    if(kind==='cur'&&tt>=R+DOWN)label(g,'다시 떴지만 보낼 실행이 없음',322,QY+110,bad,11.5,600,'center');}
+  label(g,'외부 푸시',PX+30,PY-22,ink2,13,600,'center');box(g,PX+6,PY-12,48,24,line,soft);
+  g.strokeStyle=ink3;g.lineWidth=1.2;g.beginPath();g.moveTo(196,96);g.lineTo(244,96);g.stroke();g.beginPath();g.moveTo(398,PY);g.lineTo(PX+4,PY);g.stroke();
+  if(SC==='retry'){g.beginPath();g.moveTo(196,234);g.lineTo(246,200);g.stroke()}
+  // 대기 묶음 수
+  const uniq=new Set(),inflight=new Set();let sent=0,dupSent=0;const seen={};
+  sim.jobs.forEach(o=>{if(o.type!=='f')return;if(tt>=o.start&&tt<o.end)inflight.add(o.i);if(tt>=o.end&&o.fate==='ok'){uniq.add(o.i);sent+=PER;seen[o.i]=(seen[o.i]||0)+1;if(seen[o.i]===2)dupSent+=PER}});
+  const waiting=NT-uniq.size-inflight.size;
+  for(let i=0;i<waiting;i++){const [x,y]=qPos(i);dot(g,x,y,3.4,ink3,.85)}
+  label(g,(waiting*PER).toLocaleString()+'건 남음',QX+93,QY+130,ink,12.5,600,'center');
+  if(SC==='mem'){let doneJ=0,infl=0;sim.jobs.forEach(o=>{if(tt>=o.end)doneJ+=PER;else if(tt>=o.start)infl++});
+    const m=kind==='cur'?(tt<.5?0:N-doneJ):Math.min(C,N-doneJ);
+    g.beginPath();g.roundRect(QX+8,224,170*m/N+(m?2:0),12,4);g.fillStyle=kind==='cur'?bad:css('--ok');g.fill();
+    label(g,m.toLocaleString()+'건',QX+178,248,kind==='cur'?bad:css('--ok'),12,700,'right')}
+  // 재시도
+  if(SC==='retry'){
+    const ft=MV+2;
+    sim.jobs.filter(o=>o.type==='r').forEach(o=>{
+      const [rx,ry2]=rPos(o.i);const [sx,sy]=sPos(0,0,1);
+      if(tt>=ft&&tt<ft+MV){const u=ease((tt-ft)/MV);dot(g,lerp(sx,rx,u),lerp(sy,ry2,u),6,ry)}
+      else if(tt>=ft+MV&&tt<o.start)dot(g,rx,ry2,7,ry);
+    });
+    if(tt>=ft+MV&&tt<E)label(g,'재시도까지 '+Math.ceil(E-tt)+'초',QX+150,236,ink3,11.5,600,'center');
+    const blocked=kind==='cur'&&tt>=E&&tt<sim.retryStart;
+    if(blocked){g.strokeStyle=bad;g.lineWidth=3;g.beginPath();g.moveTo(222,216);g.lineTo(222,252);g.stroke();label(g,'못 들어감',226,210,bad,11.5,700,'left')}
+  }
+  // 이동·처리·나감
+  sim.jobs.forEach(o=>{
+    const [sx,sy]=sPos(o.srv,o.slot,sim.servers),c=o.type==='r'?ry:col,r=o.type==='r'?7:(sim.servers===1?6:4);
+    if(tt>=o.start&&tt<o.start+MV&&tt<o.end){const [ax,ay]=o.type==='r'?rPos(o.i):qPos(0);const u=ease((tt-o.start)/MV);dot(g,lerp(ax,sx,u),lerp(ay,sy,u),r,c)}
+    else if(tt>=o.start+MV&&tt<o.end){dot(g,sx,sy,r,c);const u=(tt-o.start)/(o.end-o.start);g.beginPath();g.arc(sx,sy,r+4,-Math.PI/2,-Math.PI/2+u*Math.PI*2);g.strokeStyle=c;g.lineWidth=2;g.stroke()}
+    else if(tt>=o.end&&tt<o.end+MV){
+      if(o.fate==='lost'){const u=(tt-o.end)/MV;g.strokeStyle=bad;g.lineWidth=2;g.globalAlpha=1-u;g.beginPath();g.moveTo(sx-5,sy-5);g.lineTo(sx+5,sy+5);g.moveTo(sx+5,sy-5);g.lineTo(sx-5,sy+5);g.stroke();g.globalAlpha=1}
+      else{const u=ease((tt-o.end)/MV);dot(g,lerp(sx,PX+30,u),lerp(sy,PY,u),r*(1-u*.4),c,1-u*.6)}
+    }
+  });
+  label(g,'보낸 작업',PX+30,PY+30,ink3,11,500,'center');label(g,sent.toLocaleString(),PX+30,PY+46,ink,12,600,'center');
+  if(SC==='dup'&&dupSent){label(g,'두 번 보냄',PX+30,PY+70,bad,11,600,'center');label(g,dupSent.toLocaleString(),PX+30,PY+86,bad,12,700,'center')}
+  // 상태 줄
+  $('st-'+kind).innerHTML=status(kind,tt);
+}
+const span=(c,s,b)=>`<span style="color:var(--${c});${b?'font-weight:600':''}">${s}</span>`;
+function status(kind,tt){
+  const sim=SIM[kind];
+  if(SC==='retry'){
+    if(tt<E)return span('ink2',kind==='cur'?'32,000건을 실행기에 다 넣고 끝날 때까지 기다리는 중':'칸이 빌 때마다 DB에서 지금 보낼 작업을 하나 고르는 중');
+    if(tt<sim.retryStart)return span('bad',`재시도할 시각인데 ${(tt-E).toFixed(0)}초째 못 들어감`,1);
+    return span(sim.retryStart-E>5?'bad':'ok',`재시도 시작 · ${(sim.retryStart-E).toFixed(1)}초 기다림`,1);
+  }
+  if(SC==='restart'){
+    if(tt<R)return span('ink2','보내는 중');
+    if(kind==='cur')return span('bad',`08:03 재시작 뒤 아무도 안 보냄 · 남은 작업은 정오에 만료`,1);
+    if(tt<R+DOWN)return span('bad','재시작 중',1);
+    if(tt<sim.firstDone)return span('ok','다시 떠서 DB에 남은 작업을 이어서 보냄',1);
+    return span('ok',`모두 보냄 · ${clock(sim.firstDone)}`,1);
+  }
+  if(SC==='mem')return kind==='cur'?span('bad','08:00에 32,000건을 한꺼번에 메모리에 올림',1):span('ok','칸이 빈 만큼만 DB에서 꺼내 메모리에 올림',1);
+  if(kind==='cur')return span(tt>PROC?'bad':'ink2','두 서버가 같은 32,000건을 각자 보냄',tt>PROC);
+  return span('ok',tt<sim.firstDone?'두 서버가 서로 다른 작업을 나눠 보냄':`모두 보냄 · ${clock(sim.firstDone)}`,1);
+}
+const TEXT={
+ retry:{lead:'두 구조 모두 20칸으로 같은 속도로 보내. 처음 보낸 작업 중 20건이 실패해서 5분 뒤 재시도할 때 언제 칸에 들어가는지 비교해.',
+  key:'<span><b style="background:var(--ink3)"></b>점 1개 = 첫 발송 작업 200건</span><span><b style="background:var(--retry)"></b>점 1개 = 재시도 작업 5건</span>',
+  cap:tt=>tt<E?'첫 발송 중이야. 실패한 20건은 노란 점이 되어 5분을 기다려.':tt<T?'재시도할 시각이 됐어. DB 워커는 칸이 하나 비자마자 노란 점을 넣고, 현재 구조는 실행기에 넣어 둔 32,000건이 다 끝날 때까지 기다려.':'현재 구조는 32,000건이 다 끝난 뒤에야 노란 점이 들어갔어. '+(T-E).toFixed(0)+'초 늦었어.'},
+ restart:{lead:'08:03에 배포로 서버가 재시작되는 상황이야. 현재 구조는 발송을 08시 배치 실행 하나가 이어 가고, DB 워커는 DB에 남은 작업을 보고 이어 가.',
+  key:'<span><b style="background:var(--ink3)"></b>점 1개 = 발송 작업 200건</span><span style="color:var(--bad)">✕ 보내던 중 끊긴 작업</span>',
+  cap:tt=>tt<R?'두 구조 모두 보내는 중이야.':tt<R+DOWN?'서버가 재시작 중이야. 보내던 작업은 끊겼고, 남은 작업은 DB에 대기로 남아 있어.':'현재 구조는 서버가 다시 떠도 발송을 이어 갈 실행이 없어. 남은 작업은 정오에 만료돼. DB 워커는 다시 떠서 남은 작업을 이어 보내고, 끊긴 작업은 점유가 만료된 뒤 다시 가져가.'},
+ mem:{lead:'보내는 속도는 같아. 차이는 보낼 작업을 서버 메모리에 얼마나 올려 두느냐야. 현재 구조는 작업마다 가상 스레드를 만들어 실행기에 한꺼번에 넣고, DB 워커는 빈 칸만큼만 꺼내.',
+  key:'<span><b style="background:var(--ink3)"></b>점 1개 = 발송 작업 200건</span>',
+  cap:tt=>'현재 구조는 작업 수만큼 메모리에 올라가서, 작업이 3배가 되면 메모리도 3배가 돼. DB 워커는 작업이 늘어도 20건 안팎만 올려.'},
+ dup:{lead:'서버를 2대로 늘린 상황이야. 현재 구조는 서버마다 08시 배치가 돌아서 같은 작업을 각자 읽고, DB 워커는 선점으로 작업을 나눠 가져.',
+  key:'<span><b style="background:var(--ink3)"></b>점 1개 = 발송 작업 200건</span>',
+  cap:tt=>tt<PROC?'두 서버가 동시에 시작했어. 현재 구조는 같은 작업이 양쪽 서버로 하나씩 날아가.':'현재 구조는 같은 푸시가 두 번씩 나가. DB 워커는 한 작업을 한 서버만 보내서, 40칸으로 절반 시간에 끝나.'}
+};
+
+/* 시간표 */
+const W=700,H=200,PL=118,PR=16;
+let xs;
+function coverage(sim,type){const iv=sim.jobs.filter(o=>o.type===type).map(o=>[o.start,o.end]).sort((a,b)=>a[0]-b[0]);const out=[];iv.forEach(([a,b])=>{if(out.length&&a<=out[out.length-1][1]+.5)out[out.length-1][1]=Math.max(out[out.length-1][1],b);else out.push([a,b])});return out}
+function tlBase(){
+  const END=SIM.end;xs=v=>PL+(W-PL-PR)*v/END;
+  const lane=(k,y,name)=>{const sim=SIM[k],x0=xs(0);let s=`<text x="0" y="${y+14}" font-size="13" font-weight="600" fill="var(--${k})">${name}</text>
+    <text x="${PL-8}" y="${y+14}" text-anchor="end" font-size="12" fill="var(--ink2)">발송</text>
+    <rect x="${x0}" y="${y}" width="${xs(END)-x0}" height="20" rx="4" fill="var(--soft)"/>`;
+    if(SC==='retry')s+=`<text x="${PL-8}" y="${y+40}" text-anchor="end" font-size="12" fill="var(--ink2)">재시도</text><rect x="${x0}" y="${y+26}" width="${xs(END)-x0}" height="20" rx="4" fill="var(--soft)"/>`;
+    s+='<g clip-path="url(#tl)">';
+    coverage(sim,'f').forEach(([a,b])=>{s+=`<rect x="${xs(a)}" y="${y}" width="${Math.max(2,xs(b)-xs(a))}" height="20" rx="4" fill="var(--${k})" opacity=".85"/>`});
+    if(SC==='retry'){const rs=sim.retryStart,gap=rs-E;
+      const wide=xs(rs)-xs(E)>70;if(gap>1&&wide)s+=`<rect x="${xs(E)}" y="${y+26}" width="${xs(rs)-xs(E)}" height="20" rx="4" fill="var(--bad-bg)" stroke="var(--bad)" stroke-dasharray="3 3"/><text x="${(xs(E)+xs(rs))/2}" y="${y+40}" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--bad)">${gap.toFixed(0)}초 기다림</text>`;
+      s+=`<rect x="${xs(rs)}" y="${y+26}" width="22" height="20" rx="4" fill="var(--retry)"/><text x="${xs(rs)+28}" y="${y+40}" font-size="11.5" font-weight="600" fill="var(--ink)">${gap>1?(wide?'이제 시작':gap.toFixed(0)+'초 뒤 시작'):'바로 시작'}</text>`}
+    if(SC==='restart'){
+      if(k==='cur')s+=`<rect x="${xs(R)}" y="${y}" width="${xs(END)-xs(R)}" height="20" rx="4" fill="var(--bad-bg)" stroke="var(--bad)" stroke-dasharray="3 3"/><text x="${(xs(R)+xs(END))/2}" y="${y+14}" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--bad)">발송 멈춤 · 남은 작업 정오 만료</text>`;
+      else s+=`<text x="${xs(sim.firstDone)+6}" y="${y+14}" font-size="11.5" font-weight="600" fill="var(--ok)">모두 보냄</text>`}
+    if(SC==='mem'){s+=`<text x="${xs(T)+6}" y="${y+14}" font-size="11.5" font-weight="600" fill="var(--${k==='cur'?'bad':'ok'})">${k==='cur'?'메모리 최대 32,000건':'메모리 최대 20건'}</text>`}
+    if(SC==='dup'){s+=k==='cur'?`<text x="${xs(T)+6}" y="${y+14}" font-size="11.5" font-weight="600" fill="var(--bad)">64,000건 보냄 · 중복 32,000</text>`:`<text x="${xs(sim.firstDone)+6}" y="${y+14}" font-size="11.5" font-weight="600" fill="var(--ok)">32,000건 · 중복 없음</text>`}
+    return s+'</g>'};
+  let ax='';for(let v=0;v<=END;v+=60){ax+=`<line x1="${xs(v)}" x2="${xs(v)}" y1="22" y2="${H-24}" stroke="var(--grid)"/><text x="${xs(v)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink3)" class="num">${clock(v).slice(0,5)}</text>`}
+  const mk=SC==='retry'?[E,'재시도할 시각 '+clock(E).slice(0,5),'retry']:SC==='restart'?[R,'08:03 서버 재시작','bad']:null;
+  const ln=SC==='retry'?[30,104]:[44,112];
+  $('curve').innerHTML=`<clipPath id="tl"><rect x="0" y="0" width="${PL}" height="${H}"/></clipPath>${ax}
+    ${mk?`<line x1="${xs(mk[0])}" x2="${xs(mk[0])}" y1="16" y2="${H-24}" stroke="var(--${mk[2]})" stroke-width="1.5" stroke-dasharray="4 4"/><text x="${xs(mk[0])}" y="12" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--${mk[2]})">${mk[1]}</text>`:''}
+    ${lane('cur',ln[0],'현재 구조')}${lane('wrk',ln[1],'DB 워커')}
+    <line id="tph" y1="20" y2="${H-24}" stroke="var(--ink)" stroke-width="1.2"/>`;
+  $('cap2').innerHTML='<i>ⓘ</i> 위 그림을 시간표로 펼친 거야.';
+}
+function tlMove(tt){const x=xs(Math.min(tt,SIM.end));$('tl').firstElementChild.setAttribute('width',x);const l=$('tph');l.setAttribute('x1',x);l.setAttribute('x2',x)}
+
+let t=0,playing=true,last=0;
+function render(){$('clk').textContent=clock(t);draw('cur',t);draw('wrk',t);$('cap').innerHTML='<i>ⓘ</i> '+TEXT[SC].cap(t);tlMove(t)}
+function setup(){build();$('lead').textContent=TEXT[SC].lead;$('key').innerHTML=TEXT[SC].key;tlBase();t=0;render()}
+function loop(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(playing){t+=dt*SPEED;if(t>SIM.end+60)t=0;render()}requestAnimationFrame(loop)}
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'일시정지':'재생'};
+$('again').onclick=()=>{t=0;render()};
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{SC=b.dataset.s;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));setup()});
+setup();
+window.__sim={set:v=>{t=v;render()}};
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;$('play').textContent='재생';t=E+60;render()}
+requestAnimationFrame(n=>{last=n;requestAnimationFrame(loop)});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
+})();
+</script>
+
+</body>
+</html>
