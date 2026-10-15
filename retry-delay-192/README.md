@@ -5,6 +5,22 @@
 - 바로 보기: https://jung-min-ju.github.io/notification-sim/retry-delay-192/
 - 관련 이슈: KTB4-5th-wiki #192, KTB4-5th-BE #211
 
+## 어디까지 했나
+
+- 현재 08시 배치 발송 구조와 DB 워커 구조를 네 상황(발송 중 재시작, 서버 2대, 메모리, 재시도 지연)에서 비교한다.
+- 현재 구조 쪽은 실측(#192)과 코드에 맞췄다. DB 워커 쪽은 구현 전 설계를 기준으로 한 모델 예상이다.
+- 블로그 삽입 모드: `?embed&s=restart|dup|mem|retry` (화면에 보일 때만 재생, 두 구조를 위아래로 배치).
+- 이 시뮬레이터를 근거로 쓴 글: [푸시 알림 발송을 DB 워커로 바꾼 이유](https://dameokja.tistory.com/2)
+
+## 관련 PR·이슈
+
+| 구분 | 링크 |
+|---|---|
+| 측정 이슈 | [KTB4-5th-wiki #192](https://github.com/100-hours-a-week/KTB4-5th-wiki/issues/192) |
+| 현재 구조 근거 BE PR | [#125](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/125) 작업 처리, [#126](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/126) 만료 푸시 스케줄러, [#128](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/128) 작업마다 가상 스레드, [#130](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/130) 스케줄러 통합 |
+| DB 워커 구현 | [KTB4-5th-BE #211](https://github.com/100-hours-a-week/KTB4-5th-BE/issues/211) (진행 중) |
+| 이 폴더의 PR | [#2](https://github.com/jung-min-ju/notification-sim/pull/2) 추가, [#3](https://github.com/jung-min-ju/notification-sim/pull/3) 삽입 모드, [#4](https://github.com/jung-min-ju/notification-sim/pull/4) 위아래 배치 |
+
 ## 현재 구조 (KTB4-5th-BE `dev`, 2026-10-11 기준)
 
 - `NotificationScheduler.runExpirationNotificationBatch()`가 한 실행 안에서 다음 순서로 처리한다.
