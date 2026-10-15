@@ -33,4 +33,4 @@
 | DB 워커 근거 | [KTB4-5th-wiki #192](https://github.com/100-hours-a-week/KTB4-5th-wiki/issues/192) 재시도 지연 측정, `../retry-delay-192/` |
 | DB 워커 구현 | [KTB4-5th-BE #211](https://github.com/100-hours-a-week/KTB4-5th-BE/issues/211) (진행 중) |
 | Redis 설정 | [KTB4-5th-BE #189](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/189) |
-| 이 폴더를 추가한 PR | 이 PR (notification-sim) |
+| 이 폴더를 추가한 PR | [#5](https://github.com/jung-min-ju/notification-sim/pull/5) |

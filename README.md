@@ -47,3 +47,4 @@ retry-delay-192/           #192 재시도 지연을 근거로 DB 워커 이점 4
 | [#2](https://github.com/jung-min-ju/notification-sim/pull/2) | `retry-delay-192/` 추가 |
 | [#3](https://github.com/jung-min-ju/notification-sim/pull/3) | `retry-delay-192/` 상황별 삽입 모드 |
 | [#4](https://github.com/jung-min-ju/notification-sim/pull/4) | 삽입 모드에서 두 구조를 위아래로 배치 |
+| [#5](https://github.com/jung-min-ju/notification-sim/pull/5) | `notification-v2/` 추가, 시뮬레이터별 README 정리 |
