@@ -11,6 +11,7 @@
 | `index2.html` | [열기](https://jung-min-ju.github.io/notification-sim/index2.html) | ①~④: 단일·다중 인스턴스 문제와 대응, V2 개선 구조 선택 A·B | 예전판. `notification-v2`가 대체 |
 | `notification-v2/` | [열기](https://jung-min-ju.github.io/notification-sim/notification-v2/) | ①~⑥: 문제와 대응, V2 이번 구현(DB 워커), SSE 화면 맞추기, 이후 개선(RabbitMQ·Outbox) | 최신 |
 | `retry-delay-192/` | [열기](https://jung-min-ju.github.io/notification-sim/retry-delay-192/) | 08시 발송 구조 vs DB 워커, 네 상황(재시작·서버 2대·메모리·재시도 지연) | 최신. 블로그 삽입용 |
+| `sse-flow-241/` | [열기](https://jung-min-ju.github.io/notification-sim/sse-flow-241/) | 인앱 알림 SSE: 커밋 후 Redis 발행 → 서버 3대별 연결 목록 → 재조회, 여섯 상황(저장·읽음·롤백·발행 실패·연결 변화·동시 정리) | 최신. BE #241~#245 기준 |
 
 각 폴더의 README에 기준 코드, 관련 PR, 가정을 적어 두었다.
 
@@ -24,6 +25,8 @@ index2.html                ①~④ 문제·대응·V2 구조 (선택 A·B)
 notification-v2/           ①~⑥ DB 워커 확정, RabbitMQ는 이후로
         ↘
 retry-delay-192/           #192 재시도 지연을 근거로 DB 워커 이점 4가지 비교
+        ↘
+sse-flow-241/              ⑤ SSE 화면 맞추기를 구현 코드(#241~#245)로 서버별로 펼침
 ```
 
 ## 루트 시뮬레이터의 관련 BE PR (KTB4-5th-BE)
@@ -48,3 +51,4 @@ retry-delay-192/           #192 재시도 지연을 근거로 DB 워커 이점 4
 | [#3](https://github.com/jung-min-ju/notification-sim/pull/3) | `retry-delay-192/` 상황별 삽입 모드 |
 | [#4](https://github.com/jung-min-ju/notification-sim/pull/4) | 삽입 모드에서 두 구조를 위아래로 배치 |
 | [#5](https://github.com/jung-min-ju/notification-sim/pull/5) | `notification-v2/` 추가, 시뮬레이터별 README 정리 |
+| [#6](https://github.com/jung-min-ju/notification-sim/pull/6) | `sse-flow-241/` 추가 |
