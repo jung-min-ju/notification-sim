@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>알림 SSE 서버별 흐름</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 상황 탭 → 지금 호출 한 줄 → 서버 1 트랜잭션(위) · Redis · 서버 3대(아래, 서버마다 연결 목록) → ⓘ 설명 */
+:root{
+  --bg:#ffffff; --card:#ffffff; --ink:#1f2328; --ink2:#59636e; --ink3:#8c959f; --line:#d8dee4; --soft:#f6f8fa; --grid:#eef1f4;
+  --be-f:#e6f6ee; --be-s:#1f9d6c; --db-f:#efe8fc; --db-s:#7c4dde; --bus-f:#fff0e4; --bus-s:#e0621c; --fe-f:#e5f5fa; --fe-s:#1a8db0; --grp:#fffcf4; --grp-s:#d98a1a;
+  --cur:#c2571a; --wrk:#2b66c9; --io:#8250df; --bad:#cf222e; --bad-bg:#ffebe9; --ok:#1a7f37; --ok-bg:#e6f4ea; --hd:#e7eefc; --line2:#b9c2cc;
+  --shadow:0 6px 24px rgba(31,35,40,.14);
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117; --card:#0d1117; --ink:#e6edf3; --ink2:#9da7b3; --ink3:#6e7781; --line:#30363d; --soft:#161b22; --grid:#21262d;
+  --be-f:#0f2a20; --be-s:#2fbf8f; --db-f:#231a3a; --db-s:#a77bff; --bus-f:#3a2214; --bus-s:#ff8a4c; --fe-f:#0f2830; --fe-s:#38bdd8; --grp:#15130c; --grp-s:#c77a1a;
+  --cur:#d0662c; --wrk:#5a8ae0; --io:#a371f7; --bad:#ff7b72; --bad-bg:#3a1d1d; --ok:#56d364; --ok-bg:#12261a; --hd:#16233a; --line2:#4a535d;
+  --shadow:0 6px 24px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --card:#0d1117; --ink:#e6edf3; --ink2:#9da7b3; --ink3:#6e7781; --line:#30363d; --soft:#161b22; --grid:#21262d;
+  --be-f:#0f2a20; --be-s:#2fbf8f; --db-f:#231a3a; --db-s:#a77bff; --bus-f:#3a2214; --bus-s:#ff8a4c; --fe-f:#0f2830; --fe-s:#38bdd8; --grp:#15130c; --grp-s:#c77a1a;
+  --cur:#d0662c; --wrk:#5a8ae0; --io:#a371f7; --bad:#ff7b72; --bad-bg:#3a1d1d; --ok:#56d364; --ok-bg:#12261a; --hd:#16233a; --line2:#4a535d;
+  --shadow:0 6px 24px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.7;word-break:keep-all}
+.wrap{max-width:1600px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:flex;flex-direction:column;gap:18px}
+h1{font-size:24px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--ink2)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tabs button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:999px;padding:5px 14px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.fig{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:18px 18px 14px;display:flex;flex-direction:column;gap:10px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--ink2)}
+.ctl button{font:inherit;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:6px;padding:3px 12px;cursor:pointer}
+button:focus-visible,.ib:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
+.where{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;min-height:30px}
+.badge{border:1.5px solid var(--c);color:var(--c);border-radius:999px;padding:0 10px;font-weight:600;font-size:12.5px;white-space:nowrap}
+.call{font-family:var(--f-num);font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+.dia{overflow-x:auto}
+#map{width:100%;min-width:860px;height:auto;display:block}
+svg text{font-family:var(--f-ui)}
+svg .mono{font-family:var(--f-num)}
+#map [data-id]{cursor:help}
+.stage{display:grid;grid-template-columns:272px minmax(0,1fr);gap:14px;align-items:start}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0;position:sticky;top:12px}
+.hd{background:var(--hd);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.hd .sub{font-size:12.5px;font-weight:700;color:var(--wrk)}
+.hd .ttl{font-size:18px;font-weight:700;line-height:1.4;text-wrap:balance}
+.hd .badge{align-self:flex-start;margin-top:4px}
+.now{border:1.5px dashed var(--line2);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.now h4{margin:0;font-size:13px;color:var(--wrk)}
+.now ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.now li{display:grid;grid-template-columns:18px 1fr;gap:4px;font-size:13.5px;line-height:1.6}
+.now li::before{content:"→";color:var(--ink3)}
+.now .code{font-family:var(--f-num);font-size:11.5px;color:var(--ink);background:var(--soft);border-radius:6px;padding:6px 8px;overflow-wrap:anywhere}
+.now .src{font-family:var(--f-num);font-size:11px;color:var(--ink3);overflow-wrap:anywhere}
+.why{border-top:1px solid var(--line);padding-top:12px;font-size:13px;color:var(--ink2);line-height:1.65}
+.why b{color:var(--ink);margin-right:6px}
+.why span{color:var(--ink3)}
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.steps button{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:28px 1fr;gap:6px;padding:7px 8px;border-radius:8px;font-size:13.5px;color:var(--ink3);cursor:pointer;line-height:1.5}
+.steps button:hover{background:var(--soft)}
+.steps button:focus-visible{outline:2px solid var(--wrk)}
+.steps button i{font-style:normal;font-family:var(--f-num);font-weight:600}
+.steps .done button{color:var(--ink2)}
+.steps .cur button{background:var(--hd);color:var(--ink);font-weight:700}
+.steps .cur button i{color:var(--wrk)}
+.lsth{margin:0 0 4px;font-size:13px;font-weight:700;color:var(--ink2)}
+@media (max-width:980px){.stage{grid-template-columns:1fr}.side{position:static}}
+.key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink3);justify-content:center}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key i{width:11px;height:11px;border-radius:50%;display:inline-block;background:var(--ink)}
+.key i.sq{border-radius:2px;background:var(--bus-s)}
+.key i.rq{background:none;border:2px solid var(--cur)}
+.key i.ev{background:var(--ok);width:8px;height:8px}
+.cap{font-size:13.5px;color:var(--ink2);text-align:center;min-height:2.8em;display:flex;align-items:center;justify-content:center;gap:6px}
+.ib{font-style:normal;color:var(--ink3);cursor:help;flex:none}
+.ib:hover{color:var(--ink)}
+.card{position:fixed;z-index:10;max-width:340px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:10px 12px;font-size:13px;line-height:1.55;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s}
+.card.on{opacity:1;transform:none}
+.card b{display:block;font-family:var(--f-num);font-size:12px;overflow-wrap:anywhere}
+.card p{color:var(--ink2)}
+@media (max-width:600px){.wrap{padding-inline:8px}.fig{padding:12px 8px}}
+body.embed h1,body.embed .lead,body.embed .tabs{display:none}
+body.embed .wrap{padding-block:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>알림 SSE 서버별 흐름</h1>
+  <p class="lead" id="lead"></p>
+  <div class="tabs" role="group" aria-label="상황" id="tabs"></div>
+  <div class="fig">
+    <div class="ctl">
+      <button id="play">일시정지</button>
+      <button id="again">처음부터</button>
+      <button id="speed" aria-label="재생 속도">속도 0.5×</button>
+      <span>서버 3대 · 냉장고 17 (A·B 공유) · PR #241~#245</span>
+    </div>
+    <div class="stage">
+      <aside class="side" aria-live="polite">
+        <div class="hd"><span class="sub" id="hsub"></span><span class="ttl" id="httl"></span><span class="badge" id="badge"></span></div>
+        <div class="now"><h4>지금 하는 일</h4><ul id="nowl"></ul><div class="code" id="call"></div><div class="src" id="src"></div></div>
+        <div class="why" id="why"></div>
+        <div class="lst"><h4 class="lsth">단계 목록</h4><ol class="steps" id="steps"></ol></div>
+      </aside>
+      <div class="dia"><svg id="map" viewBox="0 0 1100 652" role="img" aria-label="서버별 알림 SSE 흐름"></svg></div>
+    </div>
+    <div class="key">
+      <span><i></i>변경 사건 (사용자·냉장고)</span>
+      <span><i class="sq"></i>Redis로 오가는 바이트</span>
+      <span><i class="rq"></i>HTTP 요청</span>
+      <span><i class="ev"></i>SSE 이벤트</span>
+    </div>
+  </div>
+</div>
+<div class="card" id="card" role="tooltip"></div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const ease=v=>v<.5?2*v*v:1-Math.pow(-2*v+2,2)/2,cl=v=>Math.max(0,Math.min(1,v)),lerp=(a,b,t)=>a+(b-a)*t;
+
+/* ===== 고정 배치 ===== */
+const TOP={DB:{x:24,y:40,w:132,h:60},SAVE:{x:192,y:40,w:178,h:60},EVENT:{x:410,y:40,w:200,h:60},PUB:{x:660,y:40,w:188,h:60},RED:{x:884,y:40,w:196,h:60}};
+const PX=i=>20+i*360,PW=340,PY=246,PH=330,DY=592,DH=46;
+const CX=i=>PX(i)+PW/2;
+const GATE=[635,70];
+const CD={
+ DB:['notifications · notification_recipients','알림 내용과 수신자별 readAt을 보관해요. 커밋 전 변경은 점선으로 보여요.'],
+ SAVE:['ExpirationNotificationService.generate → NotificationRecipientService.saveRecipients\nNotificationService.readNotification → markRead','알림·수신자 저장이나 읽음 변경이 일어나는 곳이에요. @Transactional 안이에요.'],
+ EVENT:['ApplicationEventPublisher.publishEvent(NotificationChanged)','@TransactionalEventListener라서 커밋될 때까지 사건을 보관만 해요. 롤백되면 버려요.'],
+ PUB:['NotificationRedisPubSub.afterCommit','커밋 뒤 같은 스레드에서 실행돼요. mapper.writeValueAsString → StringRedisTemplate.convertAndSend. 실패하면 로그만 남겨요.'],
+ RED:['Redis PUBLISH · fridgely:notifications:changed','구독한 서버마다 복사해 보내요. 저장하거나 다시 보내지 않아요.'],
+ ONM:['NotificationRedisPubSub.onMessage','서버마다 RedisMessageListenerContainer가 구독해 두고, 실행기 스레드에서 호출해요. byte[] → String → NotificationChanged → connections.notifyChanged.'],
+ MAP:['NotificationSseConnections','Map<Long, UserSseConnections> (ConcurrentHashMap). 서버 메모리에만 있어서 서버마다 내용이 달라요. 등록은 compute, 제거는 computeIfPresent.'],
+ G:['UserSseConnections','한 사용자의 Set<NotificationSseConnection>. 연결마다 sendChanged를 부르고, 실패한 연결만 빼요.'],
+ C:['NotificationSseConnection','(userId, refrigeratorId, emitter). accepts는 두 ID가 다 같을 때만 true예요.'],
+ DEV:['브라우저 · EventSource','connected·notifications-changed 를 받으면 목록과 미읽음 수를 다시 조회해요.']};
+
+/* ===== 장면 만들기: 시간순으로 쌓으면서 연결 상태를 같이 계산 ===== */
+const DEVS={AN:{s:0,n:'A 노트북',u:7,r:17},AP:{s:1,n:'A 휴대폰',u:7,r:17},AT21:{s:1,n:'A 냉장고 21 탭',u:7,r:21},BB:{s:1,n:'B 브라우저',u:8,r:17},BT:{s:2,n:'B 태블릿',u:8,r:17},AT:{s:2,n:'A 태블릿',u:7,r:17}};
+function world(){return {sv:[[{u:7,c:[['c1','AN']]}],[{u:7,c:[['c2','AP'],['c3','AT21']]},{u:8,c:[['c4','BB']]}],[{u:8,c:[['c5','BT']]}]],
+ dev:{AN:{on:1,v:3},AP:{on:1,v:3},AT21:{on:1,v:null},BB:{on:1,v:3},BT:{on:1,v:3},AT:{on:0,v:null}},db:{7:3,8:3}}}
+function maker(){const o={toks:[],sets:[],glows:[],marks:[],notes:[],caps:[],gates:[],bars:[],locks:[],end:0};const W=world();
+ const b={o,W,
+  tok(id,kind,path,t0,d,opt){o.toks.push(Object.assign({id,kind,path,t0,d},opt||{}));o.end=Math.max(o.end,t0+d+.5);return t0+d},
+  set(t,fn){fn(W);o.sets.push({t,fn})},
+  glow(id,t0,t1){o.glows.push({id,t0,t1})},
+  mark(cid,t0,t1,k){o.marks.push({cid,t0,t1,k})},
+  note(t0,t1,at,s,col){o.notes.push({t0,t1,at,s,col})},
+  cap(t,cap,badge,col,call){o.caps.push({t,cap,badge,col,call})},
+  gate(t,k){o.gates.push({t,k})},bar(t0,t1,s){o.bars.push({t0,t1,s})},lock(t0,t1,sv,u){o.locks.push({t0,t1,sv,u})}};
+ return b}
+/* 한 서버가 신호를 받아 처리하는 과정 */
+function fan(b,t,u,lb){const W=b.W;let end=t;b.tok(lb,'by',[['red']],t,.05,{fade:1,label:lb});
+ for(let i=0;i<3;i++){const id=lb+i,t1=b.tok(id,'by',[['red'],['onm',i]],t,1,{label:lb});
+  b.glow('onm'+i,t1,t1+.7);b.tok(id,'ev',[['onm',i]],t1+.3,.05,{label:lb});
+  const g=W.sv[i].find(x=>x.u===u),t2=t1+.7;
+  if(!g){b.tok(id,'ev',[['onm',i],['maptop',i]],t2,.5,{label:lb,fade:1});b.note(t2+.5,t2+2.6,['maptop',i],`get(${u}) == null → 끝`,'ink2');end=Math.max(end,t2+2.6);continue}
+  b.tok(id,'ev',[['onm',i],['key',i,u]],t2,.5,{label:lb});b.glow(`k${i}-${u}`,t2+.5,t2+1.2+g.c.length*.8);b.glow(`g${i}-${u}`,t2+.5,t2+1.2+g.c.length*.8);
+  let tj=t2+.6;g.c.forEach(([cid,dv],j)=>{const ok=DEVS[dv].r===17;b.tok(id,'ev',[j?['chip',i,g.c[j-1][0]]:['key',i,u],['chip',i,cid]],tj,.45,{label:lb});
+   b.mark(cid,tj+.45,tj+3.4,ok?'ok':'skip');
+   if(ok){b.tok('e'+cid+lb,'sse',[['chip',i,cid],['dev',dv]],tj+.5,.6,{fade:1});const v=W.db[u];b.set(tj+1.1,w=>{w.dev[dv].v=v;w.dev[dv].hit=1});b.set(tj+2.2,w=>{w.dev[dv].hit=0})}
+   tj+=.8});
+  b.tok(id,'ev',[['chip',i,g.c[g.c.length-1][0]]],tj,.05,{label:lb,fade:1});end=Math.max(end,tj+1.2)}
+ return end}
+const TAIL=(b,t)=>{b.o.end=Math.max(b.o.end,t)};
+const SCN={
+ save:{name:'알림 저장',lead:'서버 1이 A·B 알림을 저장하면, 같은 신호가 서버 3대에 다 가지만 서버마다 가진 연결이 달라서 결과가 달라지는 걸 보여 줘요.',build(){
+  const b=maker();
+  b.cap(0,'A·B가 함께 쓰는 냉장고 17에 임박 알림이 생겨요. 연결 목록은 서버마다 달라요.','대기','ink3','');
+  b.glow('SAVE',.3,1.8);b.cap(.3,'서버 1의 스케줄러 스레드가 알림과 수신자 A·B 행을 저장해요. 아직 커밋 전이에요.','서버 1 · 스케줄러 스레드','cur','generate(17) → saveRecipients(알림, [A, B])');
+  b.set(.6,w=>{w.dbp=1});
+  b.tok('A','ev',[['save'],['ev',0]],.9,.8,{label:'A',grow:1});b.tok('B','ev',[['save'],['ev',1]],1.1,.8,{label:'B',grow:1});
+  b.glow('EVENT',1.7,3);b.note(1.9,3,['evnote'],'커밋 대기','grp-s');b.cap(1.7,'수신자마다 NotificationChanged를 발행해요. 커밋될 때까지 보관만 해요.','서버 1 · 스케줄러 스레드','cur','publishEvent(NotificationChanged(7, 17)), (8, 17)');
+  b.gate(3,'ok');b.set(3.1,w=>{w.dbp=0;w.db={7:4,8:4}});b.cap(3,'커밋돼요. 이제 보관한 사건 2개가 afterCommit으로 넘어가요.','서버 1 · 스케줄러 스레드','cur','commit → afterCommit(changed)');
+  b.tok('A','ev',[['ev',0],['gate'],['pub']],3.3,.7,{label:'A'});b.tok('A','by',[['pub'],['red']],4.0,.6,{label:'A'});
+  b.tok('B','ev',[['ev',1],['gate'],['pub']],3.7,.7,{label:'B'});b.tok('B','by',[['pub'],['red']],4.4,.6,{label:'B'});
+  b.glow('PUB',3.9,5);b.cap(4,'JSON을 바이트로 바꿔 PUBLISH 해요. 사건마다 한 번씩이에요.','서버 1 · 스케줄러 스레드','cur','convertAndSend("fridgely:notifications:changed", {"userId":7,…})');
+  b.glow('RED',4.5,5.8);
+  b.cap(4.7,'Redis가 구독한 서버 3대에 같은 바이트를 보내요. 각 서버의 onMessage가 받아요.','서버 1·2·3 · 리스너 실행 스레드','wrk','onMessage(message) → notifyChanged(userId, 17)');
+  const e1=fan(b,4.7,7,'A'),e2=fan(b,5.1,8,'B');
+  b.cap(7.2,'서버마다 자기 Map에서만 찾아요. 서버 1에는 B가 없고, 서버 3에는 A가 없어서 그 서버에서는 바로 끝나요.','서버 1·2·3 · 리스너 실행 스레드','wrk','connections.get(userId) → group.notifyChanged → accepts');
+  b.cap(8.4,'서버 2의 A 냉장고 21 탭은 같은 사용자라도 냉장고가 달라서 건너뛰어요.','서버 2 · 리스너 실행 스레드','wrk','accepts: refrigeratorId 21 ≠ 17 → return');
+  b.cap(Math.max(e1,e2),'연결된 화면 4곳이 이벤트를 받고 다시 조회해서 DB와 같아졌어요.','서버 1·2·3','wrk','emitter.send(notifications-changed) → 목록·미읽음 수 재조회');
+  TAIL(b,Math.max(e1,e2)+.8);return b.o}},
+ read:{name:'A만 읽음',lead:'A가 노트북(서버 1)에서 읽으면 A의 사건 하나만 나가고, 서버 2의 A 휴대폰만 따라 바뀌어요. B 화면은 그대로예요.',build(){
+  const b=maker();b.set(0,w=>{w.db={7:4,8:4};Object.values(w.dev).forEach(d=>{if(d.v!=null)d.v=4})});
+  b.cap(0,'A가 노트북에서 알림 하나를 읽어요.','대기','ink3','');
+  b.tok('Q','rq',[['dev','AN'],['lane0'],['lane1'],['save']],.3,1.4,{grow:1});b.cap(.3,'노트북의 읽음 요청이 서버 1로 가요.','서버 1 · 요청 스레드','cur','PATCH /api/v1/notifications/301/read');
+  b.glow('SAVE',1.7,2.6);b.set(1.9,w=>{w.dbp=1});b.cap(1.7,'안 읽은 알림이라 markRead가 true를 돌려줘요. 이미 읽었다면 false라서 사건이 없어요.','서버 1 · 요청 스레드','cur','readNotification(7, 301) → recipient.markRead(now) → true');
+  b.tok('A','ev',[['save'],['ev',0]],2.4,.8,{label:'A',grow:1});b.glow('EVENT',3.2,4);b.note(3.2,4,['evnote'],'커밋 대기','grp-s');
+  b.cap(2.4,'바뀐 건 A의 수신자 행뿐이라 A의 사건 하나만 보관돼요.','서버 1 · 요청 스레드','cur','publishEvent(NotificationChanged(7, 17))');
+  b.gate(4,'ok');b.set(4.1,w=>{w.dbp=0;w.db={7:3,8:4}});
+  b.tok('A','ev',[['ev',0],['gate'],['pub']],4.2,.7,{label:'A'});b.tok('A','by',[['pub'],['red']],4.9,.6,{label:'A'});b.glow('PUB',4.8,5.6);
+  b.cap(4.2,'커밋 뒤 afterCommit이 PUBLISH 해요. 그다음에 노트북 요청에 204가 돌아가요.','서버 1 · 요청 스레드','cur','afterCommit → convertAndSend');
+  b.tok('Q','rq',[['save'],['lane1'],['lane0'],['dev','AN']],5.6,1.2,{fade:1});b.set(6.8,w=>{w.dev.AN.v=3;w.dev.AN.hit=1});b.set(7.8,w=>{w.dev.AN.hit=0});
+  b.glow('RED',5.4,6.6);const e=fan(b,5.6,7,'A');
+  b.cap(7.4,'A의 신호는 서버 1·2에서만 연결을 찾고, 서버 3에서는 A 그룹이 없어 끝나요. B의 연결은 아무도 건드리지 않아요.','서버 1·2·3 · 리스너 실행 스레드','wrk','notifyChanged(7, 17)');
+  b.cap(e,'A 화면 2곳은 3으로 맞춰졌고, B 화면 2곳은 그대로 4예요.','','ink3','');TAIL(b,e+.8);return b.o}},
+ rollback:{name:'롤백',lead:'알림 저장이 롤백되면 사건이 커밋 경계에서 버려져서, Redis와 어느 서버로도 신호가 가지 않아요.',build(){
+  const b=maker();b.cap(0,'A·B에게 알림을 만들다가 트랜잭션이 실패하는 경우예요.','대기','ink3','');
+  b.glow('SAVE',.3,1.8);b.set(.6,w=>{w.dbp=1});b.cap(.3,'서버 1이 알림과 수신자 행을 저장해요.','서버 1 · 스케줄러 스레드','cur','generate(17) → saveRecipients');
+  b.tok('A','ev',[['save'],['ev',0]],.9,.8,{label:'A',grow:1});b.tok('B','ev',[['save'],['ev',1]],1.1,.8,{label:'B',grow:1});
+  b.glow('EVENT',1.7,3.4);b.note(1.9,3,['evnote'],'커밋 대기','grp-s');b.cap(1.7,'사건 2개가 커밋을 기다려요.','서버 1 · 스케줄러 스레드','cur','publishEvent × 2');
+  b.gate(3,'bad');b.set(3.1,w=>{w.dbp=2});b.tok('A','ev',[['ev',0]],3.2,.05,{label:'A',x:1});b.tok('B','ev',[['ev',1]],3.2,.05,{label:'B',x:1});
+  b.cap(3,'트랜잭션이 롤백돼요. 알림과 수신자 행이 취소되고 보관한 사건도 버려져요.','서버 1 · 스케줄러 스레드','bad','rollback → afterCommit 호출 안 함');
+  b.set(4.2,w=>{w.dbp=0});b.note(4.2,7.5,['rednote'],'받은 신호 없음','ink2');
+  b.cap(4.4,'Redis와 서버 3대는 아무 일도 하지 않아요. 화면도 DB도 그대로 3이에요.','','ink3','');TAIL(b,7.5);return b.o}},
+ lost:{name:'Redis 발행 실패',lead:'커밋은 됐는데 PUBLISH가 실패하면 신호가 사라져서, 다른 서버에 연결된 화면이 이전 숫자로 남아요.',build(){
+  const b=maker();b.set(0,w=>{w.db={7:4,8:4};Object.values(w.dev).forEach(d=>{if(d.v!=null)d.v=4})});
+  b.cap(0,'A가 노트북에서 알림 하나를 읽어요.','대기','ink3','');
+  b.tok('Q','rq',[['dev','AN'],['lane0'],['lane1'],['save']],.3,1.4,{grow:1});b.cap(.3,'노트북의 읽음 요청이 서버 1로 가요.','서버 1 · 요청 스레드','cur','PATCH /api/v1/notifications/301/read');
+  b.glow('SAVE',1.7,2.6);b.set(1.9,w=>{w.dbp=1});b.tok('A','ev',[['save'],['ev',0]],2.4,.8,{label:'A',grow:1});b.glow('EVENT',3.2,4);b.note(3.2,4,['evnote'],'커밋 대기','grp-s');
+  b.cap(1.7,'markRead가 true라서 A의 사건이 보관돼요.','서버 1 · 요청 스레드','cur','markRead → publishEvent(NotificationChanged(7, 17))');
+  b.gate(4,'ok');b.set(4.1,w=>{w.dbp=0;w.db={7:3,8:4}});b.tok('A','ev',[['ev',0],['gate'],['pub']],4.2,.7,{label:'A'});b.glow('PUB',4.8,6.4);
+  b.bar(5,9.5,'발행 실패');b.tok('A','by',[['pub'],['pubout']],4.9,.4,{label:'A',x:1});
+  b.cap(4.9,'Redis 연결이 실패해요. afterCommit은 예외를 로그로만 남기고 다시 던지지 않아요. 재시도도 없어요.','서버 1 · 요청 스레드','bad','convertAndSend → 예외 → log.warn("알림 갱신 신호 발행 실패")');
+  b.tok('Q','rq',[['save'],['lane1'],['lane0'],['dev','AN']],5.6,1.2,{fade:1});b.set(6.8,w=>{w.dev.AN.v=3;w.dev.AN.hit=1});b.set(7.8,w=>{w.dev.AN.hit=0});
+  b.cap(6,'노트북은 자기 요청에 204를 받고 다시 조회해서 3이 돼요.','서버 1 · 요청 스레드','cur','204 → 목록·미읽음 수 재조회');
+  b.set(7.6,w=>{w.dev.AP.stale=1});b.cap(7.6,'서버 2의 A 휴대폰은 신호를 못 받아서 4로 남아요. 다음 신호나 재연결 전까지 그대로예요.','서버 2','bad','신호 없음 · DB 3 · 화면 4');
+  TAIL(b,10);return b.o}},
+ conn:{name:'연결 추가·끊김',lead:'서버 3에 A가 새로 연결하고 B가 끊기면, 서버 3의 Map만 바뀌고 다음 신호의 결과도 서버 3에서만 달라져요.',build(){
+  const b=maker();b.cap(0,'서버 3에는 지금 B 태블릿만 연결돼 있어요.','대기','ink3','');
+  b.set(.2,w=>{w.dev.AT.on=1;w.dev.AT.v=null});
+  b.tok('R','rq',[['dev','AT'],['maptop',2]],.4,1,{grow:1});b.cap(.4,'A가 태블릿에서 알림 화면을 열어요. 요청이 서버 3으로 가요.','서버 3 · 요청 스레드','cur','GET /api/v2/refrigerators/17/notifications/stream → connect(7, 17)');
+  b.glow('map2',1.4,2.4);b.set(1.6,w=>{w.sv[2].unshift({u:7,c:[['c6','AT']]})});b.tok('R','rq',[['maptop',2]],1.5,.05,{fade:1});
+  b.cap(1.4,'서버 3의 Map에 7번 키가 없어서 compute가 그룹을 새로 만들어 넣어요. 서버 1·2의 Map은 그대로예요.','서버 3 · 요청 스레드','cur','connections.compute(7, existing == null → new UserSseConnections()).add(c6)');
+  b.tok('Ec6','sse',[['chip',2,'c6'],['dev','AT']],2.5,.6,{fade:1});b.set(3.1,w=>{w.dev.AT.v=3;w.dev.AT.hit=1});b.set(4,w=>{w.dev.AT.hit=0});
+  b.cap(2.5,'connected를 보내고, 태블릿은 목록과 미읽음 수를 조회해요.','서버 3 · 요청 스레드','cur','sendConnected() → event: connected');
+  b.mark('c5',4,5.6,'x');b.cap(4,'B 태블릿 네트워크가 끊겨서 오류 콜백이 실행돼요.','서버 3 · 연결 종료 콜백','bad','emitter.onError → remove(8, c5)');
+  b.glow('k2-8',4.4,5.6);b.set(5,w=>{w.sv[2]=w.sv[2].filter(g=>g.u!==8);w.dev.BT.on=0;w.dev.BT.gone=1});
+  b.cap(4.8,'computeIfPresent로 빼고 나니 8번 그룹이 비어서 키까지 지워져요.','서버 3 · 연결 종료 콜백','bad','computeIfPresent(8, …) → isEmpty → null');
+  b.tok('N','ev',[['red']],6.2,.4,{label:'A',grow:1});b.glow('RED',6.2,7.4);
+  b.cap(6.4,'이제 A에게 신호가 오면 서버 3에서도 A의 태블릿이 받아요.','서버 1·2·3 · 리스너 실행 스레드','wrk','onMessage → notifyChanged(7, 17)');
+  b.tok('N','ev',[['red']],6.6,.05,{fade:1});
+  b.set(6.6,w=>{w.db={7:4,8:3}});const e=fan(b,6.6,7,'A');b.cap(e,'같은 신호라도 서버 3의 Map이 바뀌어서 결과가 달라졌어요.','','ink3','');TAIL(b,e+.8);return b.o}},
+ race:{name:'동시에 빠지고 들어올 때',lead:'서버 1에서 A 노트북의 마지막 연결이 빠지는 순간 재연결이 들어와도, computeIfPresent 덕분에 새 연결이 Map에 남는 걸 보여 줘요.',build(){
+  const b=maker();b.cap(0,'서버 1의 7번 그룹에는 노트북 연결 하나뿐이에요.','대기','ink3','');
+  b.mark('c1',.3,2.6,'x');b.lock(.5,2.5,0,7);
+  b.cap(.3,'노트북 연결이 끊겨 오류 콜백이 computeIfPresent(7)을 시작해요. 7번 키를 잡은 채로 빼기와 비었는지 확인을 한 번에 해요.','서버 1 · 연결 종료 콜백','bad','computeIfPresent(7, (id, group) -> { group.remove(c1); return group.isEmpty() ? null : group; })');
+  b.tok('R','rq',[['dev','AN'],['wait',0]],.8,.9,{grow:1});b.note(1.7,2.6,['waitnote',0],'compute(7) 대기','ink2');
+  b.cap(1.2,'그 사이 노트북이 바로 다시 연결해요. 같은 7번 키라 compute는 앞 작업이 끝날 때까지 기다려요.','서버 1 · 요청 스레드','cur','connect(7, 17) → compute(7, …) 대기');
+  b.set(1.9,w=>{w.sv[0][0].c=[]});b.set(2.4,w=>{w.sv[0]=[]});
+  b.cap(2.2,'비어서 null을 돌려주고 키를 지워요. 판단과 삭제 사이에 끼어든 연결이 없어요.','서버 1 · 연결 종료 콜백','bad','return null → 7번 키 제거');
+  b.tok('R','rq',[['wait',0],['maptop',0]],2.7,.5);b.set(3.3,w=>{w.sv[0]=[{u:7,c:[['c7','AN']]}]});b.tok('R','rq',[['maptop',0]],3.3,.05,{fade:1});b.glow('k0-7',3.3,4.4);
+  b.cap(2.8,'기다리던 compute가 들어와 그룹을 새로 만들고 새 연결을 넣어요.','서버 1 · 요청 스레드','cur','compute(7, existing == null → new UserSseConnections()).add(c7)');
+  b.cap(4.6,'만약 get으로 비었는지 보고 remove(7)을 따로 했다면, 그 사이 들어온 새 연결까지 같이 지워져서 신호를 못 받았을 거예요.','서버 1','ink3','get → isEmpty → remove 를 나눠 하면 생기는 문제');
+  b.set(5.4,w=>{w.db={7:4,8:3}});b.tok('N','ev',[['red']],5.4,.3,{label:'A',grow:1});b.tok('N','ev',[['red']],5.8,.05,{fade:1});b.glow('RED',5.4,6.4);
+  const e=fan(b,5.8,7,'A');b.cap(6.6,'다음 신호에서 서버 1의 새 노트북 연결이 정상으로 받아요.','서버 1·2·3 · 리스너 실행 스레드','wrk','notifyChanged(7, 17) → c7 ✓');TAIL(b,e+.8);return b.o}}
+};
+
+
+/* ===== 왼쪽 설명: 실행 계기와 단계 제목·코드 위치 (caps 순서와 같음) ===== */
+const INFO={
+ save:{why:['매일 스케줄러','NotificationScheduler가 냉장고마다 임박·만료 알림을 만들고 수신자를 저장하는 트랜잭션이에요.'],steps:[
+  ['알림·수신자 저장','ExpirationNotificationService:31 · NotificationRecipientService:24'],['사건 2개 보관 · 커밋 대기','NotificationRecipientService:29~33'],
+  ['커밋','@Transactional 프록시 (Spring)'],['afterCommit → PUBLISH','NotificationRedisPubSub:23~26'],['Redis가 서버 3대에 복사','NotificationPubSubConfig:12~16 · NotificationRedisPubSub:34'],
+  ['서버마다 get(userId)','NotificationSseConnections:53~58'],['accepts로 냉장고 확인','NotificationSseConnection:21~23, 55~57'],['화면 4곳 재조회','NotificationSseConnection:59~62']]},
+ read:{why:['사용자 요청 · PATCH …/read','알림을 누르면 본인 수신자 행의 readAt을 기록하는 요청이에요.'],steps:[
+  ['노트북 읽음 요청','NotificationController:45~51'],['markRead → true','NotificationService:68~76 · NotificationRecipient:45~52'],['A 사건 1개 보관','NotificationService:75~76'],
+  ['커밋 → PUBLISH · 204','NotificationRedisPubSub:23~26'],['서버 1·2만 A 그룹 찾음','NotificationSseConnections:53~59'],['A 화면만 맞춰짐','NotificationSseConnection:55~63']]},
+ rollback:{why:['알림 생성 중 예외','저장 도중 예외가 나서 generate() 트랜잭션이 롤백되는 경우예요.'],steps:[
+  ['알림·수신자 저장','ExpirationNotificationService:31~44'],['사건 2개 커밋 대기','NotificationRecipientService:29~33'],['롤백 → 사건 버림','@TransactionalEventListener (AFTER_COMMIT)'],['어느 서버도 신호 없음','NotificationRedisPubSub:23 호출 안 됨']]},
+ lost:{why:['읽음 요청 중 Redis 장애','DB 커밋은 성공했는데 PUBLISH가 실패하는 경우예요.'],steps:[
+  ['노트북 읽음 요청','NotificationController:45~51'],['markRead → 사건 보관','NotificationService:75~76'],['PUBLISH 실패 · 로그만','NotificationRedisPubSub:25~30'],['노트북은 204 뒤 재조회','NotificationController:50'],['휴대폰은 4로 남음','재전송 경로 없음']]},
+ conn:{why:['브라우저 연결 · GET v2 stream','알림 화면을 열 때와 네트워크가 끊길 때 서버 3의 연결 목록이 바뀌는 경우예요.'],steps:[
+  ['태블릿이 서버 3에 연결','NotificationStreamController:20~25 · NotificationStreamService:15~17'],['compute(7) · 새 그룹','NotificationSseConnections:34~38, 76~82'],['connected → 조회','NotificationSseConnection:43~47'],
+  ['B 태블릿 끊김','NotificationSseConnection:29~36'],['computeIfPresent(8) · 키 제거','NotificationSseConnections:84~90'],['A 신호 도착','NotificationRedisPubSub:34~42'],['서버 3 결과가 달라짐','NotificationSseConnections:53~59']]},
+ race:{why:['끊김 콜백과 재연결이 겹칠 때','같은 사용자의 마지막 연결이 빠지는 순간 새 연결이 들어오는 경우예요.'],steps:[
+  ['computeIfPresent(7) · 키 잠금','NotificationSseConnections:84~90'],['재연결 compute(7) 대기','NotificationSseConnections:76~82'],['null → 키 7 제거','NotificationSseConnections:88'],
+  ['새 그룹 · 새 연결 등록','NotificationSseConnections:77~81'],['나눠 했다면 생길 문제','가정한 코드 · 실제 코드에는 없음'],['새 연결이 신호 받음','NotificationSseConnections:53~59']]}};
+let STEPS=[],lastIdx=-2;
+function buildSide(){const caps=[...P.caps].sort((a,b)=>a.t-b.t);const inf=INFO[SC];STEPS=caps.slice(1).map((c,i)=>Object.assign({},c,{title:(inf.steps[i]||['',''])[0],src:(inf.steps[i]||['',''])[1]}));
+ $('why').innerHTML=`<b>실행 계기</b><span>${esc(inf.why[0])}</span><br>${esc(inf.why[1])}`;
+ $('steps').innerHTML=STEPS.map((x,i)=>`<li><button data-i="${i}"><i>${i+1}</i><span>${esc(x.title)}</span></button></li>`).join('');
+ $('steps').querySelectorAll('button').forEach(b=>b.onclick=()=>{t=STEPS[+b.dataset.i].t+.01;SM={};render(true)});
+ lastIdx=-2}
+function sideAt(){let idx=-1;STEPS.forEach((x,i)=>{if(t>=x.t)idx=i});if(idx===lastIdx)return;lastIdx=idx;
+ const n=STEPS.length,intro=[...P.caps].sort((a,b)=>a.t-b.t)[0];
+ if(idx<0){$('hsub').textContent=`${SCN[SC].name} · ${n}단계`;$('httl').textContent='재생하면 단계마다 설명이 바뀌어요';$('badge').hidden=true;
+  $('nowl').innerHTML=`<li>${esc(intro.cap)}</li><li>단계 목록에서 누르면 그 단계로 바로 갈 수 있어요.</li>`;$('call').hidden=true;$('src').textContent=''}
+ else{const x=STEPS[idx];$('hsub').textContent=`${SCN[SC].name} · ${idx+1} / ${n}단계`;$('httl').textContent=x.title;
+  $('badge').hidden=!x.badge;$('badge').textContent=x.badge||'';$('badge').style.setProperty('--c',`var(--${x.col})`);
+  $('nowl').innerHTML=x.cap.split(/(?<=요\.)\s+/).map(z=>`<li>${esc(z)}</li>`).join('');
+  $('call').hidden=!x.call;$('call').textContent=x.call||'';$('src').textContent=x.src?'코드 위치 · '+x.src:''}
+ $('steps').querySelectorAll('li').forEach((li,i)=>{li.className=i<idx?'done':i===idx?'cur':''});
+}
+/* ===== 상태 재생 ===== */
+let SC='save',P,t=0,playing=true,lastT=0;const HOLD=3;
+function stateAt(tt){const W=world();P.sets.forEach(s=>{if(s.t<=tt)s.fn(W)});return W}
+/* 서버 안 배치 */
+function layout(W){const L={k:{},g:{},c:{}};
+ W.sv.forEach((gs,i)=>{let y=PY+122;gs.forEach(g=>{const h=30+Math.max(1,g.c.length)*38;L.g[`${i}-${g.u}`]={x:PX(i)+58,y,w:PW-70,h};L.k[`${i}-${g.u}`]={x:PX(i)+12,y,w:38,h};
+   g.c.forEach(([cid],j)=>{L.c[cid]={x:PX(i)+66,y:y+26+j*38,w:PW-86,h:32}});y+=h+10})});
+ return L}
+const DEVPOS={};
+function devLayout(W){const out={};[0,1,2].forEach(i=>{const ds=Object.keys(DEVS).filter(d=>DEVS[d].s===i&&(W.dev[d].on||W.dev[d].gone));const n=ds.length,gap=8,w=(PW-gap*(n-1))/Math.max(1,n);
+  ds.forEach((d,j)=>{out[d]={x:PX(i)+j*(w+gap),y:DY,w,h:DH}})});return out}
+let SM={};function smooth(key,tgt,snap){const c=SM[key];if(!c||snap){SM[key]=Object.assign({},tgt);return SM[key]}['x','y','w','h'].forEach(k=>c[k]+=(tgt[k]-c[k])*.18);return c}
+function anchor(a,L,D){const k=a[0];
+ if(k==='save')return [TOP.SAVE.x+TOP.SAVE.w-22,TOP.SAVE.y+TOP.SAVE.h-16];
+ if(k==='ev')return [TOP.EVENT.x+TOP.EVENT.w-22-a[1]*20,TOP.EVENT.y+TOP.EVENT.h-16];
+ if(k==='gate')return GATE;if(k==='pub')return [TOP.PUB.x+TOP.PUB.w-22,TOP.PUB.y+TOP.PUB.h-16];
+ if(k==='pubout')return [TOP.PUB.x+TOP.PUB.w+16,70];
+ if(k==='red')return [TOP.RED.x+TOP.RED.w-24,TOP.RED.y+TOP.RED.h-16];
+ if(k==='onm')return [PX(a[1])+PW-28,PY+56];
+ if(k==='maptop')return [PX(a[1])+PW-28,PY+104];
+ if(k==='key'){const r=L.k[`${a[1]}-${a[2]}`];return r?[r.x+r.w/2,r.y+14]:[PX(a[1])+30,PY+130]}
+ if(k==='chip'){const r=L.c[a[2]];return r?[r.x+r.w-44,r.y+r.h/2]:[PX(a[1])+200,PY+150]}
+ if(k==='dev'){const r=D[a[1]];return r?[r.x+r.w/2,r.y]:[CX(DEVS[a[1]].s),DY]}
+ if(k==='lane0')return [8,DY+DH/2];if(k==='lane1')return [8,130];
+ if(k==='wait')return [PX(a[1])+PW-28,PY+104];
+ if(k==='evnote')return [TOP.EVENT.x+TOP.EVENT.w/2,TOP.EVENT.y+TOP.EVENT.h+16];
+ if(k==='rednote')return [TOP.RED.x+TOP.RED.w/2,TOP.RED.y+TOP.RED.h+16];
+ if(k==='waitnote')return [PX(a[1])+PW-110,PY+104];
+ return [0,0]}
+/* 경로: 위 상자 → Redis → 서버 3대로 갈라지는 선을 따라 */
+function route(pts){const out=[];for(let i=0;i<pts.length;i++){const p=pts[i];if(i&&p.via)out.push(...p.via);out.push(p.pt)}return out}
+function pathOf(tk,L,D){const raw=tk.path.map(a=>({a,pt:anchor(a,L,D)}));
+ for(let i=1;i<raw.length;i++){const A=raw[i-1].a[0],B=raw[i].a[0];
+  if(A==='red'&&B==='onm'){const i2=raw[i].a[1];raw[i].via=[[982,100],[982,196],[CX(i2),196],[CX(i2),PY]]}
+  if(A==='save'&&B==='ev')raw[i].via=[[370,70],[410,70]];
+  if(A==='ev'&&B==='gate')raw[i].via=[[610,70]];
+  if(A==='pub'&&B==='red')raw[i].via=[[848,70],[884,70]];
+  if(A==='pub'&&B==='pubout')raw[i].via=[[848,70]];
+  if(A==='lane1'&&B==='save')raw[i].via=[[281,130],[281,100]];
+  if(A==='save'&&B==='lane1')raw[i].via=[[281,100],[281,130]];
+  if(A==='dev'&&B==='lane0'){const d=D[raw[i-1].a[1]];if(d)raw[i].via=[[d.x+d.w/2,DY+DH+12],[8,DY+DH+12]];raw[i].pt=[8,DY+DH+12]}
+  if(A==='lane0'&&B==='dev'){const d=D[raw[i].a[1]];raw[i-1].pt=[8,DY+DH+12];if(d)raw[i].via=[[d.x+d.w/2,DY+DH+12],[d.x+d.w/2,DY+DH]];if(d)raw[i].pt=[d.x+d.w/2,DY+DH]}
+  if(A==='dev'&&B==='maptop'){const d=D[raw[i-1].a[1]];raw[i-1].pt=[d.x+d.w/2,DY];raw[i].via=[[d.x+d.w/2,PY+PH-6]]}
+  if(A==='dev'&&B==='wait'){const d=D[raw[i-1].a[1]];raw[i-1].pt=[d.x+d.w/2,DY];raw[i].via=[[d.x+d.w/2,PY+PH-6]]}
+  if(A==='chip'&&B==='dev'){const d=D[raw[i].a[1]];if(d){raw[i].via=[[raw[i-1].pt[0],PY+PH-6],[d.x+d.w/2,PY+PH-6]]}}}
+ return route(raw)}
+function along(pts,f){let Lsum=0;const sg=[];for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);sg.push(d);Lsum+=d}
+ if(!Lsum)return pts[0];let r=f*Lsum;for(let i=0;i<sg.length;i++){if(r<=sg[i]||i===sg.length-1){const g=sg[i]?Math.min(1,r/sg[i]):1;return [lerp(pts[i][0],pts[i+1][0],g),lerp(pts[i][1],pts[i+1][1],g)]}r-=sg[i]}}
+
+/* ===== 그리기 ===== */
+function arrow(p,q,c){const a=Math.atan2(q[1]-p[1],q[0]-p[0]),s=6;return `<path d="M${q[0]},${q[1]} L${q[0]-s*Math.cos(a-.42)},${q[1]-s*Math.sin(a-.42)} L${q[0]-s*Math.cos(a+.42)},${q[1]-s*Math.sin(a+.42)}Z" fill="${c}"/>`}
+const pl=(p,c,w,dash)=>`<polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="${c}" stroke-width="${w||1.5}" ${dash?`stroke-dasharray="${dash}"`:''} stroke-linejoin="round"/>`;
+function render(snap){
+ const W=stateAt(t),L=layout(W),D=devLayout(W);
+ const on=id=>P.glows.some(g=>g.id===id&&t>=g.t0&&t<g.t1);const pulse=.5+.5*Math.sin(performance.now()/170);
+ let h='';
+ // 위: 서버 1 트랜잭션 묶음
+ h+=`<rect x="176" y="14" width="690" height="104" rx="12" fill="var(--grp)" stroke="var(--grp-s)" stroke-dasharray="6 4"/><text x="190" y="31" font-size="11.5" font-weight="600" fill="var(--grp-s)">서버 1 · 알림을 처리한 트랜잭션 (스케줄러·요청 스레드)</text>`;
+ const tb=(id,c,t1,t2,mono2)=>{const b=TOP[id],o=on(id);return `<g data-id="${id}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="9" fill="var(--${c}-f)" stroke="var(--${c}-s)" stroke-width="${o?2.4+pulse*.8:1.5}"/><text x="${b.x+12}" y="${b.y+24}" font-size="13" font-weight="700" fill="var(--ink)">${t1}</text><text x="${b.x+12}" y="${b.y+43}" font-size="10" ${mono2?'class="mono"':''} fill="var(--ink2)">${t2}</text></g>`};
+ const dbp=W.dbp;
+ h+=`<g data-id="DB"><rect x="${TOP.DB.x}" y="${TOP.DB.y}" width="${TOP.DB.w}" height="${TOP.DB.h}" rx="9" fill="var(--db-f)" stroke="${dbp===2?'var(--bad)':'var(--db-s)'}" stroke-width="1.6" ${dbp===1?'stroke-dasharray="5 3"':''}/>
+  <text x="${TOP.DB.x+12}" y="${TOP.DB.y+24}" font-size="13" font-weight="700" fill="var(--ink)">알림 DB</text>
+  <text x="${TOP.DB.x+12}" y="${TOP.DB.y+44}" font-size="10.5" fill="${dbp===1?'var(--grp-s)':dbp===2?'var(--bad)':'var(--ink2)'}">${dbp===1?'커밋 전 변경':dbp===2?'변경 취소':`미읽음 A ${W.db[7]} · B ${W.db[8]}`}</text></g>`;
+ h+=tb('SAVE','be','저장 · 읽음 변경','saveRecipients / markRead',1)+tb('EVENT','be','사건 보관','NotificationChanged',1)+tb('PUB','be','커밋 후 발행','afterCommit()',1)+tb('RED','bus','Redis Pub/Sub','…:notifications:changed',1);
+ h+=pl([[192,70],[156,70]],'var(--ink3)')+arrow([192,70],[156,70],'var(--ink3)')+pl([[370,70],[410,70]],'var(--ink3)')+arrow([370,70],[410,70],'var(--ink3)')+pl([[848,70],[884,70]],'var(--ink3)')+arrow([848,70],[884,70],'var(--ink3)');
+ // 커밋 문
+ const gt=[...P.gates].reverse().find(g=>t>=g.t);const gk=gt?gt.k:'wait';
+ h+=pl([[610,70],[660,70]],gk==='ok'?'var(--be-s)':gk==='bad'?'var(--bad)':'var(--ink3)',gk==='ok'?2.4:1.5,gk==='wait'?'4 3':'')+arrow([610,70],[660,70],gk==='ok'?'var(--be-s)':gk==='bad'?'var(--bad)':'var(--ink3)');
+ h+=`<rect x="${GATE[0]-4}" y="54" width="8" height="32" rx="2" fill="${gk==='ok'?'var(--be-s)':gk==='bad'?'var(--bad)':'var(--ink3)'}" opacity="${gk==='ok'?.35:1}"/><text x="${GATE[0]}" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="${gk==='bad'?'var(--bad)':gk==='ok'?'var(--be-s)':'var(--ink3)'}">${gk==='ok'?'커밋':gk==='bad'?'롤백':'커밋 전'}</text>`;
+ // 발행 실패 막대
+ P.bars.forEach(br=>{if(t<br.t0||t>=br.t1)return;h+=`<rect x="862" y="52" width="6" height="36" rx="2" fill="var(--bad)"/><text x="866" y="140" text-anchor="middle" font-size="11" font-weight="700" fill="var(--bad)">${br.s}</text>`});
+ // Redis → 서버 3대
+ h+=pl([[982,100],[982,196],[CX(0),196]],'var(--db-s)',1.6,'5 4');[0,1,2].forEach(i=>{h+=pl([[CX(i),196],[CX(i),PY]],'var(--db-s)',1.6,'5 4')+arrow([CX(i),196],[CX(i),PY],'var(--db-s)')});
+ h+=`<rect x="992" y="138" width="88" height="18" rx="4" fill="var(--bg)"/><text x="996" y="151" font-size="10.5" font-weight="600" fill="var(--db-s)">모든 서버 구독</text>`;
+ // 서버 패널
+ [0,1,2].forEach(i=>{const x=PX(i);
+  h+=`<rect x="${x}" y="${PY}" width="${PW}" height="${PH}" rx="12" fill="var(--grp)" stroke="var(--grp-s)" stroke-dasharray="6 4"/>
+  <text x="${x+14}" y="${PY+20}" font-size="13" font-weight="700" fill="var(--grp-s)">서버 ${i+1}</text>
+  <g data-id="ONM"><rect x="${x+12}" y="${PY+30}" width="${PW-24}" height="52" rx="9" fill="var(--be-f)" stroke="var(--be-s)" stroke-width="${on('onm'+i)?2.4+pulse*.8:1.4}"/>
+  <text x="${x+24}" y="${PY+52}" font-size="12" font-weight="700" fill="var(--ink)">메시지 수신</text><text x="${x+24}" y="${PY+70}" font-size="10" class="mono" fill="var(--ink2)">onMessage → notifyChanged</text></g>
+  <g data-id="MAP"><text x="${x+14}" y="${PY+104}" font-size="11" font-weight="700" class="mono" fill="${on('map'+i)?'var(--cur)':'var(--ink)'}">NotificationSseConnections</text>
+  <text x="${x+14}" y="${PY+118}" font-size="9.5" class="mono" fill="var(--ink3)">Map&lt;userId, UserSseConnections&gt;</text></g>`;
+  if(!W.sv[i].length)h+=`<text x="${x+PW/2}" y="${PY+190}" text-anchor="middle" font-size="12" fill="var(--ink3)">연결 없음</text>`});
+ // 그룹·연결 (이전 상태와 비교해 생기고 사라짐)
+ const Wp=stateAt(t-.5),Lp=layout(Wp);
+ const keys=new Set([...Object.keys(L.g),...Object.keys(Lp.g)]);
+ keys.forEach(k=>{const [i,u]=k.split('-').map(Number);const live=L.g[k];const tgt=live||Lp.g[k];const kt=live?L.k[k]:Lp.k[k];
+  const g=smooth('g'+k,tgt,snap),kk=smooth('k'+k,kt,snap);const born=P.sets.filter(s=>s.t<=t).length;
+  const al=live?(SM['a'+k]=Math.min(1,(SM['a'+k]??(snap?1:0))+.08)):(SM['a'+k]=Math.max(0,(SM['a'+k]??1)-.08));if(al<=0)return;
+  const lk=P.locks.find(l=>l.sv===i&&l.u===u&&t>=l.t0&&t<l.t1);const go=on(`g${k}`),ko=on(`k${k}`);
+  h+=`<g opacity="${al}"><g data-id="G"><rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="9" fill="var(--card)" stroke="${go?'var(--wrk)':'var(--line)'}" stroke-width="${go?2+pulse*.6:1.2}"/>
+   <text x="${g.x+10}" y="${g.y+17}" font-size="10" class="mono" fill="var(--ink3)">UserSseConnections · Set</text></g>
+   <rect x="${kk.x}" y="${kk.y}" width="${kk.w}" height="${kk.h}" rx="8" fill="var(--card)" stroke="${lk?'var(--bad)':ko?'var(--wrk)':'var(--ink2)'}" stroke-width="${lk||ko?2.4:1.3}"/>
+   <text x="${kk.x+kk.w/2}" y="${kk.y+16}" text-anchor="middle" font-size="8.5" fill="var(--ink3)">key</text>
+   <text x="${kk.x+kk.w/2}" y="${kk.y+34}" text-anchor="middle" font-size="15" font-weight="700" class="mono" fill="var(--ink)">${u}</text>
+   ${lk?`<text x="${kk.x+kk.w/2}" y="${kk.y+52}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--bad)">잠금</text>`:''}</g>`});
+ const cids=new Set([...Object.keys(L.c),...Object.keys(Lp.c)]);const cdev={};[W,Wp].forEach(w=>w.sv.forEach(gs=>gs.forEach(g=>g.c.forEach(([c,d])=>cdev[c]=d))));
+ cids.forEach(cid=>{const live=L.c[cid];const c=smooth('c'+cid,live||Lp.c[cid],snap);
+  const al=live?(SM['ac'+cid]=Math.min(1,(SM['ac'+cid]??(snap?1:0))+.08)):(SM['ac'+cid]=Math.max(0,(SM['ac'+cid]??1)-.08));if(al<=0)return;
+  const d=DEVS[cdev[cid]];const mk=P.marks.find(m=>m.cid===cid&&t>=m.t0&&t<m.t1);
+  const st=mk?.k==='ok'?['var(--ok)','var(--ok-bg)']:mk?.k==='x'?['var(--bad)','var(--bad-bg)']:['var(--ink2)','var(--soft)'];
+  h+=`<g data-id="C" opacity="${al}"><rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="7" fill="${st[1]}" stroke="${st[0]}" stroke-width="${mk?2:1.1}"/>
+   <text x="${c.x+10}" y="${c.y+21}" font-size="11.5" font-weight="700" class="mono" fill="var(--ink)">(${d.u}, ${d.r})</text>
+   <text x="${c.x+74}" y="${c.y+21}" font-size="10.5" fill="var(--ink2)">${esc(d.n)}</text>`;
+  if(mk){const mx=c.x+c.w-16,my=c.y+c.h/2;
+   if(mk.k==='ok')h+=`<circle cx="${mx}" cy="${my}" r="8" fill="var(--ok)"/><path d="M${mx-4},${my}l3,3l5,-6" stroke="var(--card)" stroke-width="2" fill="none"/>`;
+   else if(mk.k==='skip')h+=`<rect x="${mx-30}" y="${my-8}" width="40" height="16" rx="8" fill="var(--grid)"/><text x="${mx-10}" y="${my+4}" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--ink2)">건너뜀</text>`;
+   else h+=`<circle cx="${mx}" cy="${my}" r="8" fill="var(--bad)"/><path d="M${mx-3.5},${my-3.5}l7,7m0,-7l-7,7" stroke="var(--card)" stroke-width="2"/>`}
+  h+='</g>'});
+ // 기기
+ Object.keys(DEVS).forEach(dk=>{const r=D[dk];if(!r){return}const dv=W.dev[dk],dd=DEVS[dk];const b=smooth('d'+dk,r,snap);
+  const bad=dv.stale,hit=dv.hit,off=!dv.on;
+  h+=`<g data-id="DEV" opacity="${off?.4:1}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="8" fill="${bad?'var(--bad-bg)':'var(--fe-f)'}" stroke="${bad?'var(--bad)':hit?'var(--ok)':'var(--fe-s)'}" stroke-width="${hit||bad?2.2:1.3}"/>
+   <text x="${b.x+b.w/2}" y="${b.y+19}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">${esc(dd.n)}</text>
+   <text x="${b.x+b.w/2}" y="${b.y+36}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${bad?'var(--bad)':hit?'var(--ok)':'var(--ink2)'}">${off?'연결 끊김':dv.v==null?(dd.r!==17?'냉장고 21 화면':'연결 전'):'미읽음 '+dv.v}</text></g>`});
+ // 메모
+ P.notes.forEach(n=>{if(t<n.t0||t>=n.t1)return;const [x,y]=anchor(n.at,L,D);const w=n.s.length*7+20,col=`var(--${n.col})`;
+  const xx=n.at[0]==='maptop'?x-w+16:x-w/2;
+  h+=`<g pointer-events="none"><rect x="${xx}" y="${y-11}" width="${w}" height="22" rx="11" fill="var(--card)" stroke="${col}"/><text x="${xx+w/2}" y="${y+4}" text-anchor="middle" font-size="10.5" font-weight="600" ${n.at[0]==='maptop'?'class="mono"':''} fill="${col}">${esc(n.s)}</text></g>`});
+ // 점
+ const last={};P.toks.forEach(tk=>{if(t>=tk.t0)last[tk.id]=tk});
+ Object.values(last).forEach(tk=>{const e=tk.t0+tk.d;let a=1;if(tk.fade&&t>e){a=1-(t-e)/.4;if(a<=0)return}if(tk.x&&t>e+.2){a=1-(t-e-.2)/.6;if(a<=0)return}
+  const pts=pathOf(tk,L,D);const f=ease(cl((t-tk.t0)/tk.d));const [x,y]=along(pts,f);const g=tk.grow?cl((t-tk.t0)/.3):1,r=7*g;
+  h+=`<g opacity="${a}" pointer-events="none">`;
+  if(tk.kind==='by')h+=`<rect x="${x-r}" y="${y-r}" width="${2*r}" height="${2*r}" rx="2.5" fill="var(--bus-s)"/>`;
+  else if(tk.kind==='rq')h+=`<circle cx="${x}" cy="${y}" r="${r}" fill="var(--card)" stroke="var(--cur)" stroke-width="2.2"/>`;
+  else if(tk.kind==='sse')h+=`<circle cx="${x}" cy="${y}" r="${5*g}" fill="var(--ok)"/>`;
+  else h+=`<circle cx="${x}" cy="${y}" r="${r}" fill="var(--ink)"/>`;
+  if(tk.label&&g>.8&&tk.kind!=='sse'&&tk.kind!=='rq')h+=`<text x="${x}" y="${y+3.3}" text-anchor="middle" font-size="9" font-weight="700" fill="${tk.kind==='by'?'#fff':'var(--bg)'}">${tk.label}</text>`;
+  if(tk.x&&t>e)h+=`<path d="M${x-6},${y-6}L${x+6},${y+6}M${x+6},${y-6}L${x-6},${y+6}" stroke="var(--bad)" stroke-width="2.4"/>`;
+  h+='</g>'});
+ $('map').innerHTML=h;
+ sideAt();
+}
+let capS=null;
+function setup(){P=SCN[SC].build();$('lead').textContent=SCN[SC].lead;SM={};
+ $('tabs').innerHTML=Object.keys(SCN).map(x=>`<button data-s="${x}" aria-pressed="${x===SC}">${SCN[x].name}</button>`).join('');
+ $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{SC=b.dataset.s;setup()});t=0;capS=null;buildSide();render(true)}
+let SPEED=.5;
+function loop(now){const dt=Math.min(.1,(now-lastT)/1000);lastT=now;if(playing){t+=dt*SPEED;if(t>P.end+HOLD){t=0;SM={}}}render(false);requestAnimationFrame(loop)}
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'일시정지':'재생'};
+$('again').onclick=()=>{t=0;SM={};render(true)};
+$('speed').onclick=()=>{SPEED=SPEED===.5?.25:SPEED===.25?1:.5;$('speed').textContent=`속도 ${SPEED}×`};
+/* 카드 */
+const card=$('card');let pinned=null;
+const cardHtml=id=>CD[id]?`<b>${esc(CD[id][0]).replace(/\n/g,'<br>')}</b><p>${esc(CD[id][1])}</p>`:'';
+function showAt(html,x,y,above){if(!html)return;card.innerHTML=html;card.classList.add('on');const c=card.getBoundingClientRect();
+ card.style.left=Math.min(Math.max(8,x-c.width/2),innerWidth-c.width-8)+'px';let T=above?y-c.height-10:y+16;if(T<8)T=y+16;if(T+c.height>innerHeight-8)T=Math.max(8,y-c.height-10);card.style.top=T+'px'}
+const hide=()=>card.classList.remove('on');
+const capCard=()=>{const c=[...P.caps].reverse().find(x=>t>=x.t);return c&&c.call?`<b>${esc(c.call)}</b><p>${esc(c.badge||'')}</p>`:''};
+document.addEventListener('pointerover',e=>{const ib=e.target.closest&&e.target.closest('.ib');if(ib){const r=ib.getBoundingClientRect();showAt(capCard(),r.left+r.width/2,r.top,1)}});
+document.addEventListener('pointerout',e=>{if(e.target.closest&&e.target.closest('.ib')&&!pinned)hide()});
+document.addEventListener('focusin',e=>{if(e.target.classList&&e.target.classList.contains('ib')){const r=e.target.getBoundingClientRect();showAt(capCard(),r.left+r.width/2,r.top,1)}});
+document.addEventListener('focusout',hide);
+$('map').addEventListener('pointermove',e=>{const g=e.target.closest('[data-id]');if(!g){if(!pinned)hide();return}showAt(cardHtml(g.dataset.id),e.clientX,e.clientY,0)});
+$('map').addEventListener('pointerleave',()=>{if(!pinned)hide()});
+document.addEventListener('click',e=>{const ib=e.target.closest('.ib'),g=e.target.closest('#map [data-id]');
+ if(ib){pinned=ib;const r=ib.getBoundingClientRect();showAt(capCard(),r.left+r.width/2,r.top,1);return}
+ if(g){pinned=g;showAt(cardHtml(g.dataset.id),e.clientX,e.clientY,0);return}pinned=null;hide()});
+const QS=new URLSearchParams(location.search);if(QS.get('s')&&SCN[QS.get('s')])SC=QS.get('s');if(QS.has('embed'))document.body.classList.add('embed');
+setup();
+if(QS.has('embed')&&'IntersectionObserver' in window){let seen=false;playing=false;$('play').textContent='재생';new IntersectionObserver(es=>{const v=es[0].isIntersecting;if(v&&!seen){seen=true;t=0;SM={}}playing=v;$('play').textContent=v?'일시정지':'재생'},{threshold:.2}).observe(document.body)}
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;$('play').textContent='재생'}
+window.__sim={set:v=>{playing=false;t=v;SM={};render(true)},end:()=>P.end,go:s=>{SC=s;setup()}};
+requestAnimationFrame(n=>{lastT=n;requestAnimationFrame(loop)});
+})();
+</script>
+</body>
+</html>
