@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>알림 큐 구조 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#ffffff;--fg:#1d1f23;--mut:#6b7280;--line:#c9ced6;--box:#f4f5f7;--cur:#e8710a;--wrk:#1a6dd4;--retry:#d9a400;--bad:#d93025;--ok:#1e8e3e;}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#14161a;--fg:#e8eaed;--mut:#9aa0a6;--line:#3c4048;--box:#1e2126;--cur:#f28b30;--wrk:#5b9cf0;--retry:#f0c030;--bad:#f2655b;--ok:#4cc26b;}
+}
+:root[data-theme="dark"]{--bg:#14161a;--fg:#e8eaed;--mut:#9aa0a6;--line:#3c4048;--box:#1e2126;--cur:#f28b30;--wrk:#5b9cf0;--retry:#f0c030;--bad:#f2655b;--ok:#4cc26b;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:"IBM Plex Sans KR",system-ui,sans-serif;font-size:14px;line-height:1.5}
+body{padding:12px}
+html.embed body{padding:8px}
+#app{max-width:1280px;margin:0 auto}
+h1{font-size:18px;margin:4px 0 10px}
+#tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+#tabs button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);border-radius:16px;background:transparent;color:var(--fg);cursor:pointer}
+#tabs button[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+html.embed h1,html.embed #tabs{display:none}
+
+/* 화면 배치: 좁으면 위아래, 중간이면 그림+옆 설명, 넓으면 노트북 비율(16:10)로 양옆 설명 */
+#frame{display:grid;gap:18px;grid-template-areas:"fig" "exp" "now";grid-template-columns:minmax(0,1fr)}
+#fig{grid-area:fig;min-width:0}
+#exp{grid-area:exp}
+#now{grid-area:now}
+@media (min-width:640px){
+  #frame{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);grid-template-areas:"fig exp" "fig now";align-items:start}
+}
+@media (min-width:980px){
+  #frame{grid-template-columns:minmax(0,1fr) minmax(0,2.3fr) minmax(0,1fr);grid-template-areas:"exp fig now";aspect-ratio:16/10;align-items:start}
+}
+.panel h3{font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6px;letter-spacing:.02em}
+.panel p{margin:0 0 10px;font-size:13px;line-height:1.7}
+.panel dl{margin:0;font-size:12.5px;line-height:1.6}
+.panel dt{font-weight:600;margin-top:6px}
+.panel dd{margin:0;color:var(--mut)}
+#nowClock{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;margin:0 0 8px}
+#steps{list-style:none;margin:0;padding:0;font-size:12.5px;line-height:1.6}
+#steps li{padding:5px 0 5px 10px;border-left:2px solid var(--line);color:var(--mut);opacity:.5}
+#steps li.past{opacity:.85}
+#steps li.cur{opacity:1;color:var(--fg);border-left-color:var(--fg);font-weight:600}
+#steps .tm{font-family:"IBM Plex Mono",monospace;font-size:11px;margin-right:6px}
+
+#stage{width:100%}
+.lane{margin-bottom:10px}
+.lane h2{font-size:13.5px;margin:0;font-weight:600}
+.lane h2.cur{color:var(--cur)}.lane h2.wrk{color:var(--wrk)}
+.lane .st{margin:0 0 2px;font-size:12.5px;min-height:19px}
+.lane .st.bad{color:var(--bad)}.lane .st.ok{color:var(--ok)}
+canvas{display:block}
+#legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 4px;font-size:12px;color:var(--mut)}
+#legend button{font:inherit;font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--fg);cursor:pointer}
+#legend button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>알림 큐 구조 비교</h1>
+  <div id="tabs" role="tablist"></div>
+  <div id="frame">
+    <aside id="exp" class="panel"></aside>
+    <div id="fig">
+      <div id="stage"></div>
+      <div id="legend"><span>● 점 1개 = 작업 1,000건</span><button id="bPlay">⏸</button><button id="bRe">↺</button><span>속도</span><button class="sp" data-v="8">느리게</button><button class="sp" data-v="15">보통</button><button class="sp" data-v="30">빠르게</button></div>
+    </div>
+    <aside id="now" class="panel"><h3>지금</h3><div id="nowClock">08:00:00</div><ol id="steps"></ol></aside>
+  </div>
+</div>
+<script>
+(function(){
+const Q=new URLSearchParams(location.search),EMBED=Q.has('embed');
+if(EMBED)document.documentElement.classList.add('embed');
+
+/* 모델 상수 */
+const N=100,PER=1000,ARR=120,RATE=32000/453.788,S=PER/RATE,TR=10,TEND=1480;
+let SPEED=15;
+const KEYC=['#8b5cf6','#14b8a6','#ec4899','#64748b'];
+
+const fmt=n=>n.toLocaleString('ko-KR');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function clock(s,sec){const T=8*3600+Math.floor(s),p=v=>String(v).padStart(2,'0');const h=Math.floor(T/3600),m=Math.floor(T%3600/60),x=T%60;return sec?`${p(h)}:${p(m)}:${p(x)}`:`${p(h)}:${p(m)}`;}
+
+/* 상황 정의 */
+const SC={
+ burst:{tab:'8시에 몰림',
+  exp:'8시에 알림 작업 10만 건이 2분 동안 몰려 들어와요. 큐가 있으면 작업을 일단 받아서 저장하고, 소비자는 자기 속도로 하나씩 꺼내 처리해요. 큐가 없으면 처리 칸이 차 있는 동안 들어온 작업은 받을 곳이 없어요.',
+  terms:[['큐','작업을 순서대로 쌓아 두는 저장 공간이에요.'],['소비자','큐에서 작업을 꺼내 처리하는 서버예요.'],['처리 칸','서버가 한꺼번에 처리하는 자리예요. 20칸이에요.']],
+  steps:(ls)=>[
+   {t:0,txt:'작업이 몰려 들어오기 시작해요.'},
+   {t:30,txt:'큐가 없는 쪽은 처리 칸이 차서 들어온 작업을 못 받아요(빨간 점). 큐가 있는 쪽은 쌓아 둬요.'},
+   {t:ARR+12,txt:'도착이 끝났어요. 큐가 없는 쪽은 '+fmt(ls[0].okCount*PER)+'건만 처리했고 '+fmt((N-ls[0].okCount)*PER)+'건을 못 받았어요.'},
+   {t:400,txt:'큐가 있는 쪽은 쌓인 작업을 소비자가 순서대로 처리해요.'},
+   {t:ls[1].pe,txt:'10만 건 처리가 모두 끝나요.'}],
+  lanes:[
+  {name:'큐 없음',title:'큐 없이 바로 처리',color:'cur',kind:'noq',
+   status:(c,l)=>c.lost>0?['처리 칸이 차서 '+fmt(c.lost*PER)+'건을 못 받았어요','bad']:['들어온 작업을 모두 받고 있어요','ok']},
+  {name:'큐 있음',title:'큐에 저장하고 처리',color:'wrk',kind:'q',srvNum:'rate',
+   status:(c,l)=>c.done===N?['10만 건을 모두 처리했어요 · '+clock(l.pe)+' 끝','ok']:['큐에 쌓아 두고 순서대로 처리해요','ok']}
+ ]},
+ consume:{tab:'저장 방식 비교',
+  exp:'Kafka는 작업을 로그에 순서대로 쓰고, 소비자가 읽어도 보관 기간 동안 그대로 남겨 둬요. 그래서 읽은 위치(offset)를 되돌리면 같은 작업을 다시 읽을 수 있어요. RabbitMQ 일반 큐는 소비자가 처리 확인(ack)을 보내면 작업을 지워요.',
+  terms:[['Pull','소비자가 요청해서 가져가는 방식이에요.'],['Push','큐가 소비자에게 보내는 방식이에요. prefetch로 한꺼번에 보낼 양을 제한해요.'],['offset','로그에서 어디까지 읽었는지 가리키는 위치예요.']],
+  steps:(ls)=>[
+   {t:0,txt:'작업이 로그와 큐에 쌓이기 시작해요.'},
+   {t:40,txt:'소비자가 작업을 가져가요. Kafka 로그에는 읽은 자리가 흐린 점으로 남고, RabbitMQ 큐에서는 사라져요.'},
+   {t:400,txt:'RabbitMQ 큐는 점점 비어 가고, Kafka 로그는 읽은 기록까지 계속 쌓여 있어요.'},
+   {t:ls[0].pe,txt:'처리가 끝나도 Kafka 로그에는 10만 건이 남아 다시 읽을 수 있어요. RabbitMQ 큐는 비어 있어요.'}],
+  lanes:[
+  {name:'Kafka',title:'Kafka · 소비자가 요청해서 가져가요 (Pull)',color:'wrk',kind:'q',pull:true,keep:true,srvNum:'rate',
+   status:()=>['읽어도 로그에 남아서 다시 읽을 수 있어요','ok']},
+  {name:'RabbitMQ',title:'RabbitMQ 일반 큐 · 큐가 보내요 (Push)',color:'cur',kind:'q',srvNum:'rate',
+   status:(c)=>c.done===N?['큐가 비었어요 · 다시 읽으려면 다시 넣어야 해요','ok']:['처리 확인을 받으면 큐에서 지워요','ok']}
+ ]},
+ part:{tab:'파티션 병렬 처리',
+  exp:'같은 사용자의 알림은 같은 파티션으로 가요. 파티션이 여러 개면 소비자도 여러 개가 나눠서 동시에 처리해요. 같은 파티션 안에서는 순서가 유지되지만, 파티션이 다르면 처리 순서는 정해지지 않아요.',
+  terms:[['파티션','로그를 나눈 조각이에요. 조각마다 소비자가 한 개 붙어요.'],['같은 색 점','같은 사용자의 작업이에요.']],
+  steps:(ls)=>[
+   {t:0,txt:'작업이 사용자별로 파티션에 나뉘어 들어와요.'},
+   {t:60,txt:'파티션 4개는 소비자 4개가 동시에 처리하고, 파티션 1개는 소비자 1개가 혼자 처리해요.'},
+   {t:ls[1].pe,txt:'파티션 4개 쪽이 먼저 10만 건 처리를 끝내요.'},
+   {t:ls[0].pe,txt:'파티션 1개 쪽도 처리를 끝내요.'}],
+  lanes:[
+  {name:'파티션 1',title:'파티션 1개 · 소비자 1개',color:'cur',kind:'q',P:1,keyed:true,srvNum:'rate',
+   status:(c,l)=>['소비자 1개가 혼자 처리해요 · '+clock(l.pe)+'에 끝나요','bad']},
+  {name:'파티션 4',title:'파티션 4개 · 소비자 4개',color:'wrk',kind:'q',P:4,keyed:true,srvNum:'rate',
+   status:(c,l)=>['소비자 4개가 나눠 처리해요 · '+clock(l.pe)+'에 끝나요','ok']}
+ ]}
+};
+const KEYS=Object.keys(SC);
+let cur=KEYS.includes(Q.get('s'))?Q.get('s'):'burst';
+
+/* 이산 사건 계산: 각 점의 경로와 시각을 미리 구한다 */
+function sim(l){
+  const P=l.P||1,free=new Array(P).fill(0);l.dots=[];
+  for(let i=0;i<N;i++){
+    const A=(i+1)*ARR/N,p=i%P,d={i,p,A,key:i%4,wp:[],iv:{}};
+    const w=d.wp;
+    if(l.kind==='noq'){
+      const a=A+TR;w.push(['src',A],['srv',a]);
+      if(free[0]<=a){d.start=a;d.end=a+S;free[0]=d.end;d.ok=true;w.push(['srv',d.end],['done',d.end+TR]);}
+      else{d.ok=false;w.push(['lost',a+TR]);}
+    }else{
+      const st=Math.max(A+2*TR,free[p]);d.start=st;d.end=st+S;free[p]=d.end;d.ok=true;
+      w.push(['src',A],['q',A+TR],['q',st-TR],['srv',st],['srv',d.end],['done',d.end+TR]);
+    }
+    const boxes={};
+    w.forEach((e,k)=>{const b=e[0];if(!boxes[b])boxes[b]={a:k,b:k};boxes[b].b=k;});
+    for(const b in boxes){const v=boxes[b];d.iv[b]=[v.a>0?w[v.a-1][1]:w[v.a][1],w[v.b][1]];}
+    d.fin=w[w.length-1][1];d.finBox=w[w.length-1][0];
+    l.dots.push(d);
+  }
+  const ok=l.dots.filter(d=>d.ok);
+  l.tb={sv:[l.dots[0].A,l.dots[N-1].A],pr:[ok[0].start,ok[ok.length-1].end]};
+  l.fin=ok[ok.length-1].end+TR;l.pe=ok[ok.length-1].end;l.okCount=ok.length;
+}
+
+/* 배치 */
+function layout(l,W){
+  const P=l.P||1,top=14,STEP=W>=480?6.4:5.4;
+  const wS=.13*W,wQ=.22*W,wV=.34*W,wD=.16*W,g=(W-4-wS-wQ-wV-wD)/3,x0=2;
+  const xQ=x0+wS+g,xV=xQ+wQ+g,xD=xV+wV+g;
+  const rowH=P===1?96:44,gap=4,Hb=P*rowH+(P-1)*gap;
+  const L={W,P,STEP,R:STEP*.42,top,Hb,arrows:[],q:[],srv:[],nums:[]};
+  const grid=(r,ox,oy)=>({x0:r.x+ox,y0:r.y+oy,x1:r.x+r.w-4,y1:r.y+r.h-4});
+  L.src={x:x0,y:top,w:wS,h:Hb,label:'도착',mode:'top'};
+  L.done={x:xD,y:top,w:wD,h:Hb,label:'처리 끝',mode:'top'};
+  if(l.kind==='noq'){
+    L.done.h=40;
+    L.srv=[{x:xV,y:top,w:wV,h:40,label:'서버 (20칸)',mode:'top',ringX:xV+24,ringY:top+27}];
+    L.lost={x:xQ,y:top+52,w:xV+wV-xQ,h:44,label:'못 받은 작업',mode:'top'};
+    L.lost.g=grid(L.lost,4,16);
+    L.arrows.push([x0+wS,top+20,xV,top+20],[xV+wV,top+20,xD,top+20],[xV+wV/2,top+40,xV+wV/2,top+52]);
+    L.nums.push({k:'src',x:x0,y:top+Hb+14,al:'left'},{k:'done',x:xD+wD/2,y:top+40+14,al:'center'},{k:'lost',x:L.lost.x+L.lost.w/2,y:top+Hb+14,al:'center'});
+  }else{
+    for(let k=0;k<P;k++){
+      const y=top+k*(rowH+gap),m=P>1?'left':'top';
+      const q={x:xQ,y,w:wQ,h:rowH,label:P>1?'파티션 '+(k+1):(l.keep?'로그':'큐'),mode:m};
+      q.g=P>1?grid(q,44,4):grid(q,4,16);
+      const s={x:xV,y,w:wV,h:rowH,label:P>1?'소비자 '+(k+1):'소비자 (20칸)',mode:m};
+      s.ringX=P>1?xV+wV-22:xV+24;s.ringY=y+rowH/2+(P>1?0:8);
+      L.q.push(q);L.srv.push(s);
+      const mid=y+rowH/2;
+      L.arrows.push([x0+wS,mid,xQ,mid]);
+      if(l.pull){L.arrows.push([xQ+wQ,mid+7,xV,mid+7],[xV,mid-7,xQ+wQ,mid-7,true]);}
+      else L.arrows.push([xQ+wQ,mid,xV,mid]);
+      L.arrows.push([xV+wV,mid,xD,mid]);
+    }
+    L.done.g=grid(L.done,4,16);
+    const by=top+Hb+14;
+    L.nums.push({k:'src',x:x0,y:by,al:'left'},{k:'q',x:xQ+wQ/2,y:by,al:'center'},{k:'srv',x:xV+wV/2,y:by,al:'center'},{k:'done',x:xD+wD/2,y:by,al:'center'});
+  }
+  if(L.done&&!L.done.g)L.done.g=grid(L.done,4,16);
+  L.H=top+Hb+26;
+  return L;
+}
+
+/* 위치 계산 */
+function slot(g,r,L){
+  const cols=Math.max(1,Math.floor((g.x1-g.x0)/L.STEP)),rows=Math.max(1,Math.floor((g.y1-g.y0)/L.STEP));
+  const rr=Math.min(r,cols*rows-1);
+  return{x:g.x0+(rr%cols)*L.STEP+L.STEP/2,y:g.y0+Math.floor(rr/cols)*L.STEP+L.STEP/2};
+}
+function rankIn(l,d,box,t){
+  if(box==='q'&&l.keep)return d.i;
+  let r=0;
+  for(const e of l.dots){
+    if(e===d)continue;
+    if(box==='q'||box==='hold'){
+      if(e.i>d.i)break;if(e.p!==d.p)continue;
+      const v=e.iv[box];if(v&&t>=v[0]&&t<v[1])r++;
+    }else if(e.finBox===box&&(e.fin<d.fin||(e.fin===d.fin&&e.i<d.i)))r++;
+  }
+  return r;
+}
+function pos(l,d,box,t){
+  const L=l.L;
+  if(box==='src')return{x:L.src.x+L.src.w/2,y:L.src.y+L.src.h/2+(((d.i*37)%11)-5)*(L.src.h/24)};
+  if(box==='srv')return{x:L.srv[d.p].ringX,y:L.srv[d.p].ringY};
+  if(box==='q')return slot(L.q[d.p].g,rankIn(l,d,'q',t),L);
+  return slot(L[box].g,rankIn(l,d,box,t),L);
+}
+function dotState(l,d,t){
+  const w=d.wp;if(t<w[0][1])return null;
+  let k=0;for(let j=0;j<w.length;j++){if(w[j][1]<=t)k=j;else break;}
+  const box=w[k][0];
+  if(k===w.length-1){const p=pos(l,d,box,t);return{x:p.x,y:p.y,box};}
+  const a=pos(l,d,box,t),b=pos(l,d,w[k+1][0],t),f=(t-w[k][1])/(w[k+1][1]-w[k][1]);
+  return{x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,box};
+}
+
+/* 그리기 */
+let DPR=1;
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawBox(c,b,col){
+  rr(c,b.x,b.y,b.w,b.h,6);c.fillStyle=col.box;c.fill();c.strokeStyle=col.line;c.lineWidth=1;c.stroke();
+  if(!b.label)return;
+  c.fillStyle=col.mut;c.font='10px "IBM Plex Sans KR",sans-serif';c.textAlign='left';
+  c.fillText(b.label,b.x+5,b.mode==='left'?b.y+b.h/2+3.5:b.y+11);
+}
+function arrow(c,a,col){
+  const[x1,y1,x2,y2,dash]=a;
+  c.strokeStyle=col.line;c.fillStyle=col.line;c.lineWidth=1.2;c.setLineDash(dash?[3,3]:[]);
+  c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();c.setLineDash([]);
+  const ang=Math.atan2(y2-y1,x2-x1);
+  c.beginPath();c.moveTo(x2,y2);c.lineTo(x2-5*Math.cos(ang-.45),y2-5*Math.sin(ang-.45));c.lineTo(x2-5*Math.cos(ang+.45),y2-5*Math.sin(ang+.45));c.closePath();c.fill();
+}
+function theme(){return{fg:css('--fg'),mut:css('--mut'),line:css('--line'),box:css('--box'),cur:css('--cur'),wrk:css('--wrk'),bad:css('--bad'),ok:css('--ok')};}
+
+function drawLane(l,cv,t){
+  const L=l.L,c=cv.getContext('2d'),col=theme();
+  c.setTransform(DPR,0,0,DPR,0,0);c.clearRect(0,0,L.W,L.H);
+  const laneCol=col[l.color];
+  L.arrows.forEach(a=>arrow(c,a,col));
+  drawBox(c,L.src,col);drawBox(c,L.done,col);
+  if(l.kind==='noq'){drawBox(c,L.lost,col);}
+  L.q.forEach(b=>drawBox(c,b,col));
+  L.srv.forEach(b=>drawBox(c,b,col));
+  /* 진행 링 */
+  L.srv.forEach((s,p)=>{
+    c.lineWidth=3;c.strokeStyle=col.line;c.beginPath();c.arc(s.ringX,s.ringY,10,0,Math.PI*2);c.stroke();
+    const d=l.dots.find(e=>e.ok&&e.p===p&&t>=e.start&&t<e.end);
+    if(d){const f=(t-d.start)/S;c.strokeStyle=laneCol;c.beginPath();c.arc(s.ringX,s.ringY,10,-Math.PI/2,-Math.PI/2+Math.PI*2*f);c.stroke();}
+  });
+  /* 로그에 남은 기록(흐린 점) */
+  if(l.keep){
+    c.globalAlpha=.3;c.fillStyle=laneCol;
+    for(const d of l.dots){
+      if(t>=d.wp[2][1]){const p=slot(L.q[0].g,d.i,L);c.beginPath();c.arc(p.x,p.y,L.R,0,Math.PI*2);c.fill();}
+    }
+    c.globalAlpha=1;
+  }
+  /* 점 */
+  const cnt={src:0,q:0,hold:0,busy:0,done:0,lost:0,log:0};
+  for(const d of l.dots){
+    const s=dotState(l,d,t);if(!s)continue;
+    cnt.src++;
+    if(l.keep&&t>=d.wp[1][1])cnt.log++;
+    if(s.box==='q')cnt.q++;else if(s.box==='hold')cnt.hold++;else if(s.box==='done')cnt.done++;else if(s.box==='lost')cnt.lost++;
+    if(d.ok&&t>=d.start&&t<d.end)cnt.busy++;
+    let fill=l.keyed?KEYC[d.key]:laneCol;
+    if(d.ok===false&&t>=d.A+TR)fill=col.bad;
+    c.fillStyle=fill;c.beginPath();c.arc(s.x,s.y,L.R,0,Math.PI*2);c.fill();
+  }
+  /* 숫자 */
+  c.fillStyle=col.fg;c.font='11px "IBM Plex Mono",monospace';
+  L.nums.forEach(n=>{
+    let txt='';
+    if(n.k==='src')txt=fmt(cnt.src*PER)+'건';
+    else if(n.k==='q')txt=(l.keep?'로그 '+fmt(cnt.log*PER):fmt(cnt.q*PER))+'건';
+    else if(n.k==='done')txt=fmt(cnt.done*PER)+'건';
+    else if(n.k==='lost')txt='못 받음 '+fmt(cnt.lost*PER)+'건';
+    else if(n.k==='srv')txt='초당 '+(RATE*(l.P||1)).toFixed(l.P>1?0:1)+'건';
+    c.textAlign=n.al;c.fillText(txt,n.x,n.y);
+  });
+  c.textAlign='left';
+  return cnt;
+}
+
+function drawTable(sc,cv,t){
+  const W=sc.W,H=sc.TH,c=cv.getContext('2d'),col=theme();
+  c.setTransform(DPR,0,0,DPR,0,0);c.clearRect(0,0,W,H);
+  const x0=30,x1=W-8,sx=s=>x0+(x1-x0)*s/TEND,nl=sc.lanes.length,blk=46,ty=22;
+  const axisY=ty+nl*blk+2;
+  c.font='9px "IBM Plex Sans KR",sans-serif';c.textAlign='left';
+  const tags=[];
+  sc.lanes.forEach((l,k)=>{
+    const y=ty+k*blk;
+    c.fillStyle=col[l.color];c.font='600 10px "IBM Plex Sans KR",sans-serif';c.fillText(l.name,2,y+8);
+    c.font='9px "IBM Plex Sans KR",sans-serif';
+    [['저장',l.tb.sv,y+13],['처리',l.tb.pr,y+27]].forEach(r=>{
+      c.fillStyle=col.line;c.globalAlpha=.35;c.fillRect(x0,r[2],x1-x0,10);c.globalAlpha=1;
+      c.fillStyle=col.mut;c.fillText(r[0],2,r[2]+8);
+      if(t>r[1][0]){c.fillStyle=col[l.color];c.fillRect(sx(r[1][0]),r[2],Math.max(1,sx(Math.min(r[1][1],t))-sx(r[1][0])),10);}
+    });
+    const txt=l.kind==='noq'?'처리 끝 '+fmt(l.okCount*PER)+'건':'완료 '+clock(l.pe);
+    tags.push({x:sx(l.pe),t:l.pe,txt});
+  });
+  c.strokeStyle=col.line;c.lineWidth=1;c.beginPath();c.moveTo(x0,axisY);c.lineTo(x1,axisY);c.stroke();
+  c.fillStyle=col.mut;c.font='9px "IBM Plex Mono",monospace';
+  for(let m=0;m<=24;m++){
+    const x=sx(m*60);c.beginPath();c.moveTo(x,axisY);c.lineTo(x,axisY+(m%5===0?5:3));c.stroke();
+    if(m%5===0){c.textAlign=m===0?'left':(m===24?'right':'center');c.fillText(clock(m*60),x,axisY+16);}
+  }
+  const seen=[];
+  tags.forEach(g=>{
+    if(t<g.t||seen.some(s=>Math.abs(s.x-g.x)<4&&s.txt===g.txt))return;seen.push(g);
+    c.strokeStyle=col.mut;c.setLineDash([3,3]);c.beginPath();c.moveTo(g.x,14);c.lineTo(g.x,axisY);c.stroke();c.setLineDash([]);
+    c.fillStyle=col.fg;c.font='10px "IBM Plex Sans KR",sans-serif';
+    const left=g.x<(x0+x1)/2;c.textAlign=left?'left':'right';c.fillText(g.txt,left?g.x+3:g.x-3,10);
+  });
+  const nx=sx(Math.min(t,TEND));
+  c.strokeStyle=col.fg;c.lineWidth=1.2;c.beginPath();c.moveTo(nx,14);c.lineTo(nx,axisY);c.stroke();
+  c.fillStyle=col.fg;c.font='10px "IBM Plex Mono",monospace';c.textAlign=nx>W-60?'right':'left';
+  c.fillText(clock(t,true),nx>W-60?nx-3:nx+3,axisY+28);
+  c.textAlign='left';
+}
+
+/* 화면 구성 */
+const stage=document.getElementById('stage'),tabs=document.getElementById('tabs'),expEl=document.getElementById('exp'),stepsEl=document.getElementById('steps'),nowClock=document.getElementById('nowClock');
+let t=0,playing=true,visible=true,endHold=0,view=null;
+
+function fit(cv,W,H){cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);cv.style.width=W+'px';cv.style.height=H+'px';}
+function build(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  const sc=SC[cur];
+  const W=Math.floor(Math.min(stage.clientWidth||320,720));
+  sc.W=W;stage.innerHTML='';
+  sc.lanes.forEach(l=>{
+    if(!l.dots)sim(l);
+    l.L=layout(l,W);
+    const sec=document.createElement('section');sec.className='lane';
+    sec.innerHTML='<h2 class="'+l.color+'"></h2><p class="st"></p>';
+    sec.querySelector('h2').textContent=l.title;
+    l.stEl=sec.querySelector('.st');
+    l.cv=document.createElement('canvas');fit(l.cv,W,l.L.H);sec.appendChild(l.cv);
+    stage.appendChild(sec);
+  });
+  sc.TH=22+sc.lanes.length*46+36;
+  sc.tcv=document.createElement('canvas');fit(sc.tcv,W,sc.TH);
+  stage.appendChild(sc.tcv);
+  /* 왼쪽 설명 */
+  expEl.innerHTML='<h3>이 그림은</h3><p></p><dl></dl>';
+  expEl.querySelector('p').textContent=sc.exp;
+  const dl=expEl.querySelector('dl');
+  sc.terms.forEach(x=>{const a=document.createElement('dt'),b=document.createElement('dd');a.textContent=x[0];b.textContent=x[1];dl.appendChild(a);dl.appendChild(b);});
+  /* 오른쪽 진행 설명 */
+  sc.stepList=sc.steps(sc.lanes);
+  stepsEl.innerHTML='';
+  sc.stepList.forEach(s=>{const li=document.createElement('li');li.innerHTML='<span class="tm"></span><span class="tx"></span>';li.querySelector('.tm').textContent=clock(s.t,true);li.querySelector('.tx').textContent=s.txt;stepsEl.appendChild(li);s.el=li;});
+  view=sc;render();
+}
+function render(){
+  if(!view)return;
+  view.lanes.forEach(l=>{const cnt=drawLane(l,l.cv,t);const s=l.status(cnt,l);l.stEl.textContent=s[0];l.stEl.className='st '+s[1];});
+  drawTable(view,view.tcv,t);
+  nowClock.textContent=clock(t,true);
+  let ci=0;view.stepList.forEach((s,i)=>{if(s.t<=t)ci=i;});
+  view.stepList.forEach((s,i)=>{s.el.className=i<ci?'past':(i===ci?'cur':'');});
+}
+function buildTabs(){
+  tabs.innerHTML='';
+  KEYS.forEach(k=>{
+    const b=document.createElement('button');b.textContent=SC[k].tab;b.setAttribute('role','tab');b.setAttribute('aria-selected',k===cur);
+    b.onclick=()=>{cur=k;t=0;endHold=0;playing=true;buildTabs();build();syncBtn();};
+    tabs.appendChild(b);
+  });
+}
+const bPlay=document.getElementById('bPlay'),bRe=document.getElementById('bRe'),spBtns=[...document.querySelectorAll('.sp')];
+function syncBtn(){bPlay.textContent=playing?'⏸':'▶';spBtns.forEach(b=>b.classList.toggle('on',+b.dataset.v===SPEED));}
+bPlay.onclick=()=>{playing=!playing;syncBtn();};
+bRe.onclick=()=>{t=0;endHold=0;playing=true;syncBtn();render();};
+spBtns.forEach(b=>b.onclick=()=>{SPEED=+b.dataset.v;syncBtn();});
+
+let last=0;
+function frame(ts){
+  const dt=Math.min((ts-last)/1000,.1);last=ts;
+  if(playing&&visible){
+    if(t<TEND){t=Math.min(TEND,t+dt*SPEED);}
+    else{endHold+=dt;if(endHold>3){t=0;endHold=0;}}
+    render();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* 화면에 보일 때만 재생, 처음 보일 때 t=0 */
+let seen=false;
+const io=new IntersectionObserver(es=>{
+  visible=es[0].isIntersecting;
+  if(visible&&!seen){seen=true;t=0;endHold=0;}
+},{threshold:.2});
+io.observe(stage);
+
+if(!EMBED)buildTabs();
+build();syncBtn();
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(build,120);});
+requestAnimationFrame(ts=>{last=ts;requestAnimationFrame(frame);});
+
+/* 검사용 훅 */
+window.__sim={
+  set(v,key){if(key&&SC[key]&&key!==cur){cur=key;if(!EMBED)buildTabs();build();}playing=false;t=Math.max(0,Math.min(TEND,v));syncBtn();render();},
+  get:()=>t,scenario:()=>cur,
+  lanes:()=>view.lanes.map(l=>({title:l.title,fin:l.fin,pe:l.pe,ok:l.okCount}))
+};
+})();
+</script>
+</body>
+</html>
