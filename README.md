@@ -12,6 +12,7 @@
 | `notification-v2/` | [열기](https://jung-min-ju.github.io/notification-sim/notification-v2/) | ①~⑥: 문제와 대응, V2 이번 구현(DB 워커), SSE 화면 맞추기, 이후 개선(RabbitMQ·Outbox) | 최신 |
 | `retry-delay-192/` | [열기](https://jung-min-ju.github.io/notification-sim/retry-delay-192/) | 08시 발송 구조 vs DB 워커, 네 상황(재시작·서버 2대·메모리·재시도 지연) | 최신. 블로그 삽입용 |
 | `sse-flow-241/` | [열기](https://jung-min-ju.github.io/notification-sim/sse-flow-241/) | 인앱 알림 SSE: 커밋 후 Redis 발행 → 서버 3대별 연결 목록 → 재조회, 여섯 상황(저장·읽음·롤백·발행 실패·연결 변화·동시 정리) | 최신. BE #241~#245 기준 |
+| `queue-consume/` | [열기](https://jung-min-ju.github.io/notification-sim/queue-consume/) | 8시에 몰리는 알림 작업을 큐가 받아 저장하는 방식, 저장 방식 비교(Kafka 로그 vs RabbitMQ 큐), 파티션 병렬 처리, 세 상황 | 최신. 블로그 삽입용. 코드 사실은 아직 확인 전 |
 
 각 폴더의 README에 기준 코드, 관련 PR, 가정을 적어 두었다.
 
@@ -52,3 +53,4 @@ sse-flow-241/              ⑤ SSE 화면 맞추기를 구현 코드(#241~#245)�
 | [#4](https://github.com/jung-min-ju/notification-sim/pull/4) | 삽입 모드에서 두 구조를 위아래로 배치 |
 | [#5](https://github.com/jung-min-ju/notification-sim/pull/5) | `notification-v2/` 추가, 시뮬레이터별 README 정리 |
 | [#6](https://github.com/jung-min-ju/notification-sim/pull/6) | `sse-flow-241/` 추가 |
+| 이번 PR | `queue-consume/` 추가 |
