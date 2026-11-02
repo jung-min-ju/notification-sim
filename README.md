@@ -13,6 +13,7 @@
 | `retry-delay-192/` | [열기](https://jung-min-ju.github.io/notification-sim/retry-delay-192/) | 08시 발송 구조 vs DB 워커, 네 상황(재시작·서버 2대·메모리·재시도 지연) | 최신. 블로그 삽입용 |
 | `sse-flow-241/` | [열기](https://jung-min-ju.github.io/notification-sim/sse-flow-241/) | 인앱 알림 SSE: 커밋 후 Redis 발행 → 서버 3대별 연결 목록 → 재조회, 여섯 상황(저장·읽음·롤백·발행 실패·연결 변화·동시 정리) | 최신. BE #241~#245 기준 |
 | `queue-consume/` | [열기](https://jung-min-ju.github.io/notification-sim/queue-consume/) | 8시에 몰리는 알림 작업을 큐가 받아 저장하는 방식, 저장 방식 비교(Kafka 로그 vs RabbitMQ 큐), 파티션 병렬 처리, 세 상황 | 최신. 블로그 삽입용. 코드 사실은 아직 확인 전 |
+| `rabbitmq-vs-kafka/` | [열기](https://jung-min-ju.github.io/notification-sim/rabbitmq-vs-kafka/) | RabbitMQ와 Kafka의 차이, 일곱 상황(소비 후·소비자 장애·소비자 여러 명·순서·우선순위·라우팅·처리량) | 최신. 블로그 삽입용. AWS 비교 문서와 공식 문서 기준 |
 
 각 폴더의 README에 기준 코드, 관련 PR, 가정을 적어 두었다.
 

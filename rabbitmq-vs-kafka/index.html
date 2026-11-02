@@ -1,0 +1,1106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RabbitMQ와 Kafka의 차이</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;--fg:#1f2328;--mut:#6b7280;--line:#d0d7de;--box:#f6f8fa;
+  --cur:#e8740c;--wrk:#2563eb;--retry:#c99a06;--bad:#d92d20;--ok:#15803d;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1216;--fg:#e6edf3;--mut:#9aa4af;--line:#3a424c;--box:#171b21;
+    --cur:#ff9a3c;--wrk:#5b9bff;--retry:#f2c94c;--bad:#ff6b5e;--ok:#4ade80;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1216;--fg:#e6edf3;--mut:#9aa4af;--line:#3a424c;--box:#171b21;
+  --cur:#ff9a3c;--wrk:#5b9bff;--retry:#f2c94c;--bad:#ff6b5e;--ok:#4ade80;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 "IBM Plex Sans KR","Noto Sans KR","Noto Sans CJK KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-text-size-adjust:100%}
+.wrap{max-width:632px;margin:0 auto;padding:16px 16px 20px}
+.embed .wrap{max-width:608px;padding:6px 4px 10px}
+h1{font-size:18px;margin:0 0 10px;font-weight:600}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);border-radius:16px;background:var(--box);color:var(--fg);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.embed h1,.embed .tabs{display:none}
+.struct{margin:0 0 14px}
+.struct h2{font-size:15px;margin:0;display:flex;align-items:center;gap:7px;font-weight:600}
+.struct h2 i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.status{margin:1px 0 3px;font-size:12.5px;min-height:19px}
+.status.ok{color:var(--ok)}.status.bad{color:var(--bad)}.status.neu{color:var(--mut)}
+.cvw{width:100%}
+canvas{display:block;width:100%}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 2px}
+.legend{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.legend .ld{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--mut)}
+.legend .sep{margin:0 4px}
+.rs{font:inherit;font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:12px;background:var(--box);color:var(--fg);cursor:pointer;white-space:nowrap}
+.info{font-size:12.5px;color:var(--mut);margin:8px 0 0}
+.exp,.info,.status{word-break:keep-all}
+.exp{margin:2px 0 0;padding:8px 12px;border:1px dashed var(--line);border-left:3px solid var(--line);border-radius:8px;font-size:12.5px;line-height:1.6;color:var(--mut)}
+.exp.r{border-left-color:var(--cur)}.exp.k{border-left-color:var(--wrk)}
+.exp h3{font-size:12.5px;margin:0 0 4px;font-weight:600;color:var(--fg)}
+.exp p{margin:0 0 5px}.exp p:last-child{margin-bottom:0}
+.embed .exp{display:none}
+@media (min-width:1180px){
+  html:not(.embed) .wrap{max-width:1400px;padding:22px 28px 28px;display:grid;
+    grid-template-columns:minmax(220px,1fr) minmax(600px,720px) minmax(220px,1fr);column-gap:28px}
+  html:not(.embed) .struct{display:contents}
+  html:not(.embed) h1{grid-column:2;grid-row:1}
+  html:not(.embed) .tabs{grid-column:2;grid-row:2}
+  html:not(.embed) #sb-r{grid-column:2;grid-row:3;margin-bottom:14px}
+  html:not(.embed) #ex-r{grid-column:1;grid-row:3;align-self:start;margin-top:30px}
+  html:not(.embed) #sb-k{grid-column:2;grid-row:4;margin-bottom:14px}
+  html:not(.embed) #ex-k{grid-column:3;grid-row:4;align-self:start;margin-top:30px}
+  html:not(.embed) .bar{grid-column:2;grid-row:5}
+  html:not(.embed) #cw-t{grid-column:2;grid-row:6}
+  html:not(.embed) .info{grid-column:2;grid-row:7}
+  html:not(.embed) .exp{font-size:14px;padding:12px 16px}
+  html:not(.embed) .exp h3{font-size:14px;margin-bottom:6px}
+  html:not(.embed) .struct .sbody{min-width:0}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <h1>RabbitMQ와 Kafka의 차이</h1>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <section class="struct">
+    <div class="sbody" id="sb-r">
+      <h2><i style="background:var(--cur)"></i>RabbitMQ</h2>
+      <p class="status neu" id="st-r"></p>
+      <div class="cvw" id="cw-r"><canvas id="cv-r"></canvas></div>
+    </div>
+    <aside class="exp r" id="ex-r"></aside>
+  </section>
+  <section class="struct">
+    <div class="sbody" id="sb-k">
+      <h2><i style="background:var(--wrk)"></i>Kafka</h2>
+      <p class="status neu" id="st-k"></p>
+      <div class="cvw" id="cw-k"><canvas id="cv-k"></canvas></div>
+    </div>
+    <aside class="exp k" id="ex-k"></aside>
+  </section>
+  <div class="bar"><div class="legend" id="legend"></div><button class="rs" id="rs" type="button">처음부터</button></div>
+  <div class="cvw" id="cw-t"><canvas id="cv-t"></canvas></div>
+  <p class="info" id="info"></p>
+</div>
+<script>
+(()=>{
+'use strict';
+const Q=new URLSearchParams(location.search);
+const EMBED=Q.has('embed');
+if(EMBED)document.documentElement.classList.add('embed');
+if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
+
+const FS='"IBM Plex Sans KR","Noto Sans KR","Noto Sans CJK KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif';
+const FM='"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace';
+let C={};
+function readColors(){
+  const s=getComputedStyle(document.documentElement),g=n=>s.getPropertyValue(n).trim();
+  C={fg:g('--fg'),mut:g('--mut'),line:g('--line'),box:g('--box'),bg:g('--bg'),cur:g('--cur'),wrk:g('--wrk'),retry:g('--retry'),bad:g('--bad'),ok:g('--ok')};
+}
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const ez=x=>{x=cl(x);return x*x*(3-2*x)};
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+/* ---------- 그리기 도구 ---------- */
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function box(c,x,y,w,h,o={}){
+  rr(c,x,y,w,h,o.r==null?8:o.r);
+  if(o.fill!==null){c.fillStyle=o.fill||C.box;c.fill()}
+  c.lineWidth=o.lw||1.2;c.strokeStyle=o.stroke||C.line;c.setLineDash(o.dash||[]);c.stroke();c.setLineDash([]);
+}
+function tx(c,s,x,y,o={}){
+  c.font=`${o.w||400} ${o.s||11}px ${o.m?FM:FS}`;c.fillStyle=o.c||C.fg;
+  c.textAlign=o.a||'center';c.textBaseline='middle';c.fillText(s,x,y);
+}
+function dot(c,x,y,r,col,o={}){
+  const al=o.al==null?1:o.al, fa=o.fa==null?1:o.fa;
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);
+  c.globalAlpha=al*fa;c.fillStyle=col;c.fill();
+  c.globalAlpha=al;c.lineWidth=1.2;c.strokeStyle=col;c.stroke();
+  c.globalAlpha=1;
+}
+function ringProg(c,x,y,r,p,col){
+  c.lineWidth=2;c.strokeStyle=C.line;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.stroke();
+  c.strokeStyle=col;c.beginPath();c.arc(x,y,r,-Math.PI/2,-Math.PI/2+Math.PI*2*cl(p));c.stroke();
+}
+function poly(c,pts,o={}){
+  c.strokeStyle=o.col||C.line;c.lineWidth=o.w||1.2;c.setLineDash(o.dash||[]);
+  c.beginPath();c.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)c.lineTo(pts[i].x,pts[i].y);c.stroke();c.setLineDash([]);
+  if(o.head){
+    const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x),s=5;
+    c.fillStyle=o.col||C.line;c.beginPath();c.moveTo(b.x,b.y);
+    c.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));c.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));c.closePath();c.fill();
+  }
+}
+function pathPos(pts,s){
+  const L=[];let tot=0;
+  for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);L.push(d);tot+=d}
+  let d=cl(s)*tot;
+  for(let i=0;i<L.length;i++){
+    if(d<=L[i]||i===L.length-1){const u=L[i]?d/L[i]:1;return{x:lerp(pts[i].x,pts[i+1].x,u),y:lerp(pts[i].y,pts[i+1].y,u)}}
+    d-=L[i];
+  }
+  return pts[pts.length-1];
+}
+/* 기다리는 점 표시 (빨간 점선 고리) / 이름표 */
+function isWait(m,t){return !!m.focus&&t>=m.arr&&t<m.P&&m.P-m.arr>.25}
+function waitRing(c,x,y,r){
+  c.strokeStyle=C.bad;c.lineWidth=1.6;c.setLineDash([3,2.5]);
+  c.beginPath();c.arc(x,y,r+4,0,Math.PI*2);c.stroke();c.setLineDash([]);
+}
+function tag(c,x,y,rd,s,al,below){
+  const ty=below?y+rd+8:y-rd-7;
+  c.globalAlpha=al==null?1:al;c.font=`600 9.5px ${FS}`;c.textAlign='center';c.textBaseline='middle';
+  c.lineWidth=3;c.strokeStyle=C.bg;c.strokeText(s,x,ty);c.fillStyle=C.fg;c.fillText(s,x,ty);c.globalAlpha=1;
+}
+function numLabel(c,x,y,lab,num,unit,col){
+  c.textAlign='left';c.textBaseline='middle';
+  c.font=`400 11px ${FS}`;const w1=c.measureText(lab+' ').width,w3=c.measureText(unit).width;
+  c.font=`600 12px ${FM}`;const w2=c.measureText(num).width;
+  let sx=x-(w1+w2+w3)/2;
+  c.fillStyle=C.mut;c.font=`400 11px ${FS}`;c.fillText(lab+' ',sx,y);
+  c.fillStyle=col||C.fg;c.font=`600 12px ${FM}`;c.fillText(num,sx+w1,y);
+  c.fillStyle=C.mut;c.font=`400 11px ${FS}`;c.fillText(unit,sx+w1+w2,y);
+}
+const fmt=n=>n.toLocaleString('en-US');
+
+/* ---------- 한 줄 처리기 모델 (이산 사건) ---------- */
+/* L: 메시지 목록{arr,pri}, kind: 'r'(우선순위 큐) | 'k'(도착 순서 로그) */
+function simLane(L,kind,free0,tt,pt,gap){
+  const n=L.length,P=new Array(n),D=new Array(n),dn=new Array(n).fill(false);
+  let c=free0;
+  for(let k=0;k<n;k++){
+    let cand=[];
+    for(let i=0;i<n;i++)if(!dn[i]&&L[i].arr<=c+1e-9)cand.push(i);
+    if(!cand.length){
+      let m=Infinity;for(let i=0;i<n;i++)if(!dn[i]&&L[i].arr<m)m=L[i].arr;
+      c=m;for(let i=0;i<n;i++)if(!dn[i]&&L[i].arr<=c+1e-9)cand.push(i);
+    }
+    cand.sort((a,b)=>kind==='r'?((L[b].pri||0)-(L[a].pri||0)||L[a].arr-L[b].arr||a-b):(L[a].arr-L[b].arr||a-b));
+    const p=cand[0];P[p]=c;D[p]=c+tt+pt;dn[p]=true;c=D[p]+gap;
+  }
+  return{P,D};
+}
+/* 큐 안에서 m 앞에 서 있는 칸 수(부드럽게 변함) */
+function rankIn(L,m,t,ack){
+  let s=0;
+  for(const j of L){
+    if(j===m||j.P>=m.P)continue;
+    const pres=j.pre?1:ez((t-(j.arr-.3))/.3);
+    const lv=ack?ez((t-j.D)/.25):ez((t-j.P)/.2);
+    s+=pres*(1-lv);
+  }
+  return s;
+}
+
+/* ---------- 상황 정의 ---------- */
+const CYC={tt:.35,pt:.65,gap:.25};
+function singlePlan(S,kind){
+  const cy=(S.cyc&&S.cyc[kind])||CYC;
+  const msgs=S.msgs.map((m,i)=>Object.assign({i,pri:0,pre:false},m));
+  const{P,D}=simLane(msgs,kind,S.free0,cy.tt,cy.pt,cy.gap);
+  msgs.forEach((m,i)=>{m.P=P[i];m.D=D[i]});
+  [...msgs].sort((a,b)=>a.arr-b.arr||a.i-b.i).forEach((m,k)=>m.cell=k);
+  const copies=msgs.map(m=>({m,P:m.P,D:m.D,pass:1}));
+  const lastD=Math.max(...D);
+  let tRe=null;
+  if(S.replay){
+    tRe=lastD+1.5;
+    if(kind==='k'){
+      const b=tRe+.8;
+      [...msgs].sort((a,c)=>a.cell-c.cell).forEach((m,k)=>{
+        const p=b+k*(cy.tt+cy.pt+cy.gap);copies.push({m,P:p,D:p+cy.tt+cy.pt,pass:2});
+      });
+    }
+  }
+  [...copies].sort((a,b)=>a.D-b.D).forEach((c,k)=>c.bin=k);
+  return{msgs,copies,tRe,tt:cy.tt,pt:cy.pt,endD:Math.max(...copies.map(c=>c.D))};
+}
+const KEYS=['주문','결제','알림'];
+const SEQ=[0,1,2,0,2,1,0,1,2];
+function routePlan(kind){
+  const msgs=SEQ.map((k,i)=>({i,key:k,lane:k,E:.5+.9*i,pri:0,pre:false}));
+  msgs.forEach(m=>{m.arr=m.E+(kind==='r'?1.6:1.0)});
+  const lanes=[[],[],[]];
+  for(let l=0;l<3;l++){
+    const L=msgs.filter(m=>m.lane===l);
+    const{P,D}=simLane(L,kind,.3,CYC.tt,CYC.pt,CYC.gap);
+    L.forEach((m,j)=>{m.P=P[j];m.D=D[j];m.cell=j;m.st=j});
+    lanes[l]=L;
+  }
+  return{msgs,lanes,tt:CYC.tt,pt:CYC.pt,endD:Math.max(...msgs.map(m=>m.D))};
+}
+
+/* ---------- 공통: 번호 점, 키프레임 ---------- */
+function numDot(c,x,y,r,col,num,o={}){
+  dot(c,x,y,r,col,o);
+  const fa=o.fa==null?1:o.fa;
+  if(r<5.5)return;
+  c.globalAlpha=o.al==null?1:o.al;
+  tx(c,String(num),x,y+.5,{s:Math.max(8,Math.min(10,r*1.35)),m:true,w:600,c:fa<.7?C.fg:'#fff'});
+  c.globalAlpha=1;
+}
+function kfVal(kf,t,dur){
+  let k=-1;for(let i=1;i<kf.length;i++)if(kf[i].t<=t)k=i;
+  if(k<0)return kf[0].v;
+  return lerp(kf[k-1].v,kf[k].v,ez((t-kf[k].t)/dur));
+}
+/* ACK 표시: 초록 점이 소비자에서 큐로 거슬러 가고, 큐에서 삭제 글자가 잠깐 떠요 */
+function ackDraw(c,g,Ds,t,gm,sy){
+  const d=Ds.find(D=>t>=D&&t<D+1.0),pulse=d!=null;
+  poly(c,[{x:g.cX,y:sy+10},{x:g.qR,y:sy+10}],{head:true,col:pulse?C.ok:C.line,w:pulse?2.6:1.2});
+  tx(c,'ACK',gm,sy+20,{s:pulse?11:10,m:true,w:pulse?600:400,c:pulse?C.ok:C.mut});
+  if(pulse){
+    const u=ez((t-d)/.55);dot(c,lerp(g.cX,g.qR,u),sy+10,3.6,C.ok);
+    const a=cl((t-d-.3)/.2)*(1-cl((t-d-.8)/.2));
+    if(a>0){c.globalAlpha=a;tx(c,'삭제',g.qR-8-g.sw*.5,g.y0+24,{s:10,w:600,c:C.mut});c.globalAlpha=1}
+  }
+}
+
+/* ---------- 소비자 장애 ---------- */
+function failPlan(kind){
+  const tt=.35,pt=.65,gap=.25,tF=4.8,tR=7.3,resume=7.6;
+  const at=[];let c=.4;
+  for(let i=0;i<3;i++){at.push({i,P:c,D:c+tt+pt,fail:false,again:false});c+=tt+pt+gap}
+  at.push({i:3,P:c,D:tF,fail:true,again:false});
+  c=resume;
+  (kind==='k'?[2,3,4,5]:[3,4,5]).forEach(i=>{at.push({i,P:c,D:c+tt+pt,fail:false,again:i<=3});c+=tt+pt+gap});
+  const done=at.filter(a=>!a.fail).sort((a,b)=>a.D-b.D);
+  done.forEach((a,k)=>a.bin=k);
+  const ackT=[];done.forEach(a=>{if(ackT[a.i]==null)ackT[a.i]=a.D});
+  const kfP=[{t:0,v:0},{t:at[0].D,v:1},{t:at[1].D,v:2},{t:at[2].D,v:3},{t:tR,v:2}];
+  const kfC=[{t:0,v:0},{t:at[1].D,v:2}];
+  if(kind==='k'){
+    const ks=at.filter(a=>a.P>=resume);
+    ks.forEach(a=>kfP.push({t:a.D,v:a.i+1}));
+    kfC.push({t:ks[1].D,v:4},{t:ks[3].D,v:6});
+  }
+  return{kind,at,tt,pt,tF,tR,resume,ackT,kfP,kfC,endD:Math.max(...done.map(a=>a.D))};
+}
+function frameSingle(c,g,kind,ackDs,t){
+  const base=kind==='r'?C.cur:C.wrk,sy=g.sy;
+  c.clearRect(0,0,g.W,g.H);
+  box(c,g.pX,g.y0,g.pw,g.h);tx(c,'생산자',g.pX+g.pw/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.qL,g.y0,g.qW,g.h,{stroke:base,lw:1.7});tx(c,kind==='r'?'큐':'로그',g.qL+g.qW/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.cX,g.y0,g.cw,g.h);tx(c,'소비자',g.cX+g.cw/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.binX,g.binY,g.binW,g.binH,{dash:[3,3]});
+  poly(c,[{x:g.pR,y:sy},{x:g.qL,y:sy}],{head:true});
+  const gm=(g.qR+g.cX)/2;
+  if(kind==='r'){
+    poly(c,[{x:g.qR,y:sy-8},{x:g.cX,y:sy-8}],{head:true});
+    tx(c,'push',gm,sy-16,{s:9.5,m:true,c:C.mut});
+    ackDraw(c,g,ackDs,t,gm,sy);
+  }else{
+    poly(c,[{x:g.cX,y:sy-8},{x:g.qR,y:sy-8}],{head:true,dash:[3,3]});
+    tx(c,'pull',gm,sy-16,{s:9.5,m:true,c:C.mut});
+  }
+}
+function drawFail(c,g,pl,t,kind){
+  const base=kind==='r'?C.cur:C.wrk,sy=g.sy,rd=g.rd,tt=pl.tt,pt=pl.pt;
+  const ackDs=pl.at.filter(a=>!a.fail).map(a=>a.D);
+  frameSingle(c,g,kind,ackDs,t);
+  const slotXr=r=>g.qR-8-g.sw*(Math.min(r,g.cap-1)+.5);
+  const cellX=i=>g.qL+6+g.sw*(i+.5);
+  const binP=k=>({x:g.binX+8+(k%g.nc)*9.5+4,y:g.binY+11+Math.floor(k/g.nc)*11});
+  // 서버 재시작 덮개
+  if(t>=pl.tF&&t<pl.tR){
+    c.globalAlpha=.9*ez((t-pl.tF)/.15);c.fillStyle=C.bad;rr(c,g.cX,g.y0,g.cw,g.h,8);c.fill();c.globalAlpha=1;
+    tx(c,'서버',g.cdx,g.y0+10,{s:10,w:600,c:'#fff'});tx(c,'재시작',g.cdx,g.y0+22,{s:10,w:600,c:'#fff'});
+  }
+  if(kind==='r'){
+    const rankR=(i,tm)=>{let s=0;for(let j=0;j<i;j++)s+=1-ez((tm-(pl.ackT[j]==null?1e9:pl.ackT[j]))/.25);return s};
+    for(let i=0;i<6;i++){
+      const A=pl.at.filter(a=>a.i===i);
+      const hadFail=A.some(a=>a.fail&&t>=a.D);
+      const col=hadFail?C.retry:base;
+      let a=null;for(const x of A)if(x.P<=t)a=x;
+      let x,y=sy,rp=null,r=rd,cross=false;
+      if(!a)x=slotXr(rankR(i,t));
+      else if(a.fail){
+        if(t<a.P+tt)x=lerp(slotXr(rankR(i,a.P)),g.cdx,ez((t-a.P)/tt));
+        else if(t<a.D){x=g.cdx;rp=(t-a.P-tt)/pt}
+        else if(t<a.D+.5){x=lerp(g.cdx,slotXr(rankR(i,t)),ez((t-a.D)/.5));cross=t<a.D+.35}
+        else x=slotXr(rankR(i,t));
+      }else{
+        if(t<a.P+tt)x=lerp(slotXr(rankR(i,a.P)),g.cdx,ez((t-a.P)/tt));
+        else if(t<a.D){x=g.cdx;rp=(t-a.P-tt)/pt}
+        else{const b=binP(a.bin),u=ez((t-a.D)/.45);x=lerp(g.cdx,b.x,u);y=lerp(sy,b.y,u);r=lerp(rd,3.5,u)}
+      }
+      // 확인 전(ACK 대기) 점선 원
+      if(a){
+        const end=a.fail?a.D+.5:a.D+.3;
+        if(t<end){
+          const gx=slotXr(rankR(i,t)),ga=t<(a.fail?a.D:a.D)?1:1-(t-a.D)/(a.fail?.5:.3);
+          c.globalAlpha=cl(ga)*.8;c.strokeStyle=base;c.lineWidth=1.4;c.setLineDash([2.5,2.5]);
+          c.beginPath();c.arc(gx,sy,rd,0,Math.PI*2);c.stroke();c.setLineDash([]);c.globalAlpha=1;
+        }
+      }
+      if(rp!=null)ringProg(c,x,y,rd+3.5,rp,base);
+      numDot(c,x,y,r,col,i+1);
+      if(cross){tx(c,'✕',x-rd-8,y,{s:13,w:700,c:C.bad})}
+    }
+    const nq=[0,1,2,3,4,5].filter(i=>(pl.ackT[i]==null?1e9:pl.ackT[i])>t).length;
+    numLabel(c,g.qL+g.qW/2,g.y0+g.h+14,'큐에 남음',String(nq),'건',base);
+  }else{
+    // 로그 칸
+    for(let i=0;i<g.cap;i++){
+      const reading=pl.at.some(a=>a.i===i&&t>=a.P&&t<a.D);
+      rr(c,g.qL+6+g.sw*i+1.5,sy-12,g.sw-3,24,5);c.lineWidth=reading?2:1;c.strokeStyle=reading?base:C.line;c.stroke();
+      tx(c,String(i),cellX(i),sy+16,{s:9,m:true,c:C.mut});
+    }
+    tx(c,'다음에 읽을 위치',g.qL+2,g.y0-18,{s:10,c:C.mut,a:'left'});
+    tx(c,'커밋한 위치',g.qR-2,g.y0-18,{s:10,w:600,c:C.retry,a:'right'});
+    const p=kfVal(pl.kfP,t,.4),px=Math.min(g.qL+6+g.sw*(Math.min(p,g.cap-1)+.5),g.qR-6);
+    c.fillStyle=base;c.beginPath();c.moveTo(px,g.y0-2);c.lineTo(px-5,g.y0-10);c.lineTo(px+5,g.y0-10);c.closePath();c.fill();
+    const cv=kfVal(pl.kfC,t,.3),cx=g.qL+6+g.sw*cv;
+    c.fillStyle=C.retry;rr(c,cx-1.5,sy-16,3,32,1.5);c.fill();
+    // 원본 점
+    for(let i=0;i<6;i++)numDot(c,cellX(i),sy,rd,base,i+1);
+    // 읽는 중인 복사본
+    for(const a of pl.at){
+      if(t<a.P)continue;
+      const col=(a.again||(a.fail&&t>=a.D))?C.retry:base;
+      let x,y=sy,rp=null,r=rd,al=1;
+      if(t<a.P+tt)x=lerp(cellX(a.i),g.cdx,ez((t-a.P)/tt));
+      else if(t<a.D){x=g.cdx;rp=(t-a.P-tt)/pt}
+      else if(a.fail){
+        if(t>=a.D+.5)continue;
+        x=g.cdx;al=1-ez((t-a.D)/.4);
+      }else{const b=binP(a.bin),u=ez((t-a.D)/.45);x=lerp(g.cdx,b.x,u);y=lerp(sy,b.y,u);r=lerp(rd,3.5,u)}
+      if(rp!=null)ringProg(c,x,y,rd+3.5,rp,base);
+      numDot(c,x,y,r,col,a.i+1,{fa:.8,al});
+      if(a.fail&&t>=a.D&&t<a.D+.35)tx(c,'✕',x-rd-8,y,{s:13,w:700,c:C.bad});
+    }
+    numLabel(c,g.qL+g.qW/2,g.y0+g.h+14,'로그에 남음','6','건',base);
+  }
+  const dn=pl.at.filter(a=>!a.fail&&t>=a.D+.45).length;
+  numLabel(c,g.binX+g.binW/2,g.binY+g.binH+13,'처리 끝',String(dn),'건');
+}
+
+/* ---------- 소비자 여러 명 ---------- */
+function multiPlan(kind){
+  const tt=.35,pt=.65,gap=.25,copies=[];
+  if(kind==='r'){
+    for(let i=0;i<6;i++){const c=i%3,r=Math.floor(i/3),P=.4+(tt+pt+gap)*r;copies.push({i,c,P,D:P+tt+pt})}
+  }else{
+    [.4,1.0].forEach((s,c)=>{for(let i=0;i<6;i++){const P=s+(tt+pt+gap)*i;copies.push({i,c,P,D:P+tt+pt})}});
+  }
+  const cnt={};
+  [...copies].sort((a,b)=>a.D-b.D||a.c-b.c).forEach(cp=>{cnt[cp.c]=cnt[cp.c]||0;cp.st=cnt[cp.c]++});
+  return{kind,copies,tt,pt,endD:Math.max(...copies.map(c=>c.D))};
+}
+function geomMulti(W){
+  const f=a=>Math.round(W*a),g={W};
+  g.pX0=f(.02);g.pX1=f(.14);g.qX0=f(.20);g.qX1=f(.60);g.cX0=f(.72);g.cX1=f(.985);g.junX=f(.66);
+  g.lt=r=>34+r*54;g.ly=r=>g.lt(r)+21;g.procY=r=>g.lt(r)+24;
+  g.midY=109;g.cap=6;g.sw=(g.qX1-g.qX0-12)/6;g.rd=Math.min(7,g.sw*.32);
+  g.H=g.lt(2)+42+34;
+  return g;
+}
+function drawMulti(c,g,pl,t,kind){
+  const base=kind==='r'?C.cur:C.wrk,rd=g.rd,my=g.midY,tt=pl.tt,pt=pl.pt;
+  c.clearRect(0,0,g.W,g.H);
+  const top=g.lt(0),bot=g.lt(2)+42;
+  box(c,g.pX0,top,g.pX1-g.pX0,bot-top);tx(c,'생산자',(g.pX0+g.pX1)/2,top+11,{s:10.5,c:C.mut});
+  box(c,g.qX0,my-30,g.qX1-g.qX0,60,{stroke:base,lw:1.7});
+  tx(c,kind==='r'?'큐':'로그',(g.qX0+g.qX1)/2,my-19,{s:10.5,c:C.mut});
+  poly(c,[{x:g.pX1,y:my},{x:g.qX0,y:my}],{head:true});
+  const lanes=kind==='r'?[0,1,2]:[0,2];
+  const cCx=(g.cX0+g.cX1)/2;
+  lanes.forEach((l,ci)=>{
+    box(c,g.cX0,g.lt(l),g.cX1-g.cX0,42);
+    tx(c,kind==='k'?'그룹 '+'AB'[ci]+' 소비자':'소비자 '+(ci+1),cCx,g.lt(l)+9,{s:10,c:C.mut});
+  });
+  poly(c,[{x:g.qX1,y:my},{x:g.junX,y:my}]);
+  poly(c,[{x:g.junX,y:g.ly(lanes[0])},{x:g.junX,y:g.ly(lanes[lanes.length-1])}]);
+  lanes.forEach(l=>{
+    if(kind==='r')poly(c,[{x:g.junX,y:g.ly(l)},{x:g.cX0,y:g.ly(l)}],{head:true});
+    else poly(c,[{x:g.cX0,y:g.ly(l)},{x:g.junX,y:g.ly(l)}],{head:true,dash:[3,3]});
+  });
+  tx(c,kind==='r'?'push':'pull',(g.qX1+g.cX0)/2+(g.cX0-g.qX1)*.0,g.ly(lanes[0])-12,{s:9.5,m:true,c:C.mut});
+  const slotXr=r=>g.qX1-8-g.sw*(Math.min(r,g.cap-1)+.5);
+  const cellX=i=>g.qX0+6+g.sw*(i+.5);
+  const stackP=(ci,k)=>({x:g.cX0+10+k*8.5,y:g.lt(lanes[ci])+37});
+  const pathTo=(x0,ci)=>[{x:x0,y:my},{x:g.junX,y:my},{x:g.junX,y:g.procY(lanes[ci])},{x:cCx,y:g.procY(lanes[ci])}];
+  if(kind==='k'){
+    for(let i=0;i<g.cap;i++){
+      const reading=pl.copies.some(cp=>cp.i===i&&t>=cp.P&&t<cp.D);
+      rr(c,g.qX0+6+g.sw*i+1.5,my-12,g.sw-3,24,5);c.lineWidth=reading?2:1;c.strokeStyle=reading?base:C.line;c.stroke();
+    }
+    [0,1].forEach(ci=>{
+      let p=0;for(const cp of pl.copies)if(cp.c===ci)p+=ez((t-cp.D)/.25);
+      const px=Math.min(cellX(Math.min(p,g.cap-1)),g.qX1-6);
+      c.fillStyle=base;c.beginPath();
+      if(ci===0){c.moveTo(px,my-31);c.lineTo(px-5,my-39);c.lineTo(px+5,my-39)}
+      else{c.moveTo(px,my+31);c.lineTo(px-5,my+39);c.lineTo(px+5,my+39)}
+      c.closePath();c.fill();
+    });
+    tx(c,'그룹 A가 읽을 위치',g.qX0+2,my-48,{s:10,c:C.mut,a:'left'});
+    tx(c,'그룹 B가 읽을 위치',g.qX0+2,my+51,{s:10,c:C.mut,a:'left'});
+    for(let i=0;i<6;i++)numDot(c,cellX(i),my,rd,base,i+1);
+    for(const cp of pl.copies){
+      if(t<cp.P)continue;
+      const col=base;let x,y,r=rd,rp=null;
+      if(t<cp.P+tt){const e=pathPos(pathTo(cellX(cp.i),cp.c),ez((t-cp.P)/tt));x=e.x;y=e.y}
+      else if(t<cp.D){x=cCx;y=g.procY(lanes[cp.c]);rp=(t-cp.P-tt)/pt}
+      else{const b=stackP(cp.c,cp.st),u=ez((t-cp.D)/.45);x=lerp(cCx,b.x,u);y=lerp(g.procY(lanes[cp.c]),b.y,u);r=lerp(rd,3,u)}
+      if(rp!=null)ringProg(c,x,y,rd+3,rp,base);
+      numDot(c,x,y,r,col,cp.i+1,{fa:.8});
+    }
+    numLabel(c,(g.qX0+g.qX1)/2,my+67,'로그에 남음','6','건',base);
+  }else{
+    const rank=(i,tm)=>{let s=0;for(let j=0;j<i;j++)s+=1-ez((tm-pl.copies.find(cp=>cp.i===j).P)/.2);return s};
+    for(const cp of pl.copies){
+      let x,y=my,r=rd,rp=null;
+      if(t<cp.P)x=slotXr(rank(cp.i,t));
+      else if(t<cp.P+tt){const e=pathPos(pathTo(slotXr(rank(cp.i,cp.P)),cp.c),ez((t-cp.P)/tt));x=e.x;y=e.y}
+      else if(t<cp.D){x=cCx;y=g.procY(lanes[cp.c]);rp=(t-cp.P-tt)/pt}
+      else{const b=stackP(cp.c,cp.st),u=ez((t-cp.D)/.45);x=lerp(cCx,b.x,u);y=lerp(g.procY(lanes[cp.c]),b.y,u);r=lerp(rd,3,u)}
+      if(rp!=null)ringProg(c,x,y,rd+3,rp,base);
+      numDot(c,x,y,r,base,cp.i+1);
+    }
+    const nq=pl.copies.filter(cp=>t<cp.P+.2).length;
+    numLabel(c,(g.qX0+g.qX1)/2,my+44,'큐에 남음',String(nq),'건',base);
+  }
+}
+
+/* ---------- 순서 ---------- */
+function orderPlan(kind){
+  const tt=.35,pt=.65,gap=.25;
+  const part=[0,1,0,1,0,1,0,1];
+  const msgs=part.map((p,i)=>({i,E:.5+.5*i,arr:1.1+.5*i,pri:0,pre:false,part:p}));
+  const seq=kind==='r'?[0,1,2,3,4,5,6,7]:[0,2,1,3,4,6,5,7];
+  let c=.4,mixT=null,mx=-1;
+  seq.forEach((i,k)=>{
+    const m=msgs[i];m.P=Math.max(c,m.arr);m.D=m.P+tt+pt;m.k=k;c=m.D+gap;
+    if(i<mx&&mixT==null)mixT=m.P;
+    mx=Math.max(mx,i);
+  });
+  const cnt=[0,0];msgs.forEach(m=>{m.cell=kind==='k'?cnt[m.part]++:m.i});
+  return{kind,msgs,tt,pt,mixT,endD:Math.max(...msgs.map(m=>m.D))};
+}
+function geomOrder(W,kind){
+  const f=a=>Math.round(W*a),g={W,kind};
+  g.pX0=f(.02);g.pX1=f(.14);g.qX0=f(.20);g.qX1=f(.62);g.cX0=f(.72);g.cX1=f(.985);
+  g.junA=(g.pX1+g.qX0)/2;g.junB=(g.qX1+g.cX0)/2;
+  g.cap=kind==='r'?8:4;g.sw=(g.qX1-g.qX0-12)/g.cap;g.rd=Math.min(7,g.sw*.37);
+  g.laneT=r=>34+r*54;g.laneY=r=>g.laneT(r)+27;
+  g.sy=88;g.binY=158;g.binH=34;g.binX=g.pX0;g.binW=W-8-g.pX0;
+  g.H=g.binY+g.binH+26;
+  return g;
+}
+function drawOrder(c,g,pl,t,kind){
+  const base=kind==='r'?C.cur:C.wrk,rd=g.rd,sy=g.sy,tt=pl.tt,pt=pl.pt;
+  c.clearRect(0,0,g.W,g.H);
+  box(c,g.pX0,34,g.pX1-g.pX0,96);tx(c,'생산자',(g.pX0+g.pX1)/2,45,{s:10.5,c:C.mut});
+  box(c,g.cX0,sy-30,g.cX1-g.cX0,60);tx(c,'소비자',(g.cX0+g.cX1)/2,sy-19,{s:10.5,c:C.mut});
+  box(c,g.binX,g.binY,g.binW,g.binH,{dash:[3,3]});
+  tx(c,'처리한 순서',g.binX+2,g.binY-9,{s:10,c:C.mut,a:'left'});
+  const cCx=(g.cX0+g.cX1)/2,pCx=(g.pX0+g.pX1)/2;
+  const binX=k=>g.binX+(g.binW/8)*(k+.5);
+  const shade=m=>kind==='k'&&m.part===1?.6:1;
+  if(kind==='r'){
+    box(c,g.qX0,sy-30,g.qX1-g.qX0,60,{stroke:base,lw:1.7});tx(c,'큐',(g.qX0+g.qX1)/2,sy-19,{s:10.5,c:C.mut});
+    poly(c,[{x:g.pX1,y:sy},{x:g.qX0,y:sy}],{head:true});
+    poly(c,[{x:g.qX1,y:sy},{x:g.cX0,y:sy}],{head:true});
+    tx(c,'push',(g.qX1+g.cX0)/2,sy-9,{s:9.5,m:true,c:C.mut});
+    const slotXr=r=>g.qX1-8-g.sw*(Math.min(r,g.cap-1)+.5);
+    for(const m of pl.msgs){
+      if(t<m.E)continue;
+      let x,y=sy,r=rd,rp=null,al=1;
+      if(t<m.arr){x=lerp(pCx,slotXr(rankIn(pl.msgs,m,t,false)),ez((t-m.E)/(m.arr-m.E)));al=cl((t-m.E)/.2)}
+      else if(t<m.P)x=slotXr(rankIn(pl.msgs,m,t,false));
+      else if(t<m.P+tt)x=lerp(slotXr(rankIn(pl.msgs,m,m.P,false)),cCx,ez((t-m.P)/tt));
+      else if(t<m.D){x=cCx;rp=(t-m.P-tt)/pt}
+      else{const b=ez((t-m.D)/.45);x=lerp(cCx,binX(m.k),b);y=lerp(sy,g.binY+17,b);r=lerp(rd,6,b)}
+      if(rp!=null)ringProg(c,x,y,rd+3.5,rp,base);
+      numDot(c,x,y,r,base,m.i+1,{al});
+    }
+  }else{
+    [0,1].forEach(p=>{
+      box(c,g.qX0,g.laneT(p),g.qX1-g.qX0,42,{stroke:base,lw:1.7});
+      tx(c,'파티션 '+p,(g.qX0+g.qX1)/2,g.laneT(p)+9,{s:10,c:C.mut});
+      for(let i=0;i<g.cap;i++){
+        const reading=pl.msgs.some(m=>m.part===p&&m.cell===i&&t>=m.P&&t<m.D);
+        rr(c,g.qX0+6+g.sw*i+1.5,g.laneY(p)-12,g.sw-3,24,5);c.lineWidth=reading?2:1;c.strokeStyle=reading?base:C.line;c.stroke();
+      }
+    });
+    poly(c,[{x:g.pX1,y:sy},{x:g.junA,y:sy}]);
+    poly(c,[{x:g.junA,y:g.laneY(0)},{x:g.junA,y:g.laneY(1)}]);
+    [0,1].forEach(p=>poly(c,[{x:g.junA,y:g.laneY(p)},{x:g.qX0,y:g.laneY(p)}],{head:true}));
+    poly(c,[{x:g.qX1,y:g.laneY(0)},{x:g.junB,y:g.laneY(0)}],{dash:[3,3]});
+    poly(c,[{x:g.qX1,y:g.laneY(1)},{x:g.junB,y:g.laneY(1)}],{dash:[3,3]});
+    poly(c,[{x:g.junB,y:g.laneY(0)},{x:g.junB,y:g.laneY(1)}],{dash:[3,3]});
+    poly(c,[{x:g.junB,y:sy},{x:g.cX0,y:sy}],{head:true,dash:[3,3]});
+    tx(c,'pull',(g.qX1+g.cX0)/2+4,sy-9,{s:9.5,m:true,c:C.mut});
+    const cellX=(p,i)=>g.qX0+6+g.sw*(i+.5);
+    for(const m of pl.msgs){
+      if(t<m.E)continue;
+      let x=cellX(m.part,m.cell),y=g.laneY(m.part),al=1;
+      if(t<m.arr){
+        const e=pathPos([{x:pCx,y:sy},{x:g.junA,y:sy},{x:g.junA,y:y},{x:x,y:y}],ez((t-m.E)/(m.arr-m.E)));x=e.x;y=e.y;al=cl((t-m.E)/.2);
+      }
+      numDot(c,x,y,rd,base,m.i+1,{al,fa:shade(m)});
+    }
+    for(const m of pl.msgs){
+      if(t<m.P)continue;
+      const cx0=cellX(m.part,m.cell),cy0=g.laneY(m.part);
+      let x,y,r=rd,rp=null;
+      if(t<m.P+tt){const e=pathPos([{x:cx0,y:cy0},{x:g.junB,y:cy0},{x:g.junB,y:sy},{x:cCx,y:sy}],ez((t-m.P)/tt));x=e.x;y=e.y}
+      else if(t<m.D){x=cCx;y=sy;rp=(t-m.P-tt)/pt}
+      else{const b=ez((t-m.D)/.45);x=lerp(cCx,binX(m.k),b);y=lerp(sy,g.binY+17,b);r=lerp(rd,6,b)}
+      if(rp!=null)ringProg(c,x,y,rd+3.5,rp,base);
+      numDot(c,x,y,r,base,m.i+1,{fa:shade(m)*.9});
+    }
+  }
+  const dn=pl.msgs.filter(m=>t>=m.D+.45).length;
+  numLabel(c,g.binX+g.binW/2,g.binY+g.binH+13,'처리 끝',String(dn),'건');
+}
+
+const SCN={
+ consume:{
+  tab:'소비 후',
+  legend:[['dot','점 1개 = 메시지 1건']],
+  info:'RabbitMQ는 ACK를 받은 메시지를 큐에서 지워요. Kafka는 보존 기간 동안 로그에 남겨서 처음부터 다시 읽을 수 있어요.',
+  exp:{
+    r:['소비자가 메시지를 읽고 ACK를 보내면 브로커가 그 메시지를 큐에서 지워요.','그래서 처리한 메시지를 다시 읽을 수 없어요. 다시 처리하려면 생산자가 저장해 둔 메시지를 다시 보내야 해요.'],
+    k:['메시지는 로그 파일에 추가되고, 보존 기간이 끝날 때까지 남아 있어요.','소비자는 마지막으로 읽은 위치(오프셋)만 기억해요. 오프셋을 되돌리면 같은 메시지를 다시 처리할 수 있어요.']
+  },
+  type:'single',
+  S:{free0:.3,replay:true,ack:{r:true,k:false},retain:{r:false,k:true},
+     msgs:Array.from({length:8},(_,i)=>({E:.5+.7*i,arr:1.1+.7*i}))},
+  status(kind,t,pl){
+    if(kind==='r')return t<pl.tRe?['ok','ACK를 받으면 큐에서 지워요']:['bad','큐가 비었어요 · 생산자가 다시 보내야 해요'];
+    return t<pl.tRe?['ok','읽어도 로그에 그대로 남아요']:['ok','오프셋을 되돌려 처음부터 다시 읽어요'];
+  },
+  rows(kind,pl){
+    const p1=pl.copies.filter(c=>c.pass===1).map(c=>({a:c.P,b:c.D,k:'bar'}));
+    if(kind==='r')return[{label:'처리',segs:p1},{label:'다시 읽기',segs:[{a:pl.tRe,b:pl.tRe+3.2,k:'wait',txt:'읽을 메시지 없음'}]}];
+    return[{label:'처리',segs:p1},{label:'다시 읽기',segs:pl.copies.filter(c=>c.pass===2).map(c=>({a:c.P,b:c.D,k:'bar'}))}];
+  },
+  markers(pl){return[{t:pl.tRe,text:'다시 읽기'}]}
+ },
+ fail:{
+  tab:'소비자 장애',
+  legend:[['dot','점 번호 = 메시지 번호'],['retry','다시 처리']],
+  info:'RabbitMQ는 ACK를 받지 못한 메시지를 큐에 되돌려요. Kafka는 소비자가 마지막으로 커밋한 위치부터 다시 읽어요.',
+  exp:{
+    r:['소비자가 ACK를 보내기 전에 연결이 끊기면, RabbitMQ는 그 메시지를 큐에 다시 넣어요. 다시 넣은 메시지에는 redelivered 표시가 붙어요.','다시 넣은 메시지는 큐의 원래 위치로 돌아가거나 그보다 앞쪽에 들어가요. 다른 소비자가 받을 수도 있어요.'],
+    k:['Kafka는 메시지를 지우지 않아서, 소비자는 읽은 위치(오프셋)를 커밋해 두고 장애가 나면 마지막으로 커밋한 위치부터 다시 읽어요.','커밋하기 전에 처리한 메시지는 다시 읽혀요. 그래서 같은 메시지가 두 번 처리될 수 있어요.']
+  },
+  type:'fail',
+  status(kind,t,pl){
+    if(t<pl.tF)return['neu','4번 메시지를 처리 중이에요'];
+    if(t<pl.tR)return kind==='r'?['bad','ACK가 없어서 4번을 큐에 되돌려요']:['bad','소비자가 끊겼어요'];
+    return kind==='r'?['ok','되돌린 4번부터 다시 처리해요']:['ok','커밋한 위치(3번)부터 다시 읽어요'];
+  },
+  rows(kind,pl){
+    const ok=pl.at.filter(a=>!a.fail).map(a=>({a:a.P,b:a.D,k:'bar',col:a.again?'retry':null}));
+    const bad=pl.at.filter(a=>a.fail).map(a=>({a:a.P,b:a.D,k:'bar',col:'bad'}));
+    return[{label:'처리',segs:ok.concat(bad)},{label:'끊김',segs:[{a:pl.tF,b:pl.tR,k:'wait'}]}];
+  },
+  markers(pl){return[{t:pl.tF,text:'소비자 끊김'}]}
+ },
+ multi:{
+  tab:'소비자 여러 명',
+  legend:[['dot','점 번호 = 메시지 번호']],
+  info:'RabbitMQ는 한 큐의 메시지를 소비자들에게 번갈아 나눠 줘요. Kafka는 소비자 그룹마다 모든 메시지를 각자 읽어요.',
+  exp:{
+    r:['한 큐에 소비자가 여러 명 붙으면, 활성 소비자에게 메시지를 기본적으로 번갈아(라운드 로빈) 보내요.','메시지 하나는 보통 소비자 한 명만 받아요. 소비자를 늘리면 처리를 나눌 수 있어요.'],
+    k:['메시지가 지워지지 않아서, 소비자 그룹마다 자기 읽을 위치를 따로 갖고 모든 메시지를 읽어요.','같은 그룹 안에서는 파티션 하나를 소비자 한 명만 읽어요. 이 그림은 서로 다른 그룹 두 개예요.']
+  },
+  type:'multi',
+  status(kind){return kind==='r'?['ok','메시지가 소비자 3명에게 번갈아 가요']:['ok','두 그룹이 모든 메시지를 각자 읽어요']},
+  rows(kind,pl){
+    const ids=kind==='r'?[0,1,2]:[0,1];
+    return ids.map(c=>({label:kind==='r'?'소비자 '+(c+1):'그룹 '+'AB'[c],segs:pl.copies.filter(cp=>cp.c===c).map(cp=>({a:cp.P,b:cp.D,k:'bar'}))}));
+  },
+  markers(){return[]}
+ },
+ order:{
+  tab:'순서',
+  legend:[['dot','점 번호 = 보낸 순서'],['sh','파티션 0',1],['sh','파티션 1',.6]],
+  info:'RabbitMQ는 큐 하나에서 보낸 순서대로 전달해요. Kafka는 파티션 안에서만 순서를 지켜서, 파티션이 여러 개면 읽는 순서가 섞일 수 있어요.',
+  exp:{
+    r:['큐 하나에 소비자 한 명이면, 메시지는 보낸 순서대로 전달돼요.','그래서 1번부터 8번까지 처리 순서가 보낸 순서와 같아요.'],
+    k:['Kafka는 한 파티션 안에서만 순서를 보장해요. 같은 키의 메시지는 같은 파티션에 들어가요.','파티션이 둘 이상이면 파티션 사이의 순서는 보장되지 않아서, 읽는 순서가 보낸 순서와 달라질 수 있어요.']
+  },
+  type:'order',
+  status(kind,t,pl){
+    if(kind==='r')return['ok','보낸 순서대로 처리해요'];
+    return t<pl.mixT?['neu','파티션 안에서는 순서가 지켜져요']:['bad','파티션 사이에서는 순서가 섞여요'];
+  },
+  rows(kind,pl){
+    if(kind==='r')return[{label:'처리',segs:pl.msgs.map(m=>({a:m.P,b:m.D,k:'bar'}))}];
+    return[0,1].map(p=>({label:'파티션 '+p,segs:pl.msgs.filter(m=>m.part===p).map(m=>({a:m.P,b:m.D,k:'bar'}))}));
+  },
+  markers(pl){return pl.mixT!=null?[{t:pl.mixT,text:'순서가 섞임'}]:[]}
+ },
+ priority:{
+  tab:'우선순위',
+  legend:[['dot','점 1개 = 메시지 1건'],['bad','긴급 메시지']],
+  info:'RabbitMQ는 우선순위 큐로 긴급 메시지를 앞줄에 세울 수 있어요. Kafka는 우선순위가 없어서 도착한 순서대로 읽어요.',
+  exp:{
+    r:['우선순위 큐를 쓰면 브로커가 선입선출 대신 우선순위가 높은 메시지를 먼저 보내요.','예를 들어 관리자가 백업 데이터베이스 메시지를 올리면, 먼저 쌓여 있던 일반 메시지보다 앞서 전달돼요.'],
+    k:['Kafka는 우선순위 큐를 지원하지 않아요.','메시지를 파티션에 나눌 때 모두 똑같이 다루기 때문에, 긴급 메시지도 도착한 순서를 기다려야 해요.']
+  },
+  type:'single',
+  S:{free0:.4,replay:false,ack:{r:true,k:false},retain:{r:false,k:true},
+     msgs:[...Array.from({length:6},()=>({E:-2,arr:-1,pre:true})),{E:1.4,arr:2.0,pri:1,focus:true}]},
+  status(kind,t){
+    if(t<1.4)return['neu','일반 메시지 6건이 순서대로 기다려요'];
+    return kind==='r'?['ok','긴급 메시지가 앞줄로 들어가요']:['bad','긴급 메시지도 맨 뒤에서 기다려요'];
+  },
+  rows(kind,pl){
+    const u=pl.msgs.find(m=>m.pri);
+    const urg=[];
+    if(u.P-u.arr>.25)urg.push({a:u.arr,b:u.P,k:'wait'});
+    urg.push({a:u.P,b:u.D,k:'bar',col:'bad'});
+    return[{label:'일반',segs:pl.msgs.filter(m=>!m.pri).map(m=>({a:m.P,b:m.D,k:'bar'}))},{label:'긴급',segs:urg}];
+  },
+  markers(){return[{t:1.4,text:'긴급 메시지 전송'}]}
+ },
+ route:{
+  tab:'라우팅',
+  legend:[['dot','점 1개 = 메시지 1건'],['sh','주문',1],['sh','결제',.6],['sh','알림',.32]],
+  info:'RabbitMQ는 거래소가 라우팅 키로 큐를 정해요. Kafka는 메시지 키로 토픽의 파티션이 정해지고, 소비자가 가져가요.',
+  exp:{
+    r:['거래소는 생산자의 메시지를 받아서 큐로 나눠 주는 구성 요소예요. 메시지에 담긴 라우팅 키를 보고 어느 큐에 넣을지 정해요.','거래소와 큐를 잇는 경로(바인딩)를 설정해서 키마다 다른 큐, 다른 애플리케이션으로 데이터를 보낼 수 있어요. 복잡한 라우팅이 필요할 때 알맞아요.'],
+    k:['생산자가 메시지마다 메시지 키를 붙이면, 브로커가 토픽의 파티션에 메시지를 저장해요.','소비자는 구독한 파티션에서 메시지를 직접 가져가요. 파티션을 늘리면 메시지 부하를 나눌 수 있어요.']
+  },
+  type:'route',
+  status(kind){return kind==='r'?['ok','거래소가 라우팅 키로 큐를 골라요']:['ok','메시지 키로 파티션이 정해져요']},
+  rows(kind,pl){
+    return[0,1,2].map(l=>({label:kind==='r'?KEYS[l]:'파티션 '+l,segs:pl.lanes[l].map(m=>({a:m.P,b:m.D,k:'bar'}))}));
+  },
+  markers(){return[]}
+ },
+ thru:{
+  tab:'처리량',
+  unit:2000,
+  legend:[['dot','점 1개 = 메시지 2,000건']],
+  info:'Kafka는 순차 디스크 I/O로 초당 최대 수백만 건을 보내요. RabbitMQ는 평균 초당 수천 건이라 같은 양이 들어오면 큐에 쌓여요.',
+  exp:{
+    r:['RabbitMQ의 처리 속도는 평균 초당 수천 건이고, 큐가 혼잡하면 더 느려질 수 있어요.','초당 수백만 건을 보내려면 브로커가 여러 개 필요해요.'],
+    k:['순차 디스크 I/O를 써서 초당 최대 수백만 건을 보낼 수 있어요.','순차 디스크 I/O는 인접한 공간에 데이터를 저장하고 읽기 때문에 임의 접근보다 빨라요.']
+  },
+  type:'single',
+  S:{free0:.3,replay:false,cap:9,ack:{r:false,k:false},retain:{r:false,k:false},
+     cyc:{r:{tt:.25,pt:.417,gap:0},k:{tt:.2,pt:.1,gap:0}},
+     msgs:Array.from({length:12},(_,i)=>({E:.5+.4*i,arr:1.0+.4*i,focus:i===11}))},
+  status(kind,t,pl){
+    if(kind==='k')return['ok','들어오는 속도를 따라가요'];
+    const n=pl.msgs.filter(m=>m.arr<=t&&m.P>t).length;
+    return n>=3?['bad','처리가 못 따라가서 큐에 쌓여요']:['neu','메시지를 처리 중이에요'];
+  },
+  rows(kind,pl){
+    const last=pl.msgs[pl.msgs.length-1];
+    const es=pl.msgs.map(m=>m.E);
+    const lastSegs=[];
+    if(last.P-last.arr>.25)lastSegs.push({a:last.arr,b:last.P,k:'wait'});
+    lastSegs.push({a:last.P,b:last.D,k:'bar'});
+    return[{label:'생산',segs:[{a:Math.min(...es),b:Math.max(...es)+.3,k:'bar'}]},{label:'마지막',segs:lastSegs}];
+  },
+  markers(pl){return[{t:Math.max(...pl.msgs.map(m=>m.E))+.3,text:'생산 끝'}]}
+ }
+};
+const ORDER=['consume','fail','multi','order','priority','route','thru'];
+
+/* ---------- 상태 ---------- */
+let SC=null,SID='',PL={},T=10,G={},fixed=null,el=0,visible=!EMBED&&true,lastNow=null;
+const $=id=>document.getElementById(id);
+const CV={r:$('cv-r'),k:$('cv-k'),t:$('cv-t')};
+const CX={r:CV.r.getContext('2d'),k:CV.k.getContext('2d'),t:CV.t.getContext('2d')};
+
+function mount(id){
+  SID=id;SC=SCN[id];
+  PL={};
+  for(const kind of['r','k']){
+    if(SC.type==='route')PL[kind]=routePlan(kind);
+    else if(SC.type==='fail')PL[kind]=failPlan(kind);
+    else if(SC.type==='multi')PL[kind]=multiPlan(kind);
+    else if(SC.type==='order')PL[kind]=orderPlan(kind);
+    else{
+      const S=Object.assign({},SC.S,{ack:SC.S.ack[kind],retain:SC.S.retain[kind]});
+      PL[kind]=singlePlan(S,kind);PL[kind].o=S;
+    }
+  }
+  T=Math.max(PL.r.endD,PL.k.endD)+1.5;
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.id===id?'true':'false'));
+  // 범례·설명
+  const lg=$('legend');lg.innerHTML='';
+  SC.legend.forEach((it,i)=>{
+    if(i>0){const s=document.createElement('span');s.className='sep';s.textContent='·';lg.appendChild(s)}
+    const d=document.createElement('span');d.className='ld';
+    if(it[0]==='bad')d.style.background='var(--bad)';
+    if(it[0]==='retry')d.style.background='var(--retry)';
+    if(it[0]==='sh'){d.style.opacity=it[2]}
+    lg.appendChild(d);
+    const tn=document.createElement('span');tn.textContent=it[1];lg.appendChild(tn);
+  });
+  $('info').textContent='ⓘ '+SC.info;
+  for(const kind of['r','k']){
+    const ex=$('ex-'+kind);ex.innerHTML='';
+    const h=document.createElement('h3');h.textContent=(kind==='r'?'RabbitMQ':'Kafka')+' · '+SC.tab;ex.appendChild(h);
+    SC.exp[kind].forEach(s=>{const p=document.createElement('p');p.textContent=s;ex.appendChild(p)});
+  }
+  el=0;lastStatus={};
+  layout();
+}
+let lastStatus={};
+
+/* ---------- 배치 ---------- */
+function sizeCanvas(cv,W,H){
+  const d=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(W*d);cv.height=Math.round(H*d);cv.style.height=H+'px';
+  cv.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+function geomSingle(W,cap){
+  const pad=8,g={W,pad,cap};
+  g.pw=Math.max(48,Math.round(W*.15));g.cw=Math.max(58,Math.round(W*.17));
+  const gap=Math.max(30,Math.round(W*.075));
+  g.pX=pad;g.pR=pad+g.pw;g.cX=W-pad-g.cw;g.qL=g.pR+gap;g.qR=g.cX-gap;g.qW=g.qR-g.qL;
+  g.y0=34;g.h=56;g.sy=g.y0+g.h-20;
+  g.sw=(g.qW-12)/cap;g.rd=Math.min(7,g.sw*.3);
+  g.binW=Math.max(g.cw,92);g.binX=W-pad-g.binW;g.binY=g.y0+g.h+30;g.binH=36;
+  g.nc=Math.floor((g.binW-10)/9.5);
+  g.cdx=g.cX+g.cw/2;g.pdx=g.pX+g.pw/2;
+  g.H=g.binY+g.binH+22;
+  return g;
+}
+function geomRoute(W,kind){
+  const f=a=>Math.round(W*a),g={W,kind};
+  g.pX0=f(.02);g.pX1=f(.12);g.eX0=f(.17);g.eX1=f(.40);
+  g.qX0=kind==='r'?f(.47):f(.24);g.qX1=f(.76);g.cX0=f(.82);g.cX1=f(.985);
+  g.lt=r=>34+r*62;g.ly=r=>g.lt(r)+27;
+  g.cap=4;g.sw=(g.qX1-g.qX0-12)/4;g.rd=Math.min(6.5,g.sw*.3);
+  g.midY=g.ly(1);g.botY=g.lt(2)+44;
+  g.junX=kind==='r'?(g.eX1+g.qX0)/2:(g.pX1+g.qX0)/2;
+  g.H=g.botY+28;
+  return g;
+}
+function ttLayout(W){
+  const rowsR=SC.rows('r',PL.r),rowsK=SC.rows('k',PL.k);
+  const L={W,blocks:[{name:'RabbitMQ',col:'cur',rows:rowsR},{name:'Kafka',col:'wrk',rows:rowsK}]};
+  L.x0=62;L.x1=W-22;
+  let y=18;
+  L.blocks.forEach(b=>{b.y=y;y+=18+b.rows.length*30+8});
+  L.axisY=y+4;L.H=y+24;
+  return L;
+}
+function layout(){
+  const W=Math.max(280,Math.floor($('cw-r').clientWidth));
+  for(const kind of['r','k']){
+    G[kind]=SC.type==='route'?geomRoute(W,kind):SC.type==='multi'?geomMulti(W):SC.type==='order'?geomOrder(W,kind):geomSingle(W,(SC.S&&SC.S.cap)||8);
+    sizeCanvas(CV[kind],W,G[kind].H);
+  }
+  G.t=ttLayout(W);sizeCanvas(CV.t,W,G.t.H);
+  frame(fixed!=null?fixed:tNow());
+}
+
+/* ---------- 한 줄 그림 (우선순위 큐 / 로그) ---------- */
+function drawSingle(c,g,pl,t,kind){
+  const o=pl.o,base=kind==='r'?C.cur:C.wrk,retain=o.retain,ack=o.ack;
+  const sy=g.sy,rd=g.rd;
+  c.clearRect(0,0,g.W,g.H);
+  box(c,g.pX,g.y0,g.pw,g.h);tx(c,'생산자',g.pX+g.pw/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.qL,g.y0,g.qW,g.h,{stroke:base,lw:1.7});
+  tx(c,kind==='r'?'큐':'로그',g.qL+g.qW/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.cX,g.y0,g.cw,g.h);tx(c,'소비자',g.cX+g.cw/2,g.y0+11,{s:10.5,c:C.mut});
+  box(c,g.binX,g.binY,g.binW,g.binH,{dash:[3,3]});
+  // 선
+  poly(c,[{x:g.pR,y:sy},{x:g.qL,y:sy}],{head:true});
+  const gm=(g.qR+g.cX)/2;
+  const blocked=kind==='r'&&pl.tRe!=null&&t>=pl.tRe;
+  if(kind==='r'&&blocked){
+    // 막힌 뒤에는 화살표와 글자를 지우고 빨간 막대만 둔다
+  }else if(kind==='r'){
+    poly(c,[{x:g.qR,y:sy-8},{x:g.cX,y:sy-8}],{head:true});
+    tx(c,'push',gm,sy-16,{s:9.5,m:true,c:C.mut});
+    if(ack)ackDraw(c,g,pl.copies.map(cp=>cp.D),t,gm,sy);
+  }else{
+    poly(c,[{x:g.cX,y:sy-8},{x:g.qR,y:sy-8}],{head:true,dash:[3,3]});
+    tx(c,'pull',gm,sy-16,{s:9.5,m:true,c:C.mut});
+  }
+  const slotX=r=>g.qR-8-g.sw*(Math.min(r,g.cap-1)+.5);
+  const cellX=i=>g.qL+6+g.sw*(i+.5);
+  const binP=k=>({x:g.binX+8+(k%g.nc)*9.5+4,y:g.binY+11+Math.floor(k/g.nc)*11});
+  const colOf=m=>m.pri?C.bad:base;
+  // 로그 칸
+  if(retain){
+    for(let i=0;i<g.cap;i++){
+      const reading=pl.copies.some(cp=>cp.m.cell===i&&t>=cp.P&&t<cp.D);
+      rr(c,g.qL+6+g.sw*i+1.5,sy-12,g.sw-3,24,5);
+      c.lineWidth=reading?2:1;c.strokeStyle=reading?base:C.line;c.stroke();
+      tx(c,String(i),cellX(i),sy+16,{s:9,m:true,c:C.mut});
+    }
+    tx(c,'다음에 읽을 위치',g.qL+2,g.y0-18,{s:10,c:C.mut,a:'left'});
+    // 오프셋 표시
+    let p1=0,p2=0;
+    for(const cp of pl.copies){const v=ez((t-cp.D)/.25);if(cp.pass===1)p1+=v;else p2+=v}
+    let p=p1;
+    if(pl.tRe!=null){const r=ez((t-pl.tRe)/.5);p=p1*(1-r)+p2}
+    const px=Math.min(g.qL+6+g.sw*(Math.min(p,g.cap-1)+.5),g.qR-6);
+    c.fillStyle=base;c.beginPath();c.moveTo(px,g.y0-2);c.lineTo(px-5,g.y0-10);c.lineTo(px+5,g.y0-10);c.closePath();c.fill();
+  }
+  // 다시 읽기 막힘 (RabbitMQ)
+  if(kind==='r'&&pl.tRe!=null&&t>=pl.tRe){
+    c.fillStyle=C.bad;rr(c,gm-3,sy-17,6,34,3);c.fill();
+    c.font=`600 11px ${FS}`;const tw=c.measureText('읽을 메시지 없음').width;
+    tx(c,'읽을 메시지 없음',cl(gm,8+tw/2,g.W-8-tw/2),g.y0-14,{s:11,w:600,c:C.bad});
+  }
+  // 점
+  const drawRing=(x,y,p,col)=>ringProg(c,x,y,rd+3.5,p,col);
+  if(!retain){
+    for(const cp of pl.copies){
+      const m=cp.m;if(t<m.E)continue;
+      let x,y=sy,al=1,rp=null,r=rd;
+      if(t<m.arr){const u=ez((t-m.E)/(m.arr-m.E));x=lerp(g.pdx,slotX(rankIn(pl.msgs,m,t,ack)),u);al=cl((t-m.E)/.2)}
+      else if(t<m.P)x=slotX(rankIn(pl.msgs,m,t,ack));
+      else if(t<m.P+pl.tt){const s0=slotX(rankIn(pl.msgs,m,m.P,ack));x=lerp(s0,g.cdx,ez((t-m.P)/pl.tt))}
+      else if(t<m.D){x=g.cdx;rp=(t-m.P-pl.tt)/pl.pt}
+      else{const b=binP(cp.bin),u=ez((t-m.D)/.45);x=lerp(g.cdx,b.x,u);y=lerp(sy,b.y,u);r=lerp(rd,3.5,u)}
+      if(rp!=null)drawRing(x,y,rp,base);
+      if(isWait(m,t))waitRing(c,x,y,r);
+      dot(c,x,y,r,colOf(m),{al});
+      if(ack&&t>=m.P&&t<m.D+.3){
+        const gx=slotX(rankIn(pl.msgs,m,t,true)),ga=t<m.D?1:1-(t-m.D)/.3;
+        c.globalAlpha=ga*.8;c.strokeStyle=base;c.lineWidth=1.4;c.setLineDash([2.5,2.5]);
+        c.beginPath();c.arc(gx,sy,rd,0,Math.PI*2);c.stroke();c.setLineDash([]);c.globalAlpha=1;
+      }
+    }
+  }else{
+    for(const m of pl.msgs){
+      if(t<m.E)continue;
+      let x=cellX(m.cell),al=1;
+      if(t<m.arr){x=lerp(g.pdx,cellX(m.cell),ez((t-m.E)/(m.arr-m.E)));al=cl((t-m.E)/.2)}
+      if(isWait(m,t))waitRing(c,x,sy,rd);
+      dot(c,x,sy,rd,colOf(m),{al});
+    }
+    for(const cp of pl.copies){
+      const m=cp.m;if(t<cp.P)continue;
+      let x,y=sy,rp=null,r=rd;
+      if(t<cp.P+pl.tt)x=lerp(cellX(m.cell),g.cdx,ez((t-cp.P)/pl.tt));
+      else if(t<cp.D){x=g.cdx;rp=(t-cp.P-pl.tt)/pl.pt}
+      else{const b=binP(cp.bin),u=ez((t-cp.D)/.45);x=lerp(g.cdx,b.x,u);y=lerp(sy,b.y,u);r=lerp(rd,3.5,u)}
+      if(rp!=null)drawRing(x,y,rp,base);
+      dot(c,x,y,r,colOf(m),{fa:.7});
+    }
+  }
+  // 숫자
+  const unit=SC.unit||1;
+  let qn,ql;
+  if(kind==='r'){
+    qn=pl.msgs.filter(m=>m.arr<=t&&(ack?t<m.D:t<m.P)).length;ql=SC.unit?'큐에 쌓임':'큐에 남음';
+  }else if(retain){qn=pl.msgs.filter(m=>m.arr<=t).length;ql='로그에 남음'}
+  else{qn=pl.msgs.filter(m=>m.arr<=t&&t<m.P).length;ql='못 읽은 메시지'}
+  numLabel(c,g.qL+g.qW/2,g.y0+g.h+14,ql,fmt(qn*unit),'건',base);
+  const dn=pl.copies.filter(cp=>t>=cp.D+.45).length;
+  numLabel(c,g.binX+g.binW/2,g.binY+g.binH+13,'처리 끝',fmt(dn*unit),'건');
+}
+
+/* ---------- 라우팅 그림 ---------- */
+function drawRoute(c,g,pl,t,kind){
+  const base=kind==='r'?C.cur:C.wrk,rd=g.rd,midY=g.midY;
+  c.clearRect(0,0,g.W,g.H);
+  const top=g.lt(0),hh=g.botY-top;
+  box(c,g.pX0,top,g.pX1-g.pX0,hh);tx(c,'생산자',(g.pX0+g.pX1)/2,top+11,{s:10.5,c:C.mut});
+  const pCx=(g.pX0+g.pX1)/2,eCx=(g.eX0+g.eX1)/2;
+  // 생산자가 방금 보낸 메시지의 키
+  const em=[...pl.msgs].reverse().find(m=>t>=m.E&&t<m.E+.9);
+  if(em){tx(c,'키',pCx,top+27,{s:9.5,c:C.mut});tx(c,KEYS[em.key],pCx,top+41,{s:10,w:600})}
+  if(kind==='r'){
+    box(c,g.eX0,top,g.eX1-g.eX0,hh,{stroke:base,lw:1.7});tx(c,'거래소',eCx,top+11,{s:10.5,c:C.mut});
+    poly(c,[{x:g.pX1,y:midY},{x:g.eX0,y:midY}],{head:true});
+    poly(c,[{x:g.eX1,y:midY},{x:g.junX,y:midY}]);
+  }else{
+    rr(c,g.qX0-6,top-17,g.qX1-g.qX0+12,hh+37,9);c.setLineDash([4,3]);c.lineWidth=1.2;c.strokeStyle=base;c.stroke();c.setLineDash([]);
+    tx(c,'토픽',g.qX0,top-9,{s:10,c:C.mut,a:'left'});
+    poly(c,[{x:g.pX1,y:midY},{x:g.junX,y:midY}]);
+  }
+  poly(c,[{x:g.junX,y:g.ly(0)},{x:g.junX,y:g.ly(2)}]);
+  for(let l=0;l<3;l++){
+    const lt=g.lt(l),ly=g.ly(l);
+    poly(c,[{x:g.junX,y:ly},{x:g.qX0,y:ly}],{head:true});
+    const flash=pl.lanes[l].some(m=>t>=m.arr&&t<m.arr+.5);
+    box(c,g.qX0,lt,g.qX1-g.qX0,44,{stroke:base,lw:flash?3.4:1.7});
+    tx(c,kind==='r'?KEYS[l]+' 큐':'파티션 '+l+' · '+KEYS[l],(g.qX0+g.qX1)/2,lt+9,{s:10,c:C.mut});
+    box(c,g.cX0,lt,g.cX1-g.cX0,44);
+    tx(c,kind==='r'?KEYS[l]+' 앱':'소비자 '+(l+1),(g.cX0+g.cX1)/2,lt+9,{s:10,c:C.mut});
+    if(kind==='r')poly(c,[{x:g.qX1,y:ly},{x:g.cX0,y:ly}],{head:true});
+    else poly(c,[{x:g.cX0,y:ly},{x:g.qX1,y:ly}],{head:true,dash:[3,3]});
+    if(kind==='k'){
+      for(let i=0;i<g.cap;i++){
+        const reading=pl.lanes[l].some(m=>m.cell===i&&t>=m.P&&t<m.D);
+        rr(c,g.qX0+6+g.sw*i+1.5,ly-12,g.sw-3,24,5);c.lineWidth=reading?2:1;c.strokeStyle=reading?base:C.line;c.stroke();
+      }
+    }
+  }
+  const slotX=r=>g.qX1-8-g.sw*(Math.min(r,g.cap-1)+.5);
+  const cellX=i=>g.qX0+6+g.sw*(i+.5);
+  const cCx=(g.cX0+g.cX1)/2;
+  const stackP=(l,st)=>({x:g.cX0+10+st*8.5,y:g.lt(l)+39});
+  const shade=m=>m.key===0?1:m.key===1?.6:.32;
+  for(const m of pl.msgs){
+    if(t<m.E)continue;
+    const l=m.lane,ly=g.ly(l),L=pl.lanes[l];
+    const fa=shade(m);let x,y=ly,al=1,rp=null,r=rd;
+    if(kind==='r'){
+      const ae=m.E+.5,he=m.E+1.1;
+      if(t<ae){const p=lerp(pCx,eCx,ez((t-m.E)/.5));x=p;y=midY;al=cl((t-m.E)/.2)}
+      else if(t<he){x=eCx;y=midY}
+      else if(t<m.arr){
+        const e=pathPos([{x:eCx,y:midY},{x:g.junX,y:midY},{x:g.junX,y:ly},{x:slotX(rankIn(L,m,t,false)),y:ly}],ez((t-he)/(m.arr-he)));x=e.x;y=e.y;
+      }
+      else if(t<m.P)x=slotX(rankIn(L,m,t,false));
+      else if(t<m.P+pl.tt){const s0=slotX(rankIn(L,m,m.P,false));x=lerp(s0,cCx,ez((t-m.P)/pl.tt))}
+      else if(t<m.D){x=cCx;rp=(t-m.P-pl.tt)/pl.pt}
+      else{const b=stackP(l,m.st),u=ez((t-m.D)/.45);x=lerp(cCx,b.x,u);y=lerp(ly,b.y,u);r=lerp(rd,3,u)}
+      if(rp!=null)ringProg(c,x,y,rd+3,rp,base);
+      dot(c,x,y,r,base,{al,fa});
+      if(t<m.arr)tag(c,x,y,rd,KEYS[m.key],al,x>g.qX0-6);
+    }else{
+      if(t<m.arr){
+        const e=pathPos([{x:pCx,y:midY},{x:g.junX,y:midY},{x:g.junX,y:ly},{x:cellX(m.cell),y:ly}],ez((t-m.E)/(m.arr-m.E)));
+        x=e.x;y=e.y;al=cl((t-m.E)/.2);
+      }else x=cellX(m.cell);
+      dot(c,x,y,rd,base,{al,fa});
+      if(t<m.arr)tag(c,x,y,rd,KEYS[m.key],al,x>g.qX0-6);
+      if(t>=m.P){
+        let cx,cy=ly,rr2=rd;
+        if(t<m.P+pl.tt)cx=lerp(cellX(m.cell),cCx,ez((t-m.P)/pl.tt));
+        else if(t<m.D){cx=cCx;ringProg(c,cx,cy,rd+3,(t-m.P-pl.tt)/pl.pt,base)}
+        else{const b=stackP(l,m.st),u=ez((t-m.D)/.45);cx=lerp(cCx,b.x,u);cy=lerp(ly,b.y,u);rr2=lerp(rd,3,u)}
+        dot(c,cx,cy,rr2,base,{fa:fa*.8});
+      }
+    }
+  }
+  // 숫자
+  for(let l=0;l<3;l++){
+    const L=pl.lanes[l];
+    const n=kind==='r'?L.filter(m=>m.arr<=t&&t<m.P).length:L.filter(m=>m.arr<=t).length;
+    numLabel(c,(g.qX0+g.qX1)/2,g.lt(l)+53,kind==='r'?'큐에 남음':'파티션에 남음',String(n),'건',base);
+  }
+}
+
+/* ---------- 시간표 ---------- */
+function drawTT(c,L,t){
+  const W=L.W;c.clearRect(0,0,W,L.H);
+  const px=s=>L.x0+(L.x1-L.x0)*s/T;
+  tx(c,t.toFixed(1)+'초',8,8,{s:10,m:true,c:C.mut,a:'left'});
+  // 기준선
+  for(const mk of SC.markers(PL.k)){
+    const x=px(mk.t);
+    c.strokeStyle=C.mut;c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.moveTo(x,14);c.lineTo(x,L.axisY);c.stroke();c.setLineDash([]);
+    c.font=`400 10.5px ${FS}`;const tw=c.measureText(mk.text).width;
+    tx(c,mk.text,cl(x,L.x0-4+tw/2,W-8-tw/2),8,{s:10.5,c:C.mut});
+  }
+  for(const b of L.blocks){
+    const col=C[b.col];
+    tx(c,b.name,8,b.y+8,{s:11,w:600,c:col,a:'left'});
+    b.rows.forEach((row,ri)=>{
+      const ry=b.y+18+ri*30;
+      tx(c,row.label,8,ry+21,{s:10.5,c:C.mut,a:'left'});
+      c.strokeStyle=C.line;c.lineWidth=1;c.beginPath();c.moveTo(L.x0,ry+29.5);c.lineTo(L.x1,ry+29.5);c.stroke();
+      for(const sg of row.segs){
+        if(t<=sg.a)continue;
+        const b1=Math.min(sg.b,t),xa=px(sg.a),xb=px(b1);
+        if(sg.k==='bar'){
+          c.globalAlpha=.9;c.fillStyle=sg.col?C[sg.col]:col;rr(c,xa,ry+15,Math.max(2,xb-xa),12,3);c.fill();c.globalAlpha=1;
+        }else{
+          const w=xb-xa,live=t<sg.b;
+          c.globalAlpha=.1;c.fillStyle=C.bad;rr(c,xa,ry+13,w,16,3);c.fill();c.globalAlpha=1;
+          c.strokeStyle=C.bad;c.lineWidth=1.2;c.setLineDash([3,2.5]);rr(c,xa,ry+13,w,16,3);c.stroke();c.setLineDash([]);
+          if(live){c.beginPath();c.arc(xb,ry+21,4,0,Math.PI*2);c.fillStyle=C.bad;c.fill()}
+          const full=px(sg.b)-xa;
+          const txt=sg.txt||(live?(t-sg.a).toFixed(1)+'초째 기다리는 중':(sg.b-sg.a).toFixed(1)+'초 기다림');
+          c.font=`400 10px ${FS}`;const tw=c.measureText(txt).width;
+          if(!live&&full>=70)tx(c,txt,xa+full/2,ry+21,{s:10,c:C.bad});
+          else tx(c,txt,cl(xa,L.x0,W-8-tw),ry+6,{s:10,c:C.bad,a:'left'});
+        }
+      }
+    });
+  }
+  // 축
+  c.strokeStyle=C.line;c.lineWidth=1;c.beginPath();c.moveTo(L.x0,L.axisY);c.lineTo(L.x1,L.axisY);c.stroke();
+  for(let s=0;s<=T;s+=2){
+    const x=px(s);c.beginPath();c.moveTo(x,L.axisY);c.lineTo(x,L.axisY+3);c.stroke();
+    tx(c,String(s),x,L.axisY+12,{s:9,m:true,c:C.mut});
+  }
+  tx(c,'초',L.x1+9,L.axisY+12,{s:9,c:C.mut,a:'left'});
+  // 현재 시각
+  const xt=px(t);
+  c.strokeStyle=C.fg;c.globalAlpha=.55;c.lineWidth=1.5;c.beginPath();c.moveTo(xt,14);c.lineTo(xt,L.axisY);c.stroke();c.globalAlpha=1;
+}
+
+/* ---------- 프레임 ---------- */
+function setStatus(kind,st){
+  const el_=$('st-'+kind),key=st[0]+st[1];
+  if(lastStatus[kind]===key)return;lastStatus[kind]=key;
+  el_.className='status '+st[0];el_.textContent=st[1];
+}
+function frame(t){
+  if(!SC)return;
+  readColors();
+  for(const kind of['r','k']){
+    if(SC.type==='route')drawRoute(CX[kind],G[kind],PL[kind],t,kind);
+    else if(SC.type==='fail')drawFail(CX[kind],G[kind],PL[kind],t,kind);
+    else if(SC.type==='multi')drawMulti(CX[kind],G[kind],PL[kind],t,kind);
+    else if(SC.type==='order')drawOrder(CX[kind],G[kind],PL[kind],t,kind);
+    else drawSingle(CX[kind],G[kind],PL[kind],t,kind);
+    setStatus(kind,SC.status(kind,t,PL[kind]));
+  }
+  drawTT(CX.t,G.t,t);
+}
+function tNow(){return Math.min(T,el%(T+2.5))}
+
+/* ---------- 재생 ---------- */
+function loop(now){
+  if(lastNow==null)lastNow=now;
+  const dt=Math.min(.1,(now-lastNow)/1000);lastNow=now;
+  if(visible&&fixed==null)el+=dt;
+  frame(fixed!=null?fixed:tNow());
+  requestAnimationFrame(loop);
+}
+
+/* ---------- 시작 ---------- */
+const tabs=$('tabs');
+ORDER.forEach(id=>{
+  const b=document.createElement('button');b.className='tab';b.type='button';b.dataset.id=id;b.textContent=SCN[id].tab;b.setAttribute('role','tab');
+  b.addEventListener('click',()=>mount(id));tabs.appendChild(b);
+});
+$('rs').addEventListener('click',()=>{el=0;fixed=null});
+let sid=Q.get('s');if(!SCN[sid])sid='consume';
+if(EMBED){
+  visible=false;
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(es=>{es.forEach(e=>{visible=e.isIntersecting})},{threshold:.2}).observe($('wrap'));
+  }else visible=true;
+}
+mount(sid);
+let rzT=null;
+window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(layout,60)});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>frame(fixed!=null?fixed:tNow()));
+window.__sim={
+  set(t){fixed=t;frame(t)},
+  resume(){fixed=null},
+  go(id){mount(id)},
+  T:()=>T,id:()=>SID,now:()=>fixed!=null?fixed:tNow(),
+  plan:(k)=>PL[k]
+};
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
