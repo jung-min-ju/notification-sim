@@ -143,7 +143,7 @@ const ez=x=>{x=cl(x);return x*x*(3-2*x)};
 const lerp=(a,b,t)=>a+(b-a)*t;
 
 /* ---------- 상수 ----------
-   점 1개 = 알림 묶음 1개. 시간은 모델 시간(초)이고 화면에서도 1초 = 1초.
+   점 1개 = 알림 묶음 1개. 시간은 모델 시간(초). 1× 재생은 실제 1초에 모델 0.75초.
    값의 근거와 가정은 README에 적었어요. */
 const N=24;
 let W=640,H=240,NARROW=false;  // canvas 논리 크기. 좁으면 320×410(두 구조를 위아래로)
@@ -646,6 +646,7 @@ function stalls(S,R){
 /* ---------- 화면 ---------- */
 const cv=document.getElementById('cv'),cx=cv.getContext('2d'),cw=document.getElementById('cw');
 const tabsEl=document.getElementById('tabs');
+const BASE=.75; // 1× = 실제 1초에 모델 시간 0.75초
 let SPD=+(Q.get('speed')||1)||1,cur=null,RES=null,T=0,playing=!EMBED,started=!EMBED,lastTS=null,stepEls={L:[],R:[]};
 function total(){return Math.max(RES.L.end,RES.R.end)+3}
 function setScene(id){
@@ -683,8 +684,8 @@ SCENES.forEach(s=>{
 function size(){
   const w0=cw.getBoundingClientRect().width,nar=w0<520;
   if(nar!==NARROW||!cw.style.aspectRatio){NARROW=nar;W=NARROW?320:640;H=NARROW?418:240;cw.style.aspectRatio=W+'/'+H}
-  const r=cw.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
-  cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+  const r=cw.getBoundingClientRect(),dpr=window.devicePixelRatio||1,nw=Math.round(r.width*dpr),nh=Math.round(r.height*dpr);
+  if(nw!==cv.width||nh!==cv.height){cv.width=nw;cv.height=nh}
   draw();
 }
 function draw(){
@@ -707,10 +708,11 @@ function draw(){
   updSteps();
 }
 function frame(ts){
-  if(lastTS!=null&&playing){T+=Math.min(.1,(ts-lastTS)/1000)*SPD;if(T>total())T=0;draw()}
+  if(lastTS!=null&&playing){T+=Math.min(.1,(ts-lastTS)/1000)*SPD*BASE;if(T>total())T=0;draw()}
   lastTS=ts;requestAnimationFrame(frame);
 }
-new ResizeObserver(size).observe(cw);
+let szq=0;new ResizeObserver(()=>{if(!szq)szq=requestAnimationFrame(()=>{szq=0;size()})}).observe(document.getElementById('stage'));
+size();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
 setScene(Q.get('s')||'sum');
 if(EMBED&&'IntersectionObserver'in window){
