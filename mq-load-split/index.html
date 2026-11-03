@@ -53,7 +53,8 @@ h1{font-size:17px;margin:4px 0 8px;font-weight:600}
 /* 그림은 비율 고정, 설명은 내용만큼 아래로 */
 .stage{width:100%;container-type:inline-size}
 .cvw{position:relative;aspect-ratio:640/240}
-canvas{display:block;width:100%;height:100%}
+canvas{display:block;width:100%;height:100%;touch-action:pan-y}
+canvas:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 .ctl{position:absolute;right:0;bottom:.4%;display:flex;gap:2px;align-items:center;container-type:normal}
 .cvw{container-type:inline-size}
 .ctl button{font:600 clamp(7px,1.25cqi,12px)/1 "IBM Plex Mono",ui-monospace,monospace;padding:.35em .45em;border:1px solid var(--line);border-radius:5px;background:var(--box);color:var(--mut);cursor:pointer}
@@ -562,7 +563,7 @@ function sideEndCls(S){
 /* ---------- 시간표 ---------- */
 const TL={x0:74,x1:512,yEv:177,yL:184,yR:208,lh:4,lg:1.5,yAx:234};
 function drawTimeline(c,t){
-  const S=cur,Tm=Math.ceil((Math.max(RES.L.end,RES.R.end)+.5)/5)*5;
+  const S=cur,Tm=tmax();
   const xs=s=>TL.x0+(TL.x1-TL.x0)*s/Tm;
   TL.x1=NARROW?W-76:W-128;
   c.strokeStyle=C.line;c.lineWidth=1;c.beginPath();c.moveTo(0,170.5);c.lineTo(W,170.5);c.stroke();
@@ -622,11 +623,14 @@ function drawTimeline(c,t){
   }
   /* 현재 시각 */
   const x=xs(Math.min(t,Tm));c.strokeStyle=C.fg;c.lineWidth=1.2;c.beginPath();c.moveTo(x,TL.yL-4);c.lineTo(x,TL.yAx-4);c.stroke();
+  /* 끌 수 있는 손잡이 */
+  c.fillStyle=C.fg;c.beginPath();c.arc(x,TL.yL-5,DRAG?4:3.2,0,Math.PI*2);c.fill();c.fillStyle=C.bg;c.beginPath();c.arc(x,TL.yL-5,1.2,0,Math.PI*2);c.fill();
   /* 범례 */
   c.font=`400 7px ${FS}`;const lw=c.measureText('점 1개 = 알림 묶음 1개').width;
   c.fillStyle=C.mut;c.beginPath();c.arc(W-4-lw-6,TL.yEv,2.6,0,Math.PI*2);c.fill();
   tx(c,'점 1개 = 알림 묶음 1개',W-4,TL.yEv+.5,{s:7,a:'right',c:C.mut});
 }
+function tmax(){return Math.ceil((Math.max(RES.L.end,RES.R.end)+.5)/5)*5}
 function shortName(S){return S.tl||(S===cur.L?cur.card.L:cur.card.R)}
 /* 맡은 큐/파티션에 알림이 있는데 리더 브로커가 없어서 못 내주는 구간 */
 function stalls(S,R){
@@ -711,6 +715,31 @@ function frame(ts){
   if(lastTS!=null&&playing){T+=Math.min(.1,(ts-lastTS)/1000)*SPD*BASE;if(T>total())T=0;draw()}
   lastTS=ts;requestAnimationFrame(frame);
 }
+/* 시간표 끌기: 누르거나 끌면 그 시각으로, 놓으면 원래 재생 상태로 */
+let DRAG=false,wasPlay=true;
+function tlPos(ev){
+  const r=cv.getBoundingClientRect(),lx=(ev.clientX-r.left)/r.width*W,ly=(ev.clientY-r.top)/r.height*H-(NARROW?176:0);
+  return{lx,inTl:ly>=172&&lx>=TL.x0-10&&lx<=TL.x1+10};
+}
+const xToT=lx=>cl((lx-TL.x0)/(TL.x1-TL.x0))*tmax();
+cv.addEventListener('pointerdown',ev=>{
+  const p=tlPos(ev);if(!p.inTl)return;
+  DRAG=true;wasPlay=playing;playing=false;started=true;cv.setPointerCapture(ev.pointerId);
+  T=xToT(p.lx);draw();ev.preventDefault();
+});
+cv.addEventListener('pointermove',ev=>{
+  const p=tlPos(ev);
+  if(DRAG){T=xToT(p.lx);draw();return}
+  cv.style.cursor=p.inTl?'ew-resize':'';
+});
+const endDrag=()=>{if(!DRAG)return;DRAG=false;playing=wasPlay;draw()};
+cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
+cv.tabIndex=0;cv.setAttribute('aria-label','시간표: 왼쪽·오른쪽 화살표로 1초씩 이동');
+cv.addEventListener('keydown',ev=>{
+  const d={ArrowLeft:-1,ArrowRight:1}[ev.key];
+  if(d){T=cl(T+d,0,tmax());started=true;draw();ev.preventDefault()}
+  else if(ev.key==='Home'){T=0;draw();ev.preventDefault()}
+});
 let szq=0;new ResizeObserver(()=>{if(!szq)szq=requestAnimationFrame(()=>{szq=0;size()})}).observe(document.getElementById('stage'));
 size();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
