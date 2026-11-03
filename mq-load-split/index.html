@@ -61,6 +61,19 @@ canvas:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 .ctl button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 #cyc{display:none}
 @container (max-width:519px){ .ctl [data-sp]{display:none} #cyc{display:block} .ctl button{font-size:10.5px} }
+.why{margin:14px 0 0;border:1px solid var(--line);border-radius:12px;padding:14px 16px;word-break:keep-all;line-height:1.55}
+.why .wh{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px;color:var(--wrk);margin:0 0 4px}
+.why .wh i{width:9px;height:9px;border-radius:50%;background:var(--wrk)}
+.why .lead{margin:0 0 10px;font-size:13.5px;color:var(--mut)}
+.why ol{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.why li{display:grid;grid-template-columns:11em 1fr auto;gap:4px 14px;align-items:baseline;padding:7px 0;font-size:13.5px}
+.why li b{font-weight:600}
+.why li.k b{color:var(--wrk)}.why li.r b{color:var(--cur)}
+.why li span{color:var(--fg)}
+.why li button{font:inherit;font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--mut);cursor:pointer;white-space:nowrap}
+.why li button:hover{color:var(--fg);border-color:var(--fg)}
+@media (max-width:560px){ .why li{grid-template-columns:1fr auto} .why li span{grid-column:1/-1;grid-row:2} }
+.embed .why{display:none}
 .exp{container-type:inline-size;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:10px}
 .card{min-width:0;border-radius:10px;padding:10px 12px;font-size:clamp(12.5px,1.6cqi,14px);line-height:1.45;word-break:keep-all}
 .card.l{background:var(--curBg)}.card.r{background:var(--wrkBg)}
@@ -118,6 +131,16 @@ canvas:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
       <div class="card r"><div class="ch"><i></i><span id="hr"></span></div><ol class="steps" id="sr"></ol></div>
     </div>
   </div>
+  <section class="why" aria-labelledby="why-h">
+    <div class="wh" id="why-h"><i></i>Kafka를 선택한 이유</div>
+    <p class="lead">정시 배치에 임박·만료 알림이 한꺼번에 몰리는 상황을 고려했어요. 이 부하를 여러 브로커와 소비자에게 나누는 방식이 두 기술에서 달라요.</p>
+    <ol>
+      <li class="r"><b>RabbitMQ 일반 큐</b><span>브로커를 추가해도 기존 큐 하나가 자동으로 나뉘지 않아요. 부하를 나누려면 여러 큐와 메시지 분배 규칙을 직접 구성해야 해요.</span><button type="button" data-go="rabbit">① 보기</button></li>
+      <li class="k"><b>Kafka 파티션</b><span>토픽을 여러 파티션으로 나누고, 같은 소비자 그룹의 소비자들이 파티션을 나눠 맡는 구조를 제공해요. 이 구조를 몰리는 배치 작업의 분산에 활용하려고 해요.</span><button type="button" data-go="kafka">② 보기</button></li>
+      <li><b>복제와 분할은 구분해요</b><span>두 기술 모두 복제와 확장을 지원해요. 복제는 장애 대비이고, 분할은 처리 부하를 나누는 일이에요.</span><button type="button" data-go="repl">④ 보기</button></li>
+      <li><b>Kafka도 관리가 필요해요</b><span>같은 냉장고 키에 작업이 몰리면 특정 파티션에 집중될 수 있어요. 브로커를 추가한 뒤에는 파티션 재배치도 필요해요.</span><button type="button" data-go="hot">③ 보기</button></li>
+    </ol>
+  </section>
 </div>
 <script>
 (()=>{
@@ -755,6 +778,11 @@ pp.addEventListener('click',()=>{playing=!playing;started=true;updCtl()});
 spb.forEach(b=>b.addEventListener('click',()=>{SPD=+b.dataset.sp;playing=true;started=true;updCtl()}));
 setInterval(updCtl,300);updCtl();
 requestAnimationFrame(frame);
+document.querySelectorAll('.why [data-go]').forEach(b=>b.addEventListener('click',()=>{
+  const id=b.dataset.go;setScene(id);playing=true;started=true;
+  try{history.replaceState(null,'','?s='+id+(Q.get('theme')?'&theme='+Q.get('theme'):''))}catch(e){}
+  document.getElementById('tabs').scrollIntoView({behavior:'smooth',block:'start'});
+}));
 window.__sim={set(t){T=t;playing=false;draw()},play(){playing=true},scene(id){setScene(id)},get t(){return T},res:()=>RES,scenes:SCENES.map(s=>s.id)};
 })();
 </script>
