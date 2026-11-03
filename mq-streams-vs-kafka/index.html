@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RabbitMQ Streams와 Kafka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;--fg:#1f2328;--mut:#6b7280;--line:#d0d7de;--box:#f6f8fa;
+  --cur:#e8740c;--wrk:#2563eb;--retry:#c99a06;--bad:#d92d20;--ok:#15803d;
+  --curBg:#fff3e6;--wrkBg:#edf3ff;--badBg:rgba(217,45,32,.13);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1216;--fg:#e6edf3;--mut:#9aa4af;--line:#3a424c;--box:#171b21;
+    --cur:#ff9a3c;--wrk:#5b9bff;--retry:#f2c94c;--bad:#ff6b5e;--ok:#4ade80;
+    --curBg:#2a1d10;--wrkBg:#121c30;--badBg:rgba(255,107,94,.18);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1216;--fg:#e6edf3;--mut:#9aa4af;--line:#3a424c;--box:#171b21;
+  --cur:#ff9a3c;--wrk:#5b9bff;--retry:#f2c94c;--bad:#ff6b5e;--ok:#4ade80;
+  --curBg:#2a1d10;--wrkBg:#121c30;--badBg:rgba(255,107,94,.18);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 "IBM Plex Sans KR","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-text-size-adjust:100%}
+.wrap{max-width:992px;margin:0 auto;padding:12px 16px 20px}
+.embed .wrap{max-width:608px;padding:4px}
+/* 단락 바 */
+.sec{position:relative;margin:0 0 10px;border-bottom:1px solid var(--line)}
+.sec ul{list-style:none;margin:0;padding:0;display:flex;gap:2px}
+.sec a{display:block;padding:7px 12px;font-size:13px;color:var(--mut);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.sec a:hover{color:var(--fg)}
+.sec a[aria-current="page"]{color:var(--fg);font-weight:600;border-bottom-color:var(--fg)}
+.sec .hb{display:none;align-items:center;gap:8px;font:inherit;font-size:13px;padding:7px 2px;background:none;border:0;color:var(--fg);cursor:pointer}
+.sec .hb b{font-weight:600}
+.sec .hb svg{flex:none}
+@media (max-width:719px){
+  .sec .hb{display:flex}
+  .sec ul{display:none;position:absolute;z-index:5;left:0;right:0;top:100%;flex-direction:column;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+  .sec.open ul{display:flex}
+  .sec a{border-bottom:0;border-radius:6px;padding:8px 10px}
+  .sec a[aria-current="page"]{background:var(--box)}
+}
+h1{font-size:17px;margin:4px 0 8px;font-weight:600}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.tab{font:inherit;font-size:12.5px;padding:4px 11px;border:1px solid var(--line);border-radius:16px;background:var(--box);color:var(--fg);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.embed .sec,.embed h1,.embed .tabs{display:none}
+/* 한 상황의 화면: 16:10, 그림 60 : 설명 40 */
+.stage{width:100%;aspect-ratio:16/10;display:grid;grid-template-rows:3fr 2fr;overflow:hidden}
+.cvw{position:relative;min-height:0}
+canvas{display:block;width:100%;height:100%}
+.exp{container-type:inline-size;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:6px}
+.card{min-width:0;min-height:0;overflow:hidden;border-radius:10px;padding:8px 10px;font-size:clamp(10px,1.5cqi,13px);line-height:1.35;word-break:keep-all}
+.card.l{background:var(--curBg)}.card.r{background:var(--wrkBg)}
+.ch{display:flex;align-items:center;gap:6px;font-weight:600;font-size:.95em;margin:0 0 5px}
+.ch i{width:8px;height:8px;border-radius:50%;flex:none}
+.card.l .ch{color:var(--cur)}.card.l .ch i{background:var(--cur)}
+.card.r .ch{color:var(--wrk)}.card.r .ch i{background:var(--wrk)}
+.steps{list-style:none;margin:0;padding:0}
+.st{position:relative;display:flex;gap:8px;padding:0 0 .55em;cursor:pointer;border-radius:6px;outline-offset:2px}
+.st:last-child{padding-bottom:0}
+.st .cc{position:relative;flex:none;width:12px;display:flex;justify-content:center;padding-top:.22em}
+.st .cc b{display:block;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--mut);background:transparent;position:relative;z-index:1}
+.st:not(:last-child) .cc::after{content:"";position:absolute;left:50%;top:calc(.22em + 9px);bottom:calc(-.22em - 1px);width:1.5px;transform:translateX(-50%);background:var(--line)}
+.st .tx{min-width:0;flex:1}
+.st .bd{display:block;color:var(--mut)}
+.st .ex{display:block;font-size:.86em;color:var(--mut);opacity:.85;margin-top:1px}
+.st.past .cc b{background:var(--mut)}
+.st.past .bd{color:var(--fg)}
+.st.now .bd{color:var(--fg);font-weight:600}
+.card.l .st.now .cc b{border-color:var(--cur);background:var(--cur);box-shadow:0 0 0 3px var(--curBg),0 0 0 4.5px var(--cur)}
+.card.r .st.now .cc b{border-color:var(--wrk);background:var(--wrk);box-shadow:0 0 0 3px var(--wrkBg),0 0 0 4.5px var(--wrk)}
+.st:focus-visible{outline:2px solid var(--fg)}
+@container (max-width:560px){ .st .ex{display:none} .st{padding-bottom:.35em} }
+@container (max-width:480px){
+  .ch{display:none}
+  .card{padding:6px 8px}
+  .st .bd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+.empty{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:12px;color:var(--mut);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="sec" id="sec" aria-label="단락">
+    <button class="hb" id="hb" type="button" aria-expanded="false" aria-controls="secl">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>단락</span><b>RabbitMQ Streams와 Kafka</b>
+    </button>
+    <ul id="secl">
+      <li><a href="../mq-load-split/">부하를 나누는 방식</a></li>
+      <li><a href="../mq-retention-replay/">기록 보관과 재처리</a></li>
+      <li><a href="../mq-throughput-consume/">처리량과 소비 방식</a></li>
+      <li><a href="../mq-streams-vs-kafka/" aria-current="page">RabbitMQ Streams와 Kafka</a></li>
+    </ul>
+  </nav>
+  <h1>RabbitMQ Streams와 Kafka 비교</h1>
+  <div class="tabs" role="tablist"></div>
+  <div class="stage empty">준비 중</div>
+</div>
+<script>
+(()=>{const Q=new URLSearchParams(location.search);if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
+const sec=document.getElementById('sec'),hb=document.getElementById('hb');
+hb.addEventListener('click',()=>{const o=sec.classList.toggle('open');hb.setAttribute('aria-expanded',o)});
+document.addEventListener('click',e=>{if(!sec.contains(e.target)){sec.classList.remove('open');hb.setAttribute('aria-expanded','false')}});})();
+</script>
+</body>
+</html>
