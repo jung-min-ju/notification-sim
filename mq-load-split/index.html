@@ -54,6 +54,12 @@ h1{font-size:17px;margin:4px 0 8px;font-weight:600}
 .stage{width:100%;aspect-ratio:16/10;display:grid;grid-template-rows:3fr 2fr;overflow:hidden}
 .cvw{position:relative;min-height:0}
 canvas{display:block;width:100%;height:100%}
+.ctl{position:absolute;right:0;bottom:.4%;display:flex;gap:2px;align-items:center;container-type:normal}
+.cvw{container-type:inline-size}
+.ctl button{font:600 clamp(7px,1.25cqi,12px)/1 "IBM Plex Mono",ui-monospace,monospace;padding:.35em .45em;border:1px solid var(--line);border-radius:5px;background:var(--box);color:var(--mut);cursor:pointer}
+.ctl button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+#cyc{display:none}
+@container (max-width:480px){ .ctl [data-sp]{display:none} #cyc{display:block} }
 .exp{container-type:inline-size;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:6px}
 .card{min-width:0;min-height:0;overflow:hidden;border-radius:10px;padding:8px 10px;font-size:clamp(10px,1.5cqi,13px);line-height:1.35;word-break:keep-all}
 .card.l{background:var(--curBg)}.card.r{background:var(--wrkBg)}
@@ -70,13 +76,16 @@ canvas{display:block;width:100%;height:100%}
 .st .tx{min-width:0;flex:1}
 .st .bd{display:block;color:var(--mut)}
 .st .ex{display:block;font-size:.86em;color:var(--mut);opacity:.85;margin-top:1px}
+.st .dt{display:none;font-size:.86em;color:var(--fg);opacity:.9;margin-top:3px;padding:4px 7px;border-radius:6px;background:var(--bg)}
+.st.now .dt{display:block}
 .st.past .cc b{background:var(--mut)}
 .st.past .bd{color:var(--fg)}
 .st.now .bd{color:var(--fg);font-weight:600}
 .card.l .st.now .cc b{border-color:var(--cur);background:var(--cur);box-shadow:0 0 0 3px var(--curBg),0 0 0 4.5px var(--cur)}
 .card.r .st.now .cc b{border-color:var(--wrk);background:var(--wrk);box-shadow:0 0 0 3px var(--wrkBg),0 0 0 4.5px var(--wrk)}
 .st:focus-visible{outline:2px solid var(--fg)}
-@container (max-width:560px){ .st .ex{display:none} .st{padding-bottom:.35em} }
+@container (max-width:640px){ .st:not(.now) .ex{display:none} }
+@container (max-width:560px){ .st .ex,.st.now .dt{display:none} .st{padding-bottom:.35em} }
 @container (max-width:480px){
   .ch{display:none}
   .card{padding:6px 8px}
@@ -101,7 +110,14 @@ canvas{display:block;width:100%;height:100%}
   <h1>부하를 나누는 방식의 차이</h1>
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="stage" id="stage">
-    <div class="cvw" id="cw"><canvas id="cv"></canvas></div>
+    <div class="cvw" id="cw"><canvas id="cv"></canvas>
+      <div class="ctl" id="ctl" role="group" aria-label="재생">
+        <button type="button" id="pp" aria-label="멈춤">❚❚</button>
+        <button type="button" data-sp="0.5" aria-pressed="false">0.5×</button>
+        <button type="button" data-sp="1" aria-pressed="true">1×</button>
+        <button type="button" data-sp="2" aria-pressed="false">2×</button>
+        <button type="button" id="cyc" aria-label="재생 속도 바꾸기">1×</button>
+      </div></div>
     <div class="exp" id="exp">
       <div class="card l"><div class="ch"><i></i><span id="hl"></span></div><ol class="steps" id="sl"></ol></div>
       <div class="card r"><div class="ch"><i></i><span id="hr"></span></div><ol class="steps" id="sr"></ol></div>
@@ -216,6 +232,40 @@ const SCENES=[
       ['브로커 1이 꺼지면 그 조각은 멈춰요','복제가 없으면 돌아올 때까지 기다려요'],
       ['나머지는 3대가 나눠 일찍 끝나요','분할은 부하 나누기예요. 둘 다 서버 비용이 들어요']]}},
 ];
+
+/* 지금 단계에서만 펼치는 자세한 설명 (근거는 README) */
+const DETAIL={
+ sum:{l:['정시 배치가 알림을 한꺼번에 만들어요. 브로커는 3대지만 큐는 우리가 만든 만큼만 있어요.',
+         '분배 규칙(consistent hash exchange)이 냉장고 ID 해시로 큐 A·B·C 중 하나를 골라요.',
+         '소비자마다 큐 하나를 구독해요. 더 나누려면 큐·바인딩·소비자 연결을 다시 구성해요.'],
+      r:['정시 배치가 임박·만료 토픽에 알림을 써요. 토픽은 정해 둔 파티션 수만큼 나뉘어 있어요.',
+         '같은 냉장고 키는 같은 파티션에 쓰여요. 파티션 리더는 브로커 3대에 흩어져 있어요.',
+         '그룹이 소비자 3명에게 파티션을 하나씩 배정해요. 소비자가 바뀌면 배정을 다시 나눠요.']},
+ rabbit:{l:['큐의 상태 변경은 모두 그 큐의 리더로 가요. 소비자가 3명이어도 리더 1대가 내줘요.',
+         '새 브로커는 기존 큐의 멤버를 갖지 않아요. 운영자가 추가해도 복제본이 늘 뿐이에요.',
+         '복제본은 리더를 따라 쓰는 사본이에요. 멤버가 늘수록 처리량은 오히려 대체로 낮아져요.'],
+      r:['알림이 큐가 아니라 분배 규칙(교환기)에 먼저 들어가요. 규칙이 냉장고 해시로 큐를 골라요.',
+         '큐 A·B·C의 리더를 브로커 1·2·3에 하나씩 두었어요. 내주는 일이 세 대로 나뉘어요.',
+         '바인딩이 그대로면 같은 냉장고는 늘 같은 큐로 가요. 큐를 바꾸면 일부 냉장고가 옮겨 가요.']},
+ kafka:{l:['파티션이 1개라 모든 알림이 파티션 0에 들어온 순서대로 쌓여요.',
+         '그룹 안에서 파티션 하나는 한 번에 소비자 한 명에게만 배정돼요. 소비자 2·3은 받을 게 없어요.',
+         '소비자 1이 24개를 혼자 처리해요. 나누려면 소비자보다 파티션 수를 먼저 늘려야 해요.'],
+      r:['토픽을 파티션 3개로 만들었어요. 냉장고 키에 따라 알림이 파티션 0·1·2에 나뉘어 쌓여요.',
+         '그룹이 파티션을 소비자에게 하나씩 배정해요. 소비자 수가 파티션 수와 같아 모두 일해요.',
+         '셋이 동시에 처리해서 왼쪽보다 일찍 끝나요. 소비자를 4명으로 늘리면 한 명은 쉬어요.']},
+ hot:{l:['냉장고 1의 알림이 대부분이에요. 키가 같으면 늘 같은 파티션에 쓰여서 파티션 0에 몰려요.',
+         '파티션 1·2는 금방 비고 파티션 0과 그 소비자만 계속 일해요. 이 파티션이 병목이에요.',
+         '브로커 4가 들어와도 기존 파티션은 옮겨지지 않아요. 옮겨도 몰린 파티션 0은 그대로예요.'],
+      r:['여러 냉장고의 알림이 섞여 들어와요. 키가 고르면 파티션마다 쌓이는 양이 비슷해요.',
+         '세 소비자가 비슷한 때에 끝나요. 몰림이 없어 한 파티션이 전체를 늦추지 않아요.',
+         '새 브로커는 파티션을 자동으로 받지 않아요. 파티션 2를 옮긴 뒤에야 브로커 4가 리더가 돼요.']},
+ repl:{l:['복제 계수 3이라 파티션 0이 브로커 1·2·3에 있어요. 리더는 1, 나머지는 따라 쓰는 팔로워예요.',
+         '브로커 1이 멈추면 팔로워 하나가 리더가 돼요. 데이터는 남지만 바뀌는 동안은 못 내줘요.',
+         '처리하는 리더는 늘 1대라 3배 빨라지지 않아요. 저장은 3배, 브로커 사이 복제 트래픽도 생겨요.'],
+      r:['복제 없이 파티션 3개를 브로커 1·2·3에 하나씩 두었어요. 세 대가 동시에 처리해요.',
+         '브로커 1이 멈추면 파티션 0을 가진 곳이 없어요. 돌아올 때까지 파티션 0은 멈춰요.',
+         '나머지 두 파티션은 계속 처리해요. 복제가 없으면 브로커 장애를 견디지 못해요.']},
+};
 
 /* ---------- 모델: 이산 사건 스케줄러 ----------
    소비자가 비면, 맡은 큐/파티션 중 리더 브로커가 살아 있고 비어 있는 곳에서
@@ -516,7 +566,7 @@ function sideEndCls(S){
 }
 
 /* ---------- 시간표 ---------- */
-const TL={x0:74,x1:604,yEv:177,yL:184,yR:208,lh:4,lg:1.5,yAx:234};
+const TL={x0:74,x1:512,yEv:177,yL:184,yR:208,lh:4,lg:1.5,yAx:234};
 function drawTimeline(c,t){
   const S=cur,Tm=Math.ceil((Math.max(RES.L.end,RES.R.end)+.5)/5)*5;
   const xs=s=>TL.x0+(TL.x1-TL.x0)*s/Tm;
@@ -601,7 +651,7 @@ function stalls(S,R){
 /* ---------- 화면 ---------- */
 const cv=document.getElementById('cv'),cx=cv.getContext('2d'),cw=document.getElementById('cw');
 const tabsEl=document.getElementById('tabs');
-let cur=null,RES=null,T=0,playing=!EMBED,started=!EMBED,lastTS=null,stepEls={L:[],R:[]};
+let SPD=+(Q.get('speed')||1)||1,cur=null,RES=null,T=0,playing=!EMBED,started=!EMBED,lastTS=null,stepEls={L:[],R:[]};
 function total(){return Math.max(RES.L.end,RES.R.end)+3}
 function setScene(id){
   cur=SCENES.find(s=>s.id===id)||SCENES[0];
@@ -610,15 +660,15 @@ function setScene(id){
   [...tabsEl.children].forEach(b=>b.setAttribute('aria-selected',b.dataset.id===cur.id));
   document.getElementById('hl').textContent=cur.card.L;
   document.getElementById('hr').textContent=cur.card.R;
-  buildSteps('sl',cur.card.l,'L');buildSteps('sr',cur.card.r,'R');
+  buildSteps('sl',cur.card.l,'L',DETAIL[cur.id].l);buildSteps('sr',cur.card.r,'R',DETAIL[cur.id].r);
   draw();
 }
-function buildSteps(elId,arr,side){
+function buildSteps(elId,arr,side,det){
   const ol=document.getElementById(elId);ol.innerHTML='';stepEls[side]=[];
   arr.forEach(([b,e],k)=>{
     const li=document.createElement('li');li.className='st';li.tabIndex=0;li.setAttribute('role','button');
-    li.innerHTML=`<span class="cc"><b></b></span><span class="tx"><span class="bd"></span><span class="ex"></span></span>`;
-    li.querySelector('.bd').textContent=(k+1)+'. '+b;li.querySelector('.ex').textContent=e;
+    li.innerHTML=`<span class="cc"><b></b></span><span class="tx"><span class="bd"></span><span class="ex"></span><span class="dt"></span></span>`;
+    li.querySelector('.bd').textContent=(k+1)+'. '+b;li.querySelector('.ex').textContent=e;li.querySelector('.dt').textContent=det[k];
     li.setAttribute('aria-label',`${k+1}단계: ${b}`);
     const go=()=>{T=cur.stepT[k];playing=true;started=true;draw()};
     li.addEventListener('click',go);
@@ -654,7 +704,7 @@ function draw(){
   updSteps();
 }
 function frame(ts){
-  if(lastTS!=null&&playing){T+=Math.min(.1,(ts-lastTS)/1000);if(T>total())T=0;draw()}
+  if(lastTS!=null&&playing){T+=Math.min(.1,(ts-lastTS)/1000)*SPD;if(T>total())T=0;draw()}
   lastTS=ts;requestAnimationFrame(frame);
 }
 new ResizeObserver(size).observe(cw);
@@ -663,6 +713,13 @@ setScene(Q.get('s')||'sum');
 if(EMBED&&'IntersectionObserver'in window){
   new IntersectionObserver(es=>{for(const e of es){if(e.isIntersecting){if(!started){started=true;T=0}playing=true}else playing=false}},{threshold:.2}).observe(document.getElementById('stage'));
 }else{playing=true;started=true}
+const pp=document.getElementById('pp'),spb=[...document.querySelectorAll('#ctl [data-sp]')];
+const cyc=document.getElementById('cyc');
+cyc.addEventListener('click',()=>{const L=[.5,1,2];SPD=L[(L.indexOf(SPD)+1)%3];playing=true;started=true;updCtl()});
+function updCtl(){cyc.textContent=SPD+'×';pp.textContent=playing?'❚❚':'▶';pp.setAttribute('aria-label',playing?'멈춤':'재생');spb.forEach(b=>b.setAttribute('aria-pressed',+b.dataset.sp===SPD))}
+pp.addEventListener('click',()=>{playing=!playing;started=true;updCtl()});
+spb.forEach(b=>b.addEventListener('click',()=>{SPD=+b.dataset.sp;playing=true;started=true;updCtl()}));
+setInterval(updCtl,300);updCtl();
 requestAnimationFrame(frame);
 window.__sim={set(t){T=t;playing=false;draw()},play(){playing=true},scene(id){setScene(id)},get t(){return T},res:()=>RES,scenes:SCENES.map(s=>s.id)};
 })();
