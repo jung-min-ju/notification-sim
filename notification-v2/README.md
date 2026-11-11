@@ -16,6 +16,7 @@
 | ④ V2 이번 구현: DB 워커 | 7개 장면: 전체 흐름, 사용자별 읽음 상태, 빈 자리만큼만 배분, 두 서버 워커의 선점, 결과에 따른 작업 상태, 워커 중단과 작업 회수, 아직 정하지 않은 것 | 설계 방향. 구현은 BE #211 |
 | ⑤ V2에서 새로 챙길 문제 | SSE 신호를 놓쳐도 화면을 DB 상태로 다시 맞추는 방법 (연결을 맺는 사이에 생긴 알림 포함) | SSE는 도입 결정 |
 | ⑥ 이후 개선안: RabbitMQ · Outbox | 큐를 붙일 때의 구조. 이번 구현에서는 제외 | 보류 |
+| ⑦ Kafka 비동기 구조의 문제와 대응 | 구성원 변경 8개, 임박·만료 6개 문제. 각 문제를 문제 → 해결 장치 → 같은 조건 재실행으로 보여 주고, 남는 한계와 다른 후보를 붙였다 | KTB4-5th-BE `dev` 4b13f19a (2026-11-08) 코드 기준. Kafka 경로는 코드 기본값 꺼짐 |
 
 ## 정한 것과 아직 정하지 않은 것
 
@@ -34,3 +35,10 @@
 | DB 워커 구현 | [KTB4-5th-BE #211](https://github.com/100-hours-a-week/KTB4-5th-BE/issues/211) (진행 중) |
 | Redis 설정 | [KTB4-5th-BE #189](https://github.com/100-hours-a-week/KTB4-5th-BE/pull/189) |
 | 이 폴더를 추가한 PR | [#5](https://github.com/jung-min-ju/notification-sim/pull/5) |
+
+## ⑦ Kafka 비동기 구조 (2026-11-11 추가)
+
+- 기준 코드: KTB4-5th-BE `origin/dev` `4b13f19a` (2026-11-08, #478 병합). 배포 환경 설정은 확인하지 않았다.
+- 구성원 변경: 변경 이력 컬럼(`refrigerator_members` joined_*/ended_*), 냉장고 행 잠금 순번, `GET_LOCK` 단일 발행자 + 고정 `transactional.id`, Kafka 트랜잭션, `read_committed`, `membership_notification_progress` 완료 순번 + 1(실패 시 1초 무한 재시도), 커밋 뒤 Redis Pub/Sub.
+- 임박·만료: `expiration_checks` 예약(유니크 키 + ON DUPLICATE KEY), 조건부 UPDATE 60초 점유, `completed_at` FOR UPDATE 확인, 알림·푸시 작업·완료 표시 한 트랜잭션(실패 시 5초 무한 재시도), 푸시 워커 동시 20칸·30초 점유.
+- 가정: "구성원 3"의 잠금 없는 순번 발급, "만료 2"의 서버마다 08시 배치는 문제를 보여 주기 위한 가정 상황이다. "같은 파티션의 다른 냉장고도 멈춤"은 무한 재시도 설정에서 추론했고 재현하지 않았다. 다른 후보(CDC, Redis Streams, DLT 등)는 코드에 없는 제안이다.

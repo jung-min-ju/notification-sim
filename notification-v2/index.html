@@ -1814,6 +1814,283 @@ POS2['3:v2w:m']={B1:[20,60,180,100],B2:[20,400,180,100],B3:[20,520,180,100],
 })();
 
 /* ---------- controller ---------- */
+/* ===== ⑦ Kafka 비동기 구조의 문제와 대응 (구성원 변경 · 임박·만료) — 기준: KTB4-5th-BE dev 4b13f19a (2026-11-08) ===== */
+SPECS.kmem=o=>({nodes:[
+  {id:'B1',col:0,type:'browser',name:'U2 · 알림 화면',colr:'var(--u2)',sub:'SSE: S2에 연결'},
+  {id:'S1',col:1,type:'server',w:210,h:130,title:'서버 S1',sub:'구성원 요청 처리'},
+  {id:'R',col:1,type:'redis'},
+  {id:'S2',col:1,type:'server',w:210,h:130,title:'서버 S2',sub:'구성원 요청 처리'},
+  {id:'M',col:2,type:'cyl',w:330,label:'refrigerator_members',cls:'db-p',rows:[['mem','U3 참여 관계','없음'],['his','변경 이력 (순번)','#3까지 전송됨']]},
+  {id:'RF',col:2,type:'cyl',w:330,label:'refrigerators',cls:'db-a',rows:[['seq','냉장고 1 마지막 순번','3']]},
+  {id:'ND',col:2,type:'cyl',w:330,label:'notifications',cls:'db-n',rows:[['nt','구성원 알림','0건']]},
+  {id:'PG',col:2,type:'cyl',w:330,label:'membership_notification_progress',cls:'db-q',rows:[['prog','냉장고 1 완료 순번','3']]},
+  {id:'X1',col:3,type:'box',w:220,h:100,title:'발행 워커 (S1)',sub:'1초마다 · 이름 잠금 보유'},
+  {id:'X2',col:3,type:'box',w:220,h:100,title:'발행 워커 (S2)',sub:'1초마다'},
+  {id:'K',col:3,type:'box',w:220,h:100,title:'Kafka',sub:'구성원 토픽 · 키 = 냉장고 ID'},
+  {id:'C',col:3,type:'box',w:220,h:100,title:'BE 소비자 (S1)',sub:'리스너 스레드 1개'}],
+ edges:[['S1-M','참여·이력 저장'],['S2-M','변경 저장'],['S1-RF','순번 +1'],['S2-RF','순번 +1'],['S1-ND','알림 저장'],['S1-K','바로 발행'],
+  ['X1-M','이력 읽기'],['X2-M','이력 읽기'],['X1-K','묶음 발행'],['X2-K','발행'],['K-C','전달'],['C-PG','순번 확인'],['C-ND','알림 저장'],
+  ['C-R','신호 발행'],['S1-R','신호 발행'],['R-S2','신호 전달'],['S2-B1','SSE 안내']],
+ conns:[['K1','B1','S2']]});
+SPECS.kexp=o=>({nodes:[
+  {id:'S1',col:0,type:'server',w:210,h:130,title:'서버 S1',sub:'08시 배치 실행'},
+  {id:'S2',col:0,type:'server',w:210,h:130,title:'서버 S2',sub:'08시 배치 실행'},
+  {id:'EC',col:1,type:'cyl',w:320,label:'expiration_checks',cls:'db-a',rows:[['ec1','냉장고 1 판정 예약','없음'],['ec2','냉장고 2 판정 예약','없음']]},
+  {id:'ND',col:1,type:'cyl',w:320,label:'notifications',cls:'db-n',rows:[['nt','임박 알림','0건']]},
+  {id:'J',col:1,type:'cyl',w:320,label:'push_notifications',cls:'db-q',rows:[['j1','푸시 작업','없음']]},
+  {id:'X1',col:2,type:'box',w:220,h:100,title:'발행 워커 (S1)',sub:'5초마다 · 최대 20건'},
+  {id:'X2',col:2,type:'box',w:220,h:100,title:'발행 워커 (S2)',sub:'5초마다 · 최대 20건'},
+  {id:'K',col:2,type:'box',w:220,h:100,title:'Kafka',sub:'판정 토픽 · 키 = 냉장고 ID'},
+  {id:'C',col:2,type:'box',w:220,h:100,title:'BE 소비자',sub:'리스너 스레드 1개'},
+  {id:'P',col:2,type:'box',w:220,h:100,title:'푸시 워커',sub:'1초마다 · 동시 20칸'},
+  {id:'W',col:3,type:'box',w:200,h:90,title:'외부 Web Push',sub:'제공자 수락 ≠ 단말 수신'}],
+ edges:[['S1-EC','예약 저장'],['S2-EC','예약 저장'],['S1-ND','판정·알림 저장'],['S1-J','푸시 작업 저장'],
+  ['X1-EC','예약 점유'],['X2-EC','예약 점유'],['X1-K','발행'],['X2-K','발행'],['K-C','전달'],
+  ['C-EC','완료 확인'],['C-ND','알림 저장'],['C-J','푸시 작업 저장'],['P-J','작업 점유'],['P-W','푸시 발송']]});
+
+(function(){
+ const X=(o,s)=>Object.assign(s,o);
+ const mem=[
+ {name:'구성원 1. (출발점) 알림 실패가 구성원 변경까지 실패시킴',scene:'kmem',opt:{},show:['S1','M','ND'],tags:['code','risk','sol'],
+  intro:'Kafka 경로가 꺼진 코드 기본값이야. U3가 냉장고 1에 참여하면, 요청 하나가 참여 관계와 다른 구성원에게 갈 알림을 한 트랜잭션으로 저장해.',
+  cmp:['알림 저장이 실패하면 U3의 참여까지 같이 취소돼.','요청은 참여와 변경 이력만 확정하고, 알림은 워커가 나중에 만들어.'],
+  steps:[
+  st('norm','참여와 알림을 한 번에 저장','S1이 U3의 참여 관계를 저장하고, 같은 트랜잭션에서 다른 구성원에게 갈 알림도 저장해. 워커도 Kafka도 안 써서 단순하고 알림도 바로 보여.',['S1','M','ND'],['S1-M','S1-ND'],
+   async()=>{await fly('S1-M','go',{label:'U3 참여 저장'});setR('mem','참여 중 (커밋 전)','pend');await fly('S1-ND','go',{label:'알림 저장'})}),
+  st('prob','알림 저장에서 오류','알림을 저장하다 DB 오류가 났어. 한 트랜잭션이라 전부 롤백돼.',['S1','ND','M'],['S1-ND'],
+   async()=>{await fly('S1-ND','bad',{label:'알림 저장 실패'});note('S1','트랜잭션 롤백','bad');setR('mem','없음 (참여 취소)','bad')}),
+  st('obs','부수 작업이 본 작업을 막음','알림은 다른 구성원에게 알려 주는 부수 작업이야. 그런데 이 실패 때문에 U3는 참여 자체에 실패했어. 받는 사람이 많을수록 요청 안에서 저장할 것도 늘어.',['M'],[],
+   async()=>{note('M','U3 참여 실패','bad');await wait(900)}),
+  X({resp:'구성원 변경이 성공했다면, 알림은 그 순간 실패해도 나중에 반드시 만들어져야 해.'},st('fix','변경만 확정하고 알림은 넘기기','Kafka 경로를 켜면 요청은 참여 관계와 변경 이력만 저장하고 응답해. 알림은 발행 워커 → Kafka → BE 소비자가 나중에 만들어.',['S1','X1','K','C'],[],
+   async()=>{reveal('X1','K','C');note('S1','membership.kafka.enabled = true','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','U3가 다시 참여해. 요청은 참여와 변경 이력만 저장하고 커밋해. 알림 저장은 요청 안에 없으니 실패할 일도 없어.',['S1','M'],['S1-M'],
+   async()=>{resetData();note('S1','');await fly('S1-M','go',{label:'참여 + 변경 이력'});setR('mem','참여 중','ok');setR('his','#4 참여 · 미전송','pend');note('S1','응답 · 알림은 나중','ok')}),
+  X({lim:['알림이 몇 초 늦게 도착해 (발행 워커 1초 주기 + 소비 시간)','이력을 보내고 중복을 거르는 장치가 새로 필요해 (구성원 2~8번)'],alt:['알림 저장만 별도 트랜잭션으로 떼기: 실패 전파는 막지만 알림이 빠질 수 있어']},
+   st('sum','해결 전후','해결 전에는 알림 실패가 참여 실패가 됐어. 해결 뒤에는 참여는 바로 확정되고, 알림은 워커 쪽에서 따로 만들어져.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 2. DB 저장과 Kafka 발행을 한 번에 못 묶음',scene:'kmem',opt:{},show:['S1','M','K'],tags:['code','risk','sol'],
+  intro:'Kafka 경로를 켰어. 요청이 참여를 저장하고 그 자리에서 Kafka로 바로 보낸다고 해 봐. DB 커밋과 Kafka 발행은 서로 다른 시스템이라 한 트랜잭션으로 묶을 수 없어.',
+  cmp:['DB는 커밋됐는데 발행이 실패하면 알림 사건이 사라져.','보낼 내용을 같은 트랜잭션으로 변경 이력 컬럼에 남겨서, 워커가 언제든 다시 보낼 수 있어.'],
+  steps:[
+  st('norm','참여 저장 후 바로 발행','S1이 U3 참여를 커밋하고, 이어서 Kafka로 변경 사건을 보내려고 해.',['S1','M'],['S1-M'],
+   async()=>{await fly('S1-M','go',{label:'U3 참여 커밋'});setR('mem','참여 중','ok')}),
+  st('prob','Kafka 발행 실패','Kafka가 잠깐 응답하지 않아 발행이 실패했어. DB는 이미 커밋돼서 되돌릴 수 없어.',['S1','K'],['S1-K'],
+   async()=>{await fly('S1-K','bad',{label:'발행 실패'});note('K','받은 사건 없음','bad')}),
+  st('obs','사건이 사라짐','참여는 저장됐는데 알림을 만들 사건은 어디에도 없어. 다른 구성원은 U3가 들어온 걸 끝내 몰라. 이걸 이중 쓰기 문제라고 해.',['M','K'],[],
+   async()=>{note('M','참여는 커밋됨','warn');note('S1','알림 사건 유실','bad');await wait(900)}),
+  X({resp:'커밋된 변경은 언젠가 반드시 발행돼야 해. 발행 실패가 사건을 지우면 안 돼.'},st('fix','이력을 업무 행에 같이 적기','보낼 내용을 refrigerator_members의 joined_* / ended_* 컬럼에 참여와 같은 트랜잭션으로 적어. 발행은 발행 워커가 이 컬럼을 읽어서 해. Transactional Outbox와 같은 원리야.',['S1','M','X1'],[],
+   async()=>{reveal('X1');rlabel('his','변경 이력 (같은 트랜잭션)');note('X1','미전송 이력을 읽어 발행','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','U3 참여와 변경 이력을 한 번에 커밋해. 발행 워커가 보내다가 똑같이 실패해.',['S1','M','X1','K'],['S1-M','X1-M','X1-K'],
+   async()=>{resetData();note('K','');note('S1','');await fly('S1-M','go',{label:'참여 + 이력 (한 트랜잭션)'});setR('mem','참여 중','ok');setR('his','#4 참여 · 미전송','pend');
+    await back('X1-M',{label:'#4 읽기'});await fly('X1-K','bad',{label:'#4 발행 실패'});setR('his','#4 참여 · 미전송 (남아 있음)','pend')}),
+  st('re','다음 회차에 다시 보냄','이력이 DB에 남아 있으니 1초 뒤 다음 회차에 다시 읽어 보내. 이번에는 성공해서 전송 완료를 적어.',['X1','M','K'],['X1-M','X1-K'],
+   async()=>{await back('X1-M',{label:'#4 다시 읽기'});await fly('X1-K','go',{label:'#4 발행'});note('K','#4 도착','ok');setR('his','#4까지 전송됨','ok')}),
+  X({lim:['참여 행 하나에 참여 1번, 종료 1번 이력만 들어가','발행 워커가 업무 테이블을 직접 읽어'],alt:['별도 Outbox 테이블 (이미지 분석의 analysis_outbox처럼)','binlog를 읽는 CDC(예: Debezium)로 폴링 없애기']},
+   st('sum','해결 전후','해결 전에는 발행 실패가 사건을 지웠어. 해결 뒤에는 커밋된 변경이면 이력도 반드시 남아서, 발행이 늦어질 수는 있어도 사라지지는 않아.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 3. 동시에 바뀌면 순서가 뒤섞임',scene:'kmem',opt:{},show:['S1','S2','M','RF'],tags:['risk','sol'],
+  intro:'U3 나가기는 S1에서, U4 추방은 S2에서 거의 동시에 처리돼. 둘 다 냉장고 1의 다음 순번을 붙여야 해. 잠금 없이 "마지막 순번을 읽고 +1"을 하면 어떻게 되는지 봐.',
+  cmp:['두 변경이 같은 #4를 받아서 받는 쪽이 순서를 정할 수 없어.','냉장고 행을 잠근 채 순번을 하나씩만 발급해서 #4, #5로 갈라.'],
+  steps:[
+  st('norm','두 요청이 동시에 순번을 읽음','S1과 S2가 동시에 냉장고 1의 마지막 순번 3을 읽어.',['S1','S2','RF'],['S1-RF','S2-RF'],
+   async()=>{await both(back('S1-RF',{label:'마지막 3'}),back('S2-RF',{label:'마지막 3'}))}),
+  st('prob','같은 번호를 받음','둘 다 3 + 1 = 4를 붙여 저장해. 서로 다른 변경인데 번호가 같아.',['S1','S2','M','RF'],['S1-M','S2-M'],
+   async()=>{await both(fly('S1-M','go',{label:'#4 나가기'}),fly('S2-M','go',{label:'#4 추방'}));setR('his','#4 나가기 · #4 추방','bad');setR('seq','4','bad')}),
+  st('obs','받는 쪽이 순서를 정할 수 없음','소비자는 순번으로 중복과 순서를 가려. 같은 번호가 둘이면 하나는 중복으로 버려지거나 순서가 뒤집혀.',['M'],[],
+   async()=>{note('M','같은 번호 2개','bad');await wait(900)}),
+  X({resp:'같은 냉장고의 변경에는 커밋 순서대로, 빈자리 없는 번호가 하나씩 붙어야 해.'},st('fix','냉장고 행 잠금 안에서 순번 발급','변경을 저장할 때 냉장고 행을 잠그고 membership_sequence를 1 올려. 잠금을 쥔 쪽만 다음 번호를 받고, 나머지는 기다려.',['RF'],[],
+   async()=>{note('RF','행 잠금 · 하나씩 발급','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','S1이 먼저 잠금을 잡고 #4를 받아 커밋해. 그동안 S2는 기다렸다가 #5를 받아.',['S1','S2','M','RF'],['S1-RF','S1-M','S2-RF','S2-M'],
+   async()=>{resetData();note('M','');note('RF','');note('S2','잠금 대기','warn');await fly('S1-RF','go',{label:'잠금 + #4'});setR('seq','4','ok');await fly('S1-M','go',{label:'#4 나가기'});
+    note('S2','');await fly('S2-RF','go',{label:'잠금 + #5'});setR('seq','5','ok');await fly('S2-M','go',{label:'#5 추방'});setR('his','#4 나가기 · #5 추방','ok')}),
+  X({lim:['같은 냉장고의 변경은 잠금 때문에 차례로만 저장돼'],alt:['순서가 덜 중요하면 시각 기준 정렬로 잠금을 없앨 수 있어. 대신 빈 번호 검사(구성원 7번)를 못 해']},
+   st('sum','해결 전후','해결 전에는 번호가 겹쳤어. 해결 뒤에는 잠금으로 번호를 하나씩 발급해서, 뒤의 모든 단계가 이 번호 하나로 중복과 순서를 가려.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 4. 서버 두 대의 발행 워커가 같이 보냄',scene:'kmem',opt:{},show:['M','X1','X2','K'],tags:['code','risk','sol'],
+  intro:'서버가 두 대면 발행 워커도 두 개야. 둘이 같은 이력을 동시에 읽고 보내면 어떻게 되는지 봐.',
+  cmp:['#4가 두 번 나가거나, #5가 #4보다 먼저 나가.','MySQL 이름 잠금(GET_LOCK)을 쥔 서버 하나만 보내.'],
+  steps:[
+  st('norm','두 워커가 같은 이력을 읽음','S1과 S2의 발행 워커가 1초마다 깨어나 미전송 이력 #4, #5를 같이 읽어.',['M','X1','X2'],['X1-M','X2-M'],
+   async()=>{setR('his','#4 · #5 미전송','pend');await both(back('X1-M',{label:'#4 · #5'}),back('X2-M',{label:'#4 · #5'}))}),
+  st('prob','둘이 따로 보냄','S1은 #4부터, S2는 네트워크가 빨라 #5를 먼저 보냈어.',['X1','X2','K'],['X1-K','X2-K'],
+   async()=>{await fly('X2-K','bad',{label:'#5'});await fly('X1-K','go',{label:'#4 · #5'});note('K','#5 → #4 → #5','bad')}),
+  st('obs','순서와 중복이 깨짐','Kafka에는 #5, #4, #5 순서로 쌓였어. 순번 하나에 기대는 소비자는 앞 번호가 빠졌다고 보고 멈추거나, 같은 번호를 두 번 받아.',['K'],[],
+   async()=>{await wait(900)}),
+  X({resp:'같은 토픽으로 순번을 보내는 쪽은 한 번에 하나뿐이어야 해.'},st('fix','이름 잠금을 쥔 서버만 보냄','각 서버의 발행 워커는 MySQL GET_LOCK을 먼저 시도해. 잠금을 쥔 서버 하나만 전용 스레드로 보내고, 나머지는 쉬어. 프로듀서는 고정 transactional.id를 써서 예전에 떠 있던 프로듀서가 늦게 보내는 것도 Kafka가 막아.',['X1','X2'],[],
+   async()=>{note('X1','GET_LOCK 성공','ok');note('X2','잠금 없음 · 쉼','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','두 워커가 같이 깨어나도 S1만 이력을 읽고 #4, #5를 순서대로 보내. S2는 아무것도 하지 않아.',['M','X1','X2','K'],['X1-M','X1-K'],
+   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await back('X1-M',{label:'#4 · #5'});await fly('X1-K','go',{label:'#4 → #5'});note('K','#4 → #5','ok');setR('his','#5까지 전송됨','ok')}),
+  X({lim:['보내는 처리량은 서버 한 대 몫이야','잠금 쥔 서버가 연결만 살아 있고 멈추면 전송도 멈춰'],alt:['냉장고 범위를 나눠 발행자를 여러 개 두기 (샤딩)','CDC로 넘기기']},
+   st('sum','해결 전후','해결 전에는 두 워커가 섞어 보냈어. 해결 뒤에는 한 서버만 순서대로 보내.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 5. 묶음 중 일부만 나감',scene:'kmem',opt:{},show:['M','X1','K'],tags:['code','risk','sol'],
+  intro:'발행 워커는 냉장고별로 최대 100건을 묶어서 보내. 묶음을 하나씩 보내다 중간에 실패하면 어떻게 되는지 봐.',
+  cmp:['#4는 나가고 #5는 안 나가서 순번에 구멍이 생겨.','Kafka 트랜잭션으로 묶음 전체를 한 번에 커밋해.'],
+  steps:[
+  st('norm','묶음을 하나씩 보냄','#4, #5를 차례로 보내.',['X1','M','K'],['X1-M','X1-K'],
+   async()=>{setR('his','#4 · #5 미전송','pend');await back('X1-M',{label:'#4 · #5'});await fly('X1-K','go',{label:'#4'})}),
+  st('prob','두 번째에서 실패','#5를 보내다 실패했어. #4는 이미 Kafka에 들어갔어.',['X1','K'],['X1-K'],
+   async()=>{await fly('X1-K','bad',{label:'#5 실패'});note('K','#4만 있음','bad')}),
+  st('obs','순번에 구멍','다시 보내면 #4가 또 나가고, 안 보내면 #5가 빠져. 어느 쪽이든 순서가 깨져.',['K'],[],async()=>{await wait(900)}),
+  X({resp:'한 묶음은 전부 나가거나 전부 안 나가야 해.'},st('fix','Kafka 트랜잭션','트랜잭션 프로듀서로 begin → send × N → commit 해. 커밋 전에 실패하면 묶음 전체가 취소돼서, 소비자에게는 아무것도 안 보여.',['X1'],[],
+   async()=>{note('X1','begin → send ×2 → commit','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','#5에서 똑같이 실패하면 묶음 전체가 취소돼. 다음 회차에 #4, #5를 다시 묶어 보내고 커밋한 뒤 DB에 "#5까지 보냄"을 적어.',['X1','M','K'],['X1-K','X1-M'],
+   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await fly('X1-K','bad',{label:'#4 · #5 중 실패 → 취소'});note('K','보이는 것 없음','ok');
+    await fly('X1-K','go',{label:'#4 · #5 커밋'});note('K','#4 · #5','ok');await fly('X1-M','go',{label:'#5까지 보냄'});setR('his','#5까지 전송됨','ok')}),
+  X({lim:['Kafka 커밋 뒤 DB에 "보냄"을 적기 전에 죽으면 같은 묶음을 또 보내 (최소 한 번 전달)'],alt:['보내는 쪽에선 완전히 못 막아. 받는 쪽(구성원 7번)에서 순번으로 걸러']},
+   st('sum','해결 전후','해결 전에는 묶음이 반만 나갔어. 해결 뒤에는 전부 나가거나 전부 안 나가. 다만 같은 묶음이 두 번 나갈 수는 있어.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 6. 취소된 묶음을 소비자가 읽음',scene:'kmem',opt:{},show:['X1','K','C'],tags:['code','risk','sol'],
+  intro:'Kafka 트랜잭션이 실패하면 묶음은 취소돼. 그런데 소비자가 커밋 여부를 따지지 않고 읽으면 어떻게 되는지 봐.',
+  cmp:['취소된 #4를 읽고 일어나지 않은 변경으로 알림을 만들어.','read_committed로 커밋된 메시지만 읽어.'],
+  steps:[
+  st('norm','트랜잭션 진행 중','발행 워커가 #4를 보냈고 아직 커밋하지 않았어.',['X1','K'],['X1-K'],async()=>{await fly('X1-K','go',{label:'#4 (커밋 전)'})}),
+  st('prob','트랜잭션 취소','DB 기록 전에 잠금을 잃어서 묶음을 취소(abort)했어. #4는 없던 일이야.',['X1','K'],[],async()=>{note('X1','abort','bad');note('K','#4 취소됨','warn');await wait(700)}),
+  st('obs','소비자가 취소된 #4를 읽음','기본 설정(read_uncommitted)이면 취소된 메시지도 소비자에게 보여. 없는 변경으로 알림이 나가.',['K','C'],['K-C'],
+   async()=>{await fly('K-C','bad',{label:'취소된 #4'});note('C','없는 변경으로 알림','bad')}),
+  X({resp:'소비자는 커밋된 사건만 처리해야 해.'},st('fix','read_committed','구성원 리스너는 isolation.level = read_committed로 설정돼 있어. 취소된 트랜잭션의 메시지는 건너뛰어.',['C'],[],
+   async()=>{note('C','read_committed','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','#4를 보내고 취소하는 것까지 같아. 소비자에게는 #4가 보이지 않아.',['X1','K','C'],['X1-K'],
+   async()=>{note('C','');note('K','');note('X1','');await fly('X1-K','go',{label:'#4 (커밋 전)'});note('X1','abort','bad');note('K','취소된 #4 · 안 보임','ok');note('C','읽을 것 없음','ok');await wait(700)}),
+  X({lim:['열린 트랜잭션이 끝날 때까지 그 뒤 메시지도 보이지 않아. 발행 쪽이 오래 끌면 소비도 같이 늦어져']},
+   st('sum','해결 전후','해결 전에는 취소된 사건도 알림이 됐어. 해결 뒤에는 커밋된 사건만 알림이 돼.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 7. 같은 메시지가 또 오거나 앞 번호가 빠짐',scene:'kmem',opt:{},show:['K','C','PG','ND'],tags:['code','risk','sol'],
+  intro:'구성원 5번에서 봤듯이 같은 묶음이 두 번 나갈 수 있어. 소비자가 그대로 알림을 만들면 어떻게 되는지 봐.',
+  cmp:['#4가 두 번 오면 알림도 두 번 나가.','완료 순번 + 1만 처리하고, 알림과 완료 순번을 한 트랜잭션으로 저장해.'],
+  steps:[
+  st('norm','#4 처리','소비자가 #4를 받아 알림을 저장해.',['K','C','ND'],['K-C','C-ND'],async()=>{await fly('K-C','go',{label:'#4'});await fly('C-ND','go',{label:'알림 저장'});setR('nt','1건','ok')}),
+  st('prob','같은 #4가 다시 옴','발행 쪽이 같은 묶음을 또 보냈어. 소비자가 또 알림을 저장해.',['K','C','ND'],['K-C','C-ND'],
+   async()=>{await fly('K-C','go',{label:'#4 (다시)'});await fly('C-ND','bad',{label:'알림 또 저장'});setR('nt','2건 (중복)','bad')}),
+  st('obs','중복 알림','구성원들은 "U3가 나갔어요"를 두 번 받아. 반대로 #5가 #4보다 먼저 오면 순서도 뒤집혀.',['ND'],[],async()=>{note('ND','같은 알림 2번','bad');await wait(900)}),
+  X({resp:'메시지는 여러 번 와도 알림은 한 번만, 순번 순서대로 만들어져야 해.'},st('fix','완료 순번 + 1만 처리','membership_notification_progress에 냉장고별 완료 순번을 적어 두고, 행을 잠근 채 비교해. 이미 처리한 번호는 건너뛰고, "완료 + 1"이 아니면 예외로 멈춰서 1초마다 다시 시도해. 알림 저장과 완료 순번 갱신은 한 트랜잭션이고, 커밋 뒤에 offset을 넘겨.',['C','PG'],[],
+   async()=>{note('PG','완료 + 1만 통과','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','#4는 완료 3 + 1이라 처리하고 완료 순번을 4로 올려. 같은 #4가 다시 오면 이미 처리한 번호라 건너뛰어.',['K','C','PG','ND'],['K-C','C-PG','C-ND'],
+   async()=>{resetData();note('ND','');note('PG','');await fly('K-C','go',{label:'#4'});await back('C-PG',{label:'완료 3 → #4 통과'});await fly('C-ND','go',{label:'알림 + 완료 4 (한 트랜잭션)'});setR('nt','1건','ok');setR('prog','4','ok');
+    await fly('K-C','go',{label:'#4 (다시)'});await back('C-PG',{label:'이미 처리'});note('C','건너뜀','ok')}),
+  st('re','앞 번호가 빠지면 멈춤','#5 없이 #6이 먼저 오면 "완료 4 + 1 ≠ 6"이라 예외를 던져. 일부러 건너뛰지 않고 1초마다 다시 시도하면서 #5를 기다려.',['K','C','PG'],['K-C','C-PG'],
+   async()=>{note('C','');await fly('K-C','go',{label:'#6'});await back('C-PG',{label:'완료 4 · #6 거부'});note('C','멈춤 · 1초마다 재시도','warn')}),
+  X({lim:['앞 번호가 끝내 오지 않으면 무한 재시도야. 그동안 같은 파티션의 다른 냉장고 메시지도 멈춰 (설정에서 추론)'],alt:['재시도 한도 + 경보 + DLT','막힌 냉장고만 따로 보류하고 나머지는 계속 처리']},
+   st('sum','해결 전후','해결 전에는 같은 알림이 두 번 나갔어. 해결 뒤에는 메시지가 최소 한 번 와도 알림은 한 번만, 순서대로 만들어져.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'구성원 8. SSE 연결은 다른 서버에 있음',scene:'kmem',opt:{},show:['C','ND','S2','B1'],tags:['code','sol'],
+  intro:'소비자는 S1에서 돌았는데 U2의 SSE 연결은 S2에 붙어 있어. 알림을 저장한 뒤 U2 화면은 어떻게 알게 될까?',
+  cmp:['알림은 저장됐는데 U2 화면은 새 알림을 몰라.','커밋 뒤 Redis Pub/Sub으로 모든 서버에 신호를 뿌리고, 연결 가진 S2가 전달해.'],
+  steps:[
+  st('norm','알림 저장','S1의 소비자가 알림을 저장하고 커밋해.',['C','ND'],['C-ND'],async()=>{await fly('C-ND','go',{label:'알림 저장'});setR('nt','1건','ok')}),
+  st('prob','S1에는 U2 연결이 없음','S1은 U2에게 직접 보낼 연결이 없어. 연결은 S2에 있어.',['C','S2','B1'],[],async()=>{note('C','S1에서 실행','warn');note('B1','S2에 연결 · 모름','bad');await wait(900)}),
+  X({resp:'어느 서버에서 커밋했든 연결을 가진 서버가 신호를 받아야 해.'},st('fix','커밋 뒤 Redis Pub/Sub','@TransactionalEventListener로 커밋이 끝난 뒤 Redis 채널에 신호를 발행해. 구독 중인 모든 서버가 받고, 연결을 가진 서버가 SSE로 전달해.',['R'],[],
+   async()=>{reveal('R');note('R','커밋 뒤 발행','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','알림을 커밋하고, 신호를 Redis로 보내. S2가 받아 U2 화면에 알려.',['C','ND','R','S2','B1'],['C-ND','C-R','R-S2','S2-B1'],
+   async()=>{resetData();note('B1','');note('C','');await fly('C-ND','go',{label:'알림 저장'});setR('nt','1건','ok');await fly('C-R','ext',{label:'커밋 뒤 신호'});await fly('R-S2','ext');await fly('S2-B1','ext');badge('B1',1);note('B1','알림함 갱신','ok')}),
+  X({lim:['Pub/Sub은 저장하지 않아서, 그 순간 놓친 신호는 다시 오지 않아'],alt:['Redis Streams처럼 저장되는 채널','다시 연결할 때 알림함을 DB에서 다시 조회 (⑤ 화면 참고)']},
+   st('sum','해결 전후','해결 전에는 다른 서버에 붙은 화면이 몰랐어. 해결 뒤에는 모든 서버가 신호를 받아. 알림 자체는 DB에 있으니 신호를 놓쳐도 다시 읽으면 돼.',[],[],async()=>{await wait(600)}))]}
+ ];
+
+ const exp=[
+ {name:'만료 1. (출발점) 배치가 길고 실패한 냉장고는 다시 안 함',scene:'kexp',opt:{},show:['S1','ND','J'],tags:['code','risk','sol'],
+  intro:'Kafka 경로가 꺼진 코드 기본값이야. 08시 배치 스레드 하나가 냉장고를 하나씩 돌면서 재고를 판정하고, 알림과 푸시 작업까지 저장해.',
+  cmp:['냉장고가 많을수록 배치가 길고, 실패한 냉장고는 그날 알림을 못 받아.','배치는 예약만 적고 끝나. 판정은 냉장고마다 따로, 실패하면 다시 처리돼.'],
+  steps:[
+  st('norm','냉장고 1 판정','배치가 냉장고 1의 재고를 판정하고 알림과 푸시 작업을 저장해.',['S1','ND','J'],['S1-ND','S1-J'],
+   async()=>{await fly('S1-ND','go',{label:'냉장고 1 알림'});setR('nt','1건','ok');await fly('S1-J','go',{label:'푸시 작업'});setR('j1','1건 대기','pend')}),
+  st('prob','냉장고 2에서 오류','냉장고 2를 저장하다 오류가 났어. 배치는 로그와 실패 개수만 남기고 다음 냉장고로 넘어가.',['S1','ND'],['S1-ND'],
+   async()=>{await fly('S1-ND','bad',{label:'냉장고 2 실패'});note('S1','실패 1 · 로그만','bad')}),
+  st('obs','다시 시도하지 않음','냉장고 2의 사용자는 그날 알림을 못 받아. 다시 시도할 기록이 어디에도 없어. 냉장고가 많아지면 배치 시간도 그만큼 길어져.',['ND'],[],
+   async()=>{note('ND','냉장고 2 알림 없음','bad');await wait(900)}),
+  X({resp:'냉장고 하나가 실패해도, 그 냉장고를 다시 처리할 기록이 남아야 해.'},st('fix','배치는 예약만, 판정은 따로','Kafka 경로를 켜면 배치는 냉장고마다 expiration_checks에 판정 예약 한 줄만 적고 끝나. 판정은 발행 워커 → Kafka → BE 소비자가 냉장고마다 따로 해.',['EC','X1','K','C'],[],
+   async()=>{reveal('EC','X1','K','C');note('S1','expiration-kafka.enabled = true','ok');await wait(900)})),
+  st('re','배치는 예약만','같은 08시 배치가 이번엔 냉장고 1, 2의 예약만 INSERT하고 금방 끝나.',['S1','EC'],['S1-EC'],
+   async()=>{resetData();note('ND','');await fly('S1-EC','go',{label:'냉장고 1 · 2 예약'});setR('ec1','예약 · 미발행','pend');setR('ec2','예약 · 미발행','pend');note('S1','배치 끝','ok')}),
+  st('re','실패해도 다시 처리','냉장고 2 판정이 실패하면 소비자는 예외를 던지고 5초 뒤 같은 메시지를 다시 처리해. 이번엔 성공해서 완료를 적어.',['EC','X1','K','C','ND'],['X1-EC','X1-K','K-C','C-ND'],
+   async()=>{await back('X1-EC',{label:'예약 2건'});await fly('X1-K','go',{label:'냉장고 1 · 2'});setR('ec1','발행됨','ok');setR('ec2','발행됨','ok');
+    await fly('K-C','go',{label:'냉장고 2'});await fly('C-ND','bad',{label:'판정 실패'});note('C','5초 뒤 다시','warn');await fly('C-ND','go',{label:'냉장고 2 알림'});setR('nt','2건','ok');setR('ec2','판정 완료','ok');note('C','')}),
+  X({lim:['판정 시작이 최대 한 주기(5초) 늦어','실패한 메시지는 5초마다 무한 재시도해 (건너뛰지 않음)'],alt:['Kafka 없이 예약 테이블 + DB 워커가 직접 판정 (푸시 워커 방식)']},
+   st('sum','해결 전후','해결 전에는 배치 하나가 모든 판정을 지고, 실패를 버렸어. 해결 뒤에는 배치가 짧아지고, 실패한 냉장고는 예약이 남아 다시 처리돼. 재시도와 중복 방지는 예약 테이블 덕분이야.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'만료 2. 08시 배치가 두 번 돎',scene:'kexp',opt:{},show:['S1','S2','EC'],tags:['risk','sol'],
+  intro:'서버마다 08시 배치가 돌거나, 배치를 다시 실행하면 같은 날 같은 냉장고의 예약을 두 번 적으려 해.',
+  cmp:['예약이 두 줄 생겨서 같은 냉장고를 두 번 판정해.','(날짜, 냉장고) 유니크 키 + ON DUPLICATE KEY로 하루 한 줄만 남아.'],
+  steps:[
+  st('prob','두 서버가 같이 예약','S1과 S2의 08시 배치가 동시에 냉장고 1 예약을 적어.',['S1','S2','EC'],['S1-EC','S2-EC'],
+   async()=>{await both(fly('S1-EC','go',{label:'냉장고 1 예약'}),fly('S2-EC','go',{label:'냉장고 1 예약'}));setR('ec1','예약 2줄','bad')}),
+  st('obs','같은 판정 두 번','예약이 두 줄이면 발행도 두 번, 판정과 알림도 두 번이야.',['EC'],[],async()=>{note('EC','같은 냉장고 2번','bad');await wait(900)}),
+  X({resp:'같은 날 같은 냉장고의 예약은 몇 번 적어도 한 줄이어야 해.'},st('fix','유니크 키 + ON DUPLICATE KEY','expiration_checks에 (business_date, refrigerator_id) 유니크 키가 있어. INSERT … ON DUPLICATE KEY UPDATE로 이미 있으면 그대로 둬.',['EC'],[],
+   async()=>{note('EC','uk(날짜, 냉장고)','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','두 서버가 같이 적어도 한 줄만 남아. 늦게 온 쪽은 아무것도 바꾸지 않아.',['S1','S2','EC'],['S1-EC','S2-EC'],
+   async()=>{resetData();note('EC','');await both(fly('S1-EC','go',{label:'냉장고 1 예약'}),fly('S2-EC','go',{label:'냉장고 1 예약'}));setR('ec1','예약 1줄','ok');note('S2','이미 있음 · 그대로','ok')}),
+  X({lim:['배치 자체는 서버마다 돌아. 냉장고 목록 조회와 INSERT는 두 번 일어나'],alt:['실행권 테이블로 한 서버만 배치 돌리기 (③ 화면의 방식)']},
+   st('sum','해결 전후','해결 전에는 같은 판정이 두 번 됐어. 해결 뒤에는 배치가 몇 번 돌아도 예약은 하루 한 줄이야.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'만료 3. 발행 워커 둘이 같은 예약을 보냄',scene:'kexp',opt:{},show:['EC','X1','X2','K'],tags:['code','risk','sol'],
+  intro:'서버가 두 대면 발행 워커도 두 개야. 둘이 같은 시각에 미발행 예약을 읽으면 어떻게 되는지 봐.',
+  cmp:['같은 냉장고 판정 요청이 Kafka에 두 번 들어가.','조건부 UPDATE로 60초 점유에 성공한 워커만 보내.'],
+  steps:[
+  st('prob','둘이 같은 예약을 읽음','S1과 S2의 발행 워커가 냉장고 1 예약을 같이 읽고 각자 보내.',['EC','X1','X2','K'],['X1-EC','X2-EC','X1-K','X2-K'],
+   async()=>{setR('ec1','예약 · 미발행','pend');await both(back('X1-EC',{label:'냉장고 1'}),back('X2-EC',{label:'냉장고 1'}));await both(fly('X1-K','go',{label:'냉장고 1'}),fly('X2-K','bad',{label:'냉장고 1'}));note('K','같은 요청 2개','bad')}),
+  X({resp:'같은 예약은 한 번에 한 워커만 보내야 해.'},st('fix','조건부 UPDATE로 60초 점유','보내기 전에 "published_at이 비어 있고 publish_after가 지났으면 publish_after를 60초 뒤로" UPDATE를 해. 이 UPDATE가 1행을 바꾼 워커만 보내고, 0행이면 건너뛰어.',['EC','X1','X2'],[],
+   async()=>{note('EC','claim: publish_after + 60초','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','둘이 같이 점유를 시도해. S1만 1행을 바꿔서 보내고, S2는 0행이라 건너뛰어.',['EC','X1','X2','K'],['X1-EC','X2-EC','X1-K'],
+   async()=>{resetData();note('K','');note('EC','');setR('ec1','예약 · 미발행','pend');await both(fly('X1-EC','go',{label:'점유 시도'}),fly('X2-EC','go',{label:'점유 시도'}));note('X1','1행 · 성공','ok');note('X2','0행 · 건너뜀','ok');setR('ec1','점유 (60초)','pend');
+    await fly('X1-K','go',{label:'냉장고 1'});setR('ec1','발행됨','ok');note('K','1개','ok')}),
+  X({lim:['보낸 뒤 "발행됨"을 적기 전에 죽으면 60초 뒤 또 보내 (최소 한 번) → 만료 4번에서 거름']},
+   st('sum','해결 전후','해결 전에는 두 워커가 같이 보냈어. 해결 뒤에는 점유에 성공한 하나만 보내.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'만료 4. 같은 판정 요청이 두 번 옴',scene:'kexp',opt:{},show:['K','C','EC','ND'],tags:['code','risk','sol'],
+  intro:'만료 3번에서 봤듯이 같은 요청이 두 번 나갈 수 있어. 소비자가 그대로 판정하면 어떻게 되는지 봐.',
+  cmp:['같은 냉장고 알림이 두 번 만들어져.','예약 줄을 잠그고 completed_at이 있으면 건너뛰어.'],
+  steps:[
+  st('norm','냉장고 1 판정','소비자가 냉장고 1을 판정하고 알림을 저장해.',['K','C','ND'],['K-C','C-ND'],async()=>{await fly('K-C','go',{label:'냉장고 1'});await fly('C-ND','go',{label:'알림'});setR('nt','1건','ok')}),
+  st('prob','같은 요청이 또 옴','같은 판정 요청이 다시 와서 또 판정해.',['K','C','ND'],['K-C','C-ND'],async()=>{await fly('K-C','go',{label:'냉장고 1 (다시)'});await fly('C-ND','bad',{label:'알림 또'});setR('nt','2건 (중복)','bad')}),
+  X({resp:'같은 날 같은 냉장고 판정은 한 번만 반영돼야 해.'},st('fix','잠그고 완료 여부 확인','판정 전에 그 예약 줄을 FOR UPDATE로 잠그고 completed_at을 봐. 이미 있으면 아무것도 안 해.',['C','EC'],[],
+   async()=>{note('EC','FOR UPDATE · completed_at','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','처음엔 완료 표시가 없어서 판정하고 완료를 적어. 같은 요청이 다시 오면 이미 완료라 건너뛰어.',['K','C','EC','ND'],['K-C','C-EC','C-ND'],
+   async()=>{resetData();note('EC','');await fly('K-C','go',{label:'냉장고 1'});await back('C-EC',{label:'완료 없음'});await fly('C-ND','go',{label:'알림'});setR('nt','1건','ok');setR('ec1','판정 완료','ok');
+    await fly('K-C','go',{label:'냉장고 1 (다시)'});await back('C-EC',{label:'이미 완료'});note('C','건너뜀','ok')}),
+  X({lim:['처리 중 오류는 5초마다 무한 재시도해. 계속 실패하면 같은 파티션 뒤 메시지도 멈춰 (설정에서 추론)'],alt:['재시도 한도 + 경보 + DLT']},
+   st('sum','해결 전후','해결 전에는 같은 알림이 두 번 생겼어. 해결 뒤에는 요청이 몇 번 와도 판정은 한 번이야.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'만료 5. 알림만 저장되고 완료 표시가 없음',scene:'kexp',opt:{},show:['C','EC','ND','J'],tags:['code','risk','sol'],
+  intro:'판정 결과(알림·푸시 작업)와 "판정 완료" 표시를 따로 저장한다고 해 봐. 그 사이에서 실패하면 어떻게 되는지 봐.',
+  cmp:['알림은 있는데 완료 표시가 없어서, 다시 오면 또 판정해.','알림·푸시 작업·완료 표시를 한 트랜잭션으로 커밋하고, 그 뒤에 offset을 넘겨.'],
+  steps:[
+  st('norm','알림 저장','소비자가 알림과 푸시 작업을 저장했어.',['C','ND','J'],['C-ND','C-J'],async()=>{await fly('C-ND','go',{label:'알림'});setR('nt','1건','ok');await fly('C-J','go',{label:'푸시 작업'});setR('j1','1건 대기','pend')}),
+  st('prob','완료 표시 실패','completed_at을 적다가 실패했어. 알림과 푸시 작업은 이미 커밋됐어.',['C','EC'],['C-EC'],async()=>{await fly('C-EC','bad',{label:'완료 표시 실패'});setR('ec1','완료 표시 없음','bad')}),
+  st('obs','다시 오면 또 판정','offset도 안 넘어가서 같은 메시지가 다시 와. 완료 표시가 없으니 또 판정하고 알림을 또 만들어.',['C','ND'],['C-ND'],async()=>{await fly('C-ND','bad',{label:'알림 또'});setR('nt','2건 (중복)','bad')}),
+  X({resp:'판정 결과와 "끝났음"은 함께 남거나 함께 없어야 해.'},st('fix','한 트랜잭션 + 커밋 뒤 offset','알림, 푸시 작업, completed_at을 한 트랜잭션으로 커밋해. 리스너는 커밋이 끝나야 반환하고(AckMode.RECORD), 그때 offset이 넘어가.',['C'],[],
+   async()=>{note('C','함께 커밋 → offset','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','셋을 함께 커밋해. 중간에 실패하면 셋 다 없던 일이 되고, 다시 와도 처음부터 깨끗하게 판정해.',['C','EC','ND','J'],['C-ND','C-J','C-EC'],
+   async()=>{resetData();await both(fly('C-ND','go',{label:'알림'}),fly('C-J','go',{label:'푸시 작업'}),fly('C-EC','go',{label:'완료'}));setR('nt','1건','ok');setR('j1','1건 대기','pend');setR('ec1','판정 완료','ok')}),
+  X({lim:['한 번만 보장되는 건 DB 안 결과까지야. 푸시 발송과 SSE 신호는 이 보장 밖이야']},
+   st('sum','해결 전후','해결 전에는 알림이 두 번 생겼어. 해결 뒤에는 같은 냉장고 알림이 하루 한 번만 만들어져.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'만료 6. Web Push가 느리거나 실패함',scene:'kexp',opt:{},show:['J','P','W'],tags:['code','sol'],
+  intro:'푸시 작업은 push_notifications에 쌓이고, 푸시 워커가 외부 Web Push로 보내. 외부 서버는 느리거나 실패할 수 있어.',
+  cmp:['느린 응답에 워커가 묶이고, 같은 작업을 여러 워커가 보낼 수 있어.','동시 20칸으로 제한하고, 작업마다 30초 점유를 걸어.'],
+  steps:[
+  st('prob','외부 응답이 느림','푸시 워커가 외부로 보냈는데 응답이 오래 걸려.',['P','W'],['P-W'],async()=>{await fly('P-W','ext',{label:'푸시 발송'});note('W','응답 지연','warn');note('P','작업이 묶임','bad')}),
+  X({resp:'외부가 느려도 워커 전체가 멈추면 안 되고, 한 작업은 한 워커만 보내야 해.'},st('fix','동시 20칸 · 30초 점유','푸시 워커는 1초마다 빈 칸 수만큼만 작업을 점유해(최대 20칸). 작업마다 30초 점유를 걸고, 점유 시간이 지난 작업은 보내지 않아. 그 작업은 다른 워커가 다시 잡아.',['P','J'],[],
+   async()=>{note('P','동시 20칸','ok');note('J','점유 30초','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','빈 칸만큼 작업을 점유하고 보내. 실패하면 재시도 대기로 돌리고, 점유가 끝난 작업은 보내지 않아.',['J','P','W'],['P-J','P-W'],
+   async()=>{resetData();note('W','');note('P','');setR('j1','1건 대기','pend');await back('P-J',{label:'빈 칸만큼 점유'});setR('j1','처리 중 (30초 점유)','pend');await fly('P-W','ext',{label:'푸시 발송'});await back('P-W',{cls:'bad',label:'실패'});setR('j1','재시도 대기','pend');note('P','다른 칸은 계속','ok')}),
+  X({lim:['외부가 수락한 뒤 결과 저장이 실패하면 같은 푸시가 또 나갈 수 있어 (② 1-B 참고)']},
+   st('sum','해결 전후','해결 전에는 느린 외부에 워커가 묶였어. 해결 뒤에는 한 번에 보내는 양이 정해져 있고, 점유로 같은 작업을 겹쳐 보내지 않아.',[],[],async()=>{await wait(600)}))]}
+ ];
+
+ /* 문제마다 자기 상자만 크게 보이도록 장면 이름을 나눔 */
+ mem.concat(exp).forEach((sc,i)=>{const nm=sc.scene+'_'+i;SPECS[nm]=SPECS[sc.scene];sc.scene=nm});
+ SCREENS.push({chip:'⑦ Kafka 비동기 구조의 문제',title:'⑦ Kafka 비동기 구조의 문제와 대응',menu:'구성원 변경 · 임박·만료를 Kafka로 넘겼을 때 생기는 문제와 막는 장치',
+  lede:'KTB4-5th-BE dev 4b13f19a 코드 기준이야. 두 기능 모두 Kafka 경로는 코드 기본값이 꺼져 있어. 각 문제는 문제, 해결 장치, 같은 조건 재실행 순서로 진행해.',
+  list:mem.concat(exp),
+  gloss:[['변경 이력','refrigerator_members의 joined_* / ended_* 컬럼. 보낼 구성원 사건과 순번.'],
+   ['expiration_checks','날짜·냉장고마다 한 줄인 판정 예약. published_at(보냄), completed_at(판정 끝).'],
+   ['발행 워커','DB를 주기적으로 읽어 아직 안 보낸 기록을 Kafka로 보내는 스레드. 구성원 1초, 만료 5초.'],
+   ['BE 소비자','Kafka 메시지를 받아 처리하는 리스너 스레드. 서버당 리스너마다 1개.'],
+   ['Kafka 트랜잭션','여러 메시지를 전부 보내거나 전부 취소하는 묶음. read_committed 소비자에게는 커밋된 것만 보여.'],
+   ['완료 순번','membership_notification_progress의 냉장고별 completed_sequence. "완료 + 1"만 처리.'],
+   ['최소 한 번 전달','같은 메시지가 두 번 올 수 있는 전달 방식. 받는 쪽이 중복을 걸러야 해.']]});
+})();
+
 const PH={norm:['p-norm','정상'],prob:['p-prob','문제'],obs:['p-obs','관찰'],fix:['p-fix','해결 장치'],re:['p-re','다시 실행'],sum:['p-sum','정리'],flow:['p-norm','흐름'],br:['p-fix','선택']};
 const TAGN={code:['code','코드 확인'],risk:['risk','구조적 위험'],perf:['perf','성능 가설'],sol:['sol','해결 후보'],plan:['sol','V2 계획']};
 const CLSN={now:'지금 구조에 반영',perf:'후속 성능 검증',fix:'후속 개별 수정',front:'프론트 담당 영역'};
