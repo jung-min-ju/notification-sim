@@ -1815,6 +1815,9 @@ POS2['3:v2w:m']={B1:[20,60,180,100],B2:[20,400,180,100],B3:[20,520,180,100],
 
 /* ---------- controller ---------- */
 /* ===== ⑦ Kafka 비동기 구조의 문제와 대응 (구성원 변경 · 임박·만료) — 기준: KTB4-5th-BE dev 4b13f19a (2026-11-08) ===== */
+/* Kafka를 파티션·소비자 그룹이 보이는 상자로 그림 */
+function kbox(n,p,rows){const b=box(n.id,p.x,p.y,p.w,p.h,n.title,n.sub,{stroke:n.stroke,dash:n.dash});rows.forEach(([k,name,c],i)=>trow(n.id,k,i,name,c));return N[n.id]}
+const _makeNode7=makeNode;makeNode=function(n,p){if(n.type==='kafka'||n.type==='group')return kbox(n,p,n.rows);return _makeNode7(n,p)};
 SPECS.kmem=o=>({nodes:[
   {id:'B1',col:0,type:'browser',name:'U2 · 알림 화면',colr:'var(--u2)',sub:'SSE: S2에 연결'},
   {id:'S1',col:1,type:'server',w:210,h:130,title:'서버 S1',sub:'구성원 요청 처리'},
@@ -1826,13 +1829,17 @@ SPECS.kmem=o=>({nodes:[
   {id:'PG',col:2,type:'cyl',w:330,label:'membership_notification_progress',cls:'db-q',rows:[['prog','냉장고 1 완료 순번','3']]},
   {id:'X1',col:3,type:'box',w:220,h:100,title:'발행 워커 (S1)',sub:'1초마다 · 이름 잠금 보유'},
   {id:'X2',col:3,type:'box',w:220,h:100,title:'발행 워커 (S2)',sub:'1초마다'},
-  {id:'K',col:3,type:'box',w:220,h:100,title:'Kafka',sub:'구성원 토픽 · 키 = 냉장고 ID'},
-  {id:'C',col:3,type:'box',w:220,h:100,title:'BE 소비자 (S1)',sub:'리스너 스레드 1개'}],
+  {id:'K',col:3,type:'kafka',w:270,h:140,title:'Kafka · 구성원 토픽',sub:'키 = 냉장고 ID → 같은 냉장고는 같은 파티션',rows:[['kp0','파티션 0 (냉장고 1)','#3까지 커밋'],['kp1','파티션 1 (다른 냉장고)','비어 있음']]},
+  {id:'C',col:3,type:'group',w:270,h:140,title:'소비자 그룹',sub:'membership-notification.v1',rows:[['g1','소비자 1 · S1','파티션 0 담당'],['g2','소비자 2 · S2','파티션 1 담당']]}],
  edges:[['S1-M','참여·이력 저장'],['S2-M','변경 저장'],['S1-RF','순번 +1'],['S2-RF','순번 +1'],['S1-ND','알림 저장'],['S1-K','바로 발행'],
   ['X1-M','이력 읽기'],['X2-M','이력 읽기'],['X1-K','묶음 발행'],['X2-K','발행'],['K-C','전달'],['C-PG','순번 확인'],['C-ND','알림 저장'],
   ['C-R','신호 발행'],['S1-R','신호 발행'],['R-S2','신호 전달'],['S2-B1','SSE 안내']],
  conns:[['K1','B1','S2']]});
 SPECS.kexp=o=>({nodes:[
+  {id:'B1',col:-1,type:'browser',name:'U1 · 앱',colr:'var(--u1)',sub:'냉장고 A에 재료 등록',nobadge:1},
+  {id:'AP',col:0,type:'box',w:210,h:120,title:'서버 · 재료 등록',sub:'요청 트랜잭션',stroke:'var(--s2)'},
+  {id:'UT',col:1,type:'cyl',w:320,label:'users',cls:'db-p',rows:[['ut','U1 행','잠금 없음']]},
+  {id:'RT',col:1,type:'cyl',w:320,label:'refrigerators',cls:'db-a',rows:[['rt','냉장고 A 행','잠금 없음']]},
   {id:'S1',col:0,type:'server',w:210,h:130,title:'서버 S1',sub:'08시 배치 실행'},
   {id:'S2',col:0,type:'server',w:210,h:130,title:'서버 S2',sub:'08시 배치 실행'},
   {id:'EC',col:1,type:'cyl',w:320,label:'expiration_checks',cls:'db-a',rows:[['ec1','냉장고 1 판정 예약','없음'],['ec2','냉장고 2 판정 예약','없음']]},
@@ -1840,13 +1847,14 @@ SPECS.kexp=o=>({nodes:[
   {id:'J',col:1,type:'cyl',w:320,label:'push_notifications',cls:'db-q',rows:[['j1','푸시 작업','없음']]},
   {id:'X1',col:2,type:'box',w:220,h:100,title:'발행 워커 (S1)',sub:'5초마다 · 최대 20건'},
   {id:'X2',col:2,type:'box',w:220,h:100,title:'발행 워커 (S2)',sub:'5초마다 · 최대 20건'},
-  {id:'K',col:2,type:'box',w:220,h:100,title:'Kafka',sub:'판정 토픽 · 키 = 냉장고 ID'},
-  {id:'C',col:2,type:'box',w:220,h:100,title:'BE 소비자',sub:'리스너 스레드 1개'},
+  {id:'K',col:2,type:'kafka',w:270,h:174,title:'Kafka · 판정 토픽',sub:'키 = 냉장고 ID → 파티션',rows:[['kp0','파티션 0','비어 있음'],['kp1','파티션 1','비어 있음'],['kp2','파티션 2','비어 있음']]},
+  {id:'C',col:2,type:'group',w:270,h:140,title:'소비자 그룹',sub:'be.expiration-check.v1',rows:[['g1','소비자 1 · Pod 1','파티션 0 · 1 담당'],['g2','소비자 2 · Pod 2','파티션 2 담당']]},
   {id:'P',col:2,type:'box',w:220,h:100,title:'푸시 워커',sub:'1초마다 · 동시 20칸'},
   {id:'W',col:3,type:'box',w:200,h:90,title:'외부 Web Push',sub:'제공자 수락 ≠ 단말 수신'}],
  edges:[['S1-EC','예약 저장'],['S2-EC','예약 저장'],['S1-ND','판정·알림 저장'],['S1-J','푸시 작업 저장'],
   ['X1-EC','예약 점유'],['X2-EC','예약 점유'],['X1-K','발행'],['X2-K','발행'],['K-C','전달'],
-  ['C-EC','완료 확인'],['C-ND','알림 저장'],['C-J','푸시 작업 저장'],['P-J','작업 점유'],['P-W','푸시 발송']]});
+  ['C-EC','완료 확인'],['C-ND','알림 저장'],['C-J','푸시 작업 저장'],['P-J','작업 점유'],['P-W','푸시 발송'],
+  ['B1-AP','재료 등록'],['AP-UT','U1 행 쓰기 잠금'],['AP-RT','냉장고 A 쓰기 잠금'],['C-RT','외래 키 검사'],['C-UT','외래 키 검사']]});
 
 (function(){
  const X=(o,s)=>Object.assign(s,o);
@@ -1913,13 +1921,13 @@ SPECS.kexp=o=>({nodes:[
   st('norm','두 워커가 같은 이력을 읽음','S1과 S2의 발행 워커가 1초마다 깨어나 미전송 이력 #4, #5를 같이 읽어.',['M','X1','X2'],['X1-M','X2-M'],
    async()=>{setR('his','#4 · #5 미전송','pend');await both(back('X1-M',{label:'#4 · #5'}),back('X2-M',{label:'#4 · #5'}))}),
   st('prob','둘이 따로 보냄','S1은 #4부터, S2는 네트워크가 빨라 #5를 먼저 보냈어.',['X1','X2','K'],['X1-K','X2-K'],
-   async()=>{await fly('X2-K','bad',{label:'#5'});await fly('X1-K','go',{label:'#4 · #5'});note('K','#5 → #4 → #5','bad')}),
+   async()=>{await fly('X2-K','bad',{label:'#5'});await fly('X1-K','go',{label:'#4 · #5'});note('K','');setR('kp0','#5 → #4 → #5','bad')}),
   st('obs','순서와 중복이 깨짐','Kafka에는 #5, #4, #5 순서로 쌓였어. 순번 하나에 기대는 소비자는 앞 번호가 빠졌다고 보고 멈추거나, 같은 번호를 두 번 받아.',['K'],[],
    async()=>{await wait(900)}),
   X({resp:'같은 토픽으로 순번을 보내는 쪽은 한 번에 하나뿐이어야 해.'},st('fix','이름 잠금을 쥔 서버만 보냄','각 서버의 발행 워커는 MySQL GET_LOCK을 먼저 시도해. 잠금을 쥔 서버 하나만 전용 스레드로 보내고, 나머지는 쉬어. 프로듀서는 고정 transactional.id를 써서 예전에 떠 있던 프로듀서가 늦게 보내는 것도 Kafka가 막아.',['X1','X2'],[],
    async()=>{note('X1','GET_LOCK 성공','ok');note('X2','잠금 없음 · 쉼','ok');await wait(900)})),
   st('re','같은 조건으로 다시 실행','두 워커가 같이 깨어나도 S1만 이력을 읽고 #4, #5를 순서대로 보내. S2는 아무것도 하지 않아.',['M','X1','X2','K'],['X1-M','X1-K'],
-   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await back('X1-M',{label:'#4 · #5'});await fly('X1-K','go',{label:'#4 → #5'});note('K','#4 → #5','ok');setR('his','#5까지 전송됨','ok')}),
+   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await back('X1-M',{label:'#4 · #5'});await fly('X1-K','go',{label:'#4 → #5'});setR('kp0','#4 → #5','ok');setR('his','#5까지 전송됨','ok')}),
   X({lim:['보내는 처리량은 서버 한 대 몫이야','잠금 쥔 서버가 연결만 살아 있고 멈추면 전송도 멈춰'],alt:['냉장고 범위를 나눠 발행자를 여러 개 두기 (샤딩)','CDC로 넘기기']},
    st('sum','해결 전후','해결 전에는 두 워커가 섞어 보냈어. 해결 뒤에는 한 서버만 순서대로 보내.',[],[],async()=>{await wait(600)}))]},
 
@@ -1930,13 +1938,13 @@ SPECS.kexp=o=>({nodes:[
   st('norm','묶음을 하나씩 보냄','#4, #5를 차례로 보내.',['X1','M','K'],['X1-M','X1-K'],
    async()=>{setR('his','#4 · #5 미전송','pend');await back('X1-M',{label:'#4 · #5'});await fly('X1-K','go',{label:'#4'})}),
   st('prob','두 번째에서 실패','#5를 보내다 실패했어. #4는 이미 Kafka에 들어갔어.',['X1','K'],['X1-K'],
-   async()=>{await fly('X1-K','bad',{label:'#5 실패'});note('K','#4만 있음','bad')}),
+   async()=>{await fly('X1-K','bad',{label:'#5 실패'});setR('kp0','#4만 (#5 구멍)','bad')}),
   st('obs','순번에 구멍','다시 보내면 #4가 또 나가고, 안 보내면 #5가 빠져. 어느 쪽이든 순서가 깨져.',['K'],[],async()=>{await wait(900)}),
   X({resp:'한 묶음은 전부 나가거나 전부 안 나가야 해.'},st('fix','Kafka 트랜잭션','트랜잭션 프로듀서로 begin → send × N → commit 해. 커밋 전에 실패하면 묶음 전체가 취소돼서, 소비자에게는 아무것도 안 보여.',['X1'],[],
    async()=>{note('X1','begin → send ×2 → commit','ok');await wait(900)})),
   st('re','같은 조건으로 다시 실행','#5에서 똑같이 실패하면 묶음 전체가 취소돼. 다음 회차에 #4, #5를 다시 묶어 보내고 커밋한 뒤 DB에 "#5까지 보냄"을 적어.',['X1','M','K'],['X1-K','X1-M'],
-   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await fly('X1-K','bad',{label:'#4 · #5 중 실패 → 취소'});note('K','보이는 것 없음','ok');
-    await fly('X1-K','go',{label:'#4 · #5 커밋'});note('K','#4 · #5','ok');await fly('X1-M','go',{label:'#5까지 보냄'});setR('his','#5까지 전송됨','ok')}),
+   async()=>{resetData();note('K','');setR('his','#4 · #5 미전송','pend');await fly('X1-K','bad',{label:'#4 · #5 중 실패 → 취소'});setR('kp0','취소 · 보이는 것 없음','ok');
+    await fly('X1-K','go',{label:'#4 · #5 커밋'});setR('kp0','#4 · #5 커밋','ok');await fly('X1-M','go',{label:'#5까지 보냄'});setR('his','#5까지 전송됨','ok')}),
   X({lim:['Kafka 커밋 뒤 DB에 "보냄"을 적기 전에 죽으면 같은 묶음을 또 보내 (최소 한 번 전달)'],alt:['보내는 쪽에선 완전히 못 막아. 받는 쪽(구성원 7번)에서 순번으로 걸러']},
    st('sum','해결 전후','해결 전에는 묶음이 반만 나갔어. 해결 뒤에는 전부 나가거나 전부 안 나가. 다만 같은 묶음이 두 번 나갈 수는 있어.',[],[],async()=>{await wait(600)}))]},
 
@@ -1945,13 +1953,13 @@ SPECS.kexp=o=>({nodes:[
   cmp:['취소된 #4를 읽고 일어나지 않은 변경으로 알림을 만들어.','read_committed로 커밋된 메시지만 읽어.'],
   steps:[
   st('norm','트랜잭션 진행 중','발행 워커가 #4를 보냈고 아직 커밋하지 않았어.',['X1','K'],['X1-K'],async()=>{await fly('X1-K','go',{label:'#4 (커밋 전)'})}),
-  st('prob','트랜잭션 취소','DB 기록 전에 잠금을 잃어서 묶음을 취소(abort)했어. #4는 없던 일이야.',['X1','K'],[],async()=>{note('X1','abort','bad');note('K','#4 취소됨','warn');await wait(700)}),
+  st('prob','트랜잭션 취소','DB 기록 전에 잠금을 잃어서 묶음을 취소(abort)했어. #4는 없던 일이야.',['X1','K'],[],async()=>{note('X1','abort','bad');setR('kp0','#4 (취소됨)','pend');await wait(700)}),
   st('obs','소비자가 취소된 #4를 읽음','기본 설정(read_uncommitted)이면 취소된 메시지도 소비자에게 보여. 없는 변경으로 알림이 나가.',['K','C'],['K-C'],
-   async()=>{await fly('K-C','bad',{label:'취소된 #4'});note('C','없는 변경으로 알림','bad')}),
+   async()=>{await fly('K-C','bad',{label:'취소된 #4'});setR('g1','취소된 #4로 알림','bad')}),
   X({resp:'소비자는 커밋된 사건만 처리해야 해.'},st('fix','read_committed','구성원 리스너는 isolation.level = read_committed로 설정돼 있어. 취소된 트랜잭션의 메시지는 건너뛰어.',['C'],[],
-   async()=>{note('C','read_committed','ok');await wait(900)})),
+   async()=>{setR('g1','read_committed','ok');await wait(900)})),
   st('re','같은 조건으로 다시 실행','#4를 보내고 취소하는 것까지 같아. 소비자에게는 #4가 보이지 않아.',['X1','K','C'],['X1-K'],
-   async()=>{note('C','');note('K','');note('X1','');await fly('X1-K','go',{label:'#4 (커밋 전)'});note('X1','abort','bad');note('K','취소된 #4 · 안 보임','ok');note('C','읽을 것 없음','ok');await wait(700)}),
+   async()=>{note('C','');note('K','');note('X1','');await fly('X1-K','go',{label:'#4 (커밋 전)'});note('X1','abort','bad');setR('kp0','#4 (취소됨)','pend');setR('g1','읽을 것 없음','ok');await wait(700)}),
   X({lim:['열린 트랜잭션이 끝날 때까지 그 뒤 메시지도 보이지 않아. 발행 쪽이 오래 끌면 소비도 같이 늦어져']},
    st('sum','해결 전후','해결 전에는 취소된 사건도 알림이 됐어. 해결 뒤에는 커밋된 사건만 알림이 돼.',[],[],async()=>{await wait(600)}))]},
 
@@ -1967,9 +1975,9 @@ SPECS.kexp=o=>({nodes:[
    async()=>{note('PG','완료 + 1만 통과','ok');await wait(900)})),
   st('re','같은 조건으로 다시 실행','#4는 완료 3 + 1이라 처리하고 완료 순번을 4로 올려. 같은 #4가 다시 오면 이미 처리한 번호라 건너뛰어.',['K','C','PG','ND'],['K-C','C-PG','C-ND'],
    async()=>{resetData();note('ND','');note('PG','');await fly('K-C','go',{label:'#4'});await back('C-PG',{label:'완료 3 → #4 통과'});await fly('C-ND','go',{label:'알림 + 완료 4 (한 트랜잭션)'});setR('nt','1건','ok');setR('prog','4','ok');
-    await fly('K-C','go',{label:'#4 (다시)'});await back('C-PG',{label:'이미 처리'});note('C','건너뜀','ok')}),
+    await fly('K-C','go',{label:'#4 (다시)'});await back('C-PG',{label:'이미 처리'});setR('g1','#4 다시 → 건너뜀','ok')}),
   st('re','앞 번호가 빠지면 멈춤','#5 없이 #6이 먼저 오면 "완료 4 + 1 ≠ 6"이라 예외를 던져. 일부러 건너뛰지 않고 1초마다 다시 시도하면서 #5를 기다려.',['K','C','PG'],['K-C','C-PG'],
-   async()=>{note('C','');await fly('K-C','go',{label:'#6'});await back('C-PG',{label:'완료 4 · #6 거부'});note('C','멈춤 · 1초마다 재시도','warn')}),
+   async()=>{note('C','');await fly('K-C','go',{label:'#6'});await back('C-PG',{label:'완료 4 · #6 거부'});setR('g1','#6 거부 · 1초마다 재시도','bad');setR('kp0','#6에서 멈춤','bad')}),
   X({lim:['앞 번호가 끝내 오지 않으면 무한 재시도야. 그동안 같은 파티션의 다른 냉장고 메시지도 멈춰 (설정에서 추론)'],alt:['재시도 한도 + 경보 + DLT','막힌 냉장고만 따로 보류하고 나머지는 계속 처리']},
    st('sum','해결 전후','해결 전에는 같은 알림이 두 번 나갔어. 해결 뒤에는 메시지가 최소 한 번 와도 알림은 한 번만, 순서대로 만들어져.',[],[],async()=>{await wait(600)}))]},
 
@@ -2003,8 +2011,8 @@ SPECS.kexp=o=>({nodes:[
   st('re','배치는 예약만','같은 08시 배치가 이번엔 냉장고 1, 2의 예약만 INSERT하고 금방 끝나.',['S1','EC'],['S1-EC'],
    async()=>{resetData();note('ND','');await fly('S1-EC','go',{label:'냉장고 1 · 2 예약'});setR('ec1','예약 · 미발행','pend');setR('ec2','예약 · 미발행','pend');note('S1','배치 끝','ok')}),
   st('re','실패해도 다시 처리','냉장고 2 판정이 실패하면 소비자는 예외를 던지고 5초 뒤 같은 메시지를 다시 처리해. 이번엔 성공해서 완료를 적어.',['EC','X1','K','C','ND'],['X1-EC','X1-K','K-C','C-ND'],
-   async()=>{await back('X1-EC',{label:'예약 2건'});await fly('X1-K','go',{label:'냉장고 1 · 2'});setR('ec1','발행됨','ok');setR('ec2','발행됨','ok');
-    await fly('K-C','go',{label:'냉장고 2'});await fly('C-ND','bad',{label:'판정 실패'});note('C','5초 뒤 다시','warn');await fly('C-ND','go',{label:'냉장고 2 알림'});setR('nt','2건','ok');setR('ec2','판정 완료','ok');note('C','')}),
+   async()=>{await back('X1-EC',{label:'예약 2건'});await fly('X1-K','go',{label:'냉장고 1 · 2'});setR('kp0','냉장고 1 → 냉장고 2','pend');setR('ec1','발행됨','ok');setR('ec2','발행됨','ok');
+    await fly('K-C','go',{label:'냉장고 2'});await fly('C-ND','bad',{label:'판정 실패'});setR('g1','냉장고 2 실패 · 5초 뒤 다시','bad');await fly('C-ND','go',{label:'냉장고 2 알림'});setR('g1','냉장고 2 완료 · offset 2','ok');setR('nt','2건','ok');setR('ec2','판정 완료','ok');note('C','')}),
   X({lim:['판정 시작이 최대 한 주기(5초) 늦어','실패한 메시지는 5초마다 무한 재시도해 (건너뛰지 않음)'],alt:['Kafka 없이 예약 테이블 + DB 워커가 직접 판정 (푸시 워커 방식)']},
    st('sum','해결 전후','해결 전에는 배치 하나가 모든 판정을 지고, 실패를 버렸어. 해결 뒤에는 배치가 짧아지고, 실패한 냉장고는 예약이 남아 다시 처리돼. 재시도와 중복 방지는 예약 테이블 덕분이야.',[],[],async()=>{await wait(600)}))]},
 
@@ -2027,12 +2035,12 @@ SPECS.kexp=o=>({nodes:[
   cmp:['같은 냉장고 판정 요청이 Kafka에 두 번 들어가.','조건부 UPDATE로 60초 점유에 성공한 워커만 보내.'],
   steps:[
   st('prob','둘이 같은 예약을 읽음','S1과 S2의 발행 워커가 냉장고 1 예약을 같이 읽고 각자 보내.',['EC','X1','X2','K'],['X1-EC','X2-EC','X1-K','X2-K'],
-   async()=>{setR('ec1','예약 · 미발행','pend');await both(back('X1-EC',{label:'냉장고 1'}),back('X2-EC',{label:'냉장고 1'}));await both(fly('X1-K','go',{label:'냉장고 1'}),fly('X2-K','bad',{label:'냉장고 1'}));note('K','같은 요청 2개','bad')}),
+   async()=>{setR('ec1','예약 · 미발행','pend');await both(back('X1-EC',{label:'냉장고 1'}),back('X2-EC',{label:'냉장고 1'}));await both(fly('X1-K','go',{label:'냉장고 1'}),fly('X2-K','bad',{label:'냉장고 1'}));setR('kp1','냉장고 1 · 냉장고 1 (중복)','bad')}),
   X({resp:'같은 예약은 한 번에 한 워커만 보내야 해.'},st('fix','조건부 UPDATE로 60초 점유','보내기 전에 "published_at이 비어 있고 publish_after가 지났으면 publish_after를 60초 뒤로" UPDATE를 해. 이 UPDATE가 1행을 바꾼 워커만 보내고, 0행이면 건너뛰어.',['EC','X1','X2'],[],
    async()=>{note('EC','claim: publish_after + 60초','ok');await wait(900)})),
   st('re','같은 조건으로 다시 실행','둘이 같이 점유를 시도해. S1만 1행을 바꿔서 보내고, S2는 0행이라 건너뛰어.',['EC','X1','X2','K'],['X1-EC','X2-EC','X1-K'],
    async()=>{resetData();note('K','');note('EC','');setR('ec1','예약 · 미발행','pend');await both(fly('X1-EC','go',{label:'점유 시도'}),fly('X2-EC','go',{label:'점유 시도'}));note('X1','1행 · 성공','ok');note('X2','0행 · 건너뜀','ok');setR('ec1','점유 (60초)','pend');
-    await fly('X1-K','go',{label:'냉장고 1'});setR('ec1','발행됨','ok');note('K','1개','ok')}),
+    await fly('X1-K','go',{label:'냉장고 1'});setR('ec1','발행됨','ok');setR('kp1','냉장고 1','ok')}),
   X({lim:['보낸 뒤 "발행됨"을 적기 전에 죽으면 60초 뒤 또 보내 (최소 한 번) → 만료 4번에서 거름']},
    st('sum','해결 전후','해결 전에는 두 워커가 같이 보냈어. 해결 뒤에는 점유에 성공한 하나만 보내.',[],[],async()=>{await wait(600)}))]},
 
@@ -2074,13 +2082,31 @@ SPECS.kexp=o=>({nodes:[
   st('re','같은 조건으로 다시 실행','빈 칸만큼 작업을 점유하고 보내. 실패하면 재시도 대기로 돌리고, 점유가 끝난 작업은 보내지 않아.',['J','P','W'],['P-J','P-W'],
    async()=>{resetData();note('W','');note('P','');setR('j1','1건 대기','pend');await back('P-J',{label:'빈 칸만큼 점유'});setR('j1','처리 중 (30초 점유)','pend');await fly('P-W','ext',{label:'푸시 발송'});await back('P-W',{cls:'bad',label:'실패'});setR('j1','재시도 대기','pend');note('P','다른 칸은 계속','ok')}),
   X({lim:['외부가 수락한 뒤 결과 저장이 실패하면 같은 푸시가 또 나갈 수 있어 (② 1-B 참고)']},
-   st('sum','해결 전후','해결 전에는 느린 외부에 워커가 묶였어. 해결 뒤에는 한 번에 보내는 양이 정해져 있고, 점유로 같은 작업을 겹쳐 보내지 않아.',[],[],async()=>{await wait(600)}))]}
+   st('sum','해결 전후','해결 전에는 느린 외부에 워커가 묶였어. 해결 뒤에는 한 번에 보내는 양이 정해져 있고, 점유로 같은 작업을 겹쳐 보내지 않아.',[],[],async()=>{await wait(600)}))]},
+ {name:'만료 7. 08시 재료 등록과 판정이 서로 잠금을 기다림',scene:'kexp',opt:{},show:['B1','AP','UT','RT','K','C','ND'],tags:['code','risk'],
+  intro:'오전 8시, U1이 냉장고 A에 새 재료를 등록하는 순간 BE 소비자가 A에 이미 있던 재료의 만료 알림을 만들어. A와 B의 판정은 같은 파티션에 A → B 순서로 들어와 있어. 락 순서는 코드에서 확인했고, 두 작업을 동시에 돌려 교착을 본 실험은 아직 없어.',
+  cmp:['A가 재시도하는 동안 같은 파티션의 B도 처리되지 않아.','⑧ V3 후보에서 대안 네 가지를 같은 상황으로 다시 돌려 봐.'],
+  steps:[
+  st('norm','A · B가 같은 파티션에','08시 예약이 발행돼서 냉장고 A, B의 판정이 파티션 0에 A → B 순서로 쌓였어. 파티션 0은 소비자 그룹 안에서 소비자 1이 맡아. 소비자는 한 파티션의 메시지를 순서대로 하나씩 처리해.',['K','C'],[],
+   async()=>{setR('kp0','A → B','pend');setR('g1','파티션 0 · A부터','pend');await wait(900)}),
+  st('norm','재료 등록이 U1 행을 먼저 잠금','재료 등록은 쓰기 권한을 확인하면서 요청한 사용자 U1의 행을 먼저 쓰기 잠금해. 그다음 냉장고 A 행을 잠글 차례야.',['B1','AP','UT'],['B1-AP','AP-UT'],
+   async()=>{await fly('B1-AP','go',{label:'재료 등록'});await fly('AP-UT','go',{label:'U1 행 쓰기 잠금'});setR('ut','등록 요청이 잠금','pend')}),
+  st('norm','소비자는 냉장고 A 행을 먼저 잠금','소비자는 A의 알림 본문을 INSERT해. 외래 키를 검사하면서 냉장고 A 행에 공유 잠금을 잡아. 그다음 수신자를 INSERT하면서 U1 행을 검사할 차례야.',['C','ND','RT'],['C-ND','C-RT'],
+   async()=>{setR('g1','A 처리 중','pend');await fly('C-ND','go',{label:'A 알림 INSERT'});await fly('C-RT','go',{label:'외래 키 검사'});setR('rt','판정 쪽 공유 잠금','pend')}),
+  st('prob','서로 상대의 잠금을 기다림','등록은 냉장고 A 쓰기 잠금을, 소비자는 U1 행 검사를 기다려. 둘 다 상대가 끝나야 진행할 수 있어서 순환 대기, 즉 교착이 돼.',['AP','RT','C','UT'],['AP-RT','C-UT'],
+   async()=>{await both(fly('AP-RT','bad',{label:'냉장고 A 대기'}),fly('C-UT','bad',{label:'U1 행 대기'}));setR('ut','등록이 잡고 · 판정이 기다림','bad');setR('rt','판정이 잡고 · 등록이 기다림','bad');note('AP','대기','warn')}),
+  st('prob','MySQL이 한쪽을 롤백','MySQL은 교착을 풀려고 한쪽 트랜잭션을 롤백해. 여기서는 알림 쪽이 롤백됐다고 가정해. 소비자는 예외를 받고 5초 뒤 A를 다시 시도해. 등록 쪽이 롤백되면 영향은 등록 요청 실패로 나타나.',['C','AP','RT'],['AP-RT'],
+   async()=>{setR('rt','판정 잠금 풀림','');setR('g1','A 롤백 · 5초 뒤 재시도','bad');await fly('AP-RT','go',{label:'잠금 획득'});setR('ut','잠금 없음','');note('AP','등록 완료','ok')}),
+  st('obs','같은 파티션의 B가 기다림','소비자는 A를 끝내야 offset을 넘기고 B로 갈 수 있어. A를 재시도하는 동안 B는 시작도 못 해. A가 첫 재시도에 성공하면 짧게 끝나지만, 실패가 반복되면 B의 대기도 길어져.',['K','C','ND'],[],
+   async()=>{setR('kp0','A(재시도 중) → B(대기)','bad');setR('nt','A 0건 · B 0건','bad');note('C','B 처리 못 함','bad');await wait(900)}),
+  X({lim:['락 순서는 코드에서 확인했어. 재료 등록과 판정을 동시에 돌려 실제 교착과 롤백 대상을 본 실험은 아직 없어','로컬 실험(격리 MySQL·Kafka)에서는 A의 알림 저장을 락 타임아웃(1205)으로 두 번 실패시켰고, 9.2초 동안 A·B 알림이 모두 0건이었어. 잠금을 풀자 5.1초 뒤 A·B가 1건씩 저장되고 offset 2까지 갔어 (락 대기 한도를 2초로 줄인 테스트 조건)','운영에서 이 정체가 일어난 근거는 아직 없어 (11/10~11/12 지표에 실패 없음)']},
+   st('sum','왜 구조 문제인가','Kafka 레코드는 냉장고 단위인데, 재시도는 파티션 단위로 진행을 막아. 냉장고 하나의 실패가 같은 파티션의 다른 냉장고 알림까지 늦춰. 대안은 ⑧에서 같은 상황으로 돌려 봐.',[],[],async()=>{await wait(600)}))]}
  ];
 
  /* 문제마다 자기 상자만 크게 보이도록 장면 이름을 나눔 */
  mem.concat(exp).forEach((sc,i)=>{const nm=sc.scene+'_'+i;SPECS[nm]=SPECS[sc.scene];sc.scene=nm});
  SCREENS.push({chip:'⑦ Kafka 비동기 구조의 문제',title:'⑦ Kafka 비동기 구조의 문제와 대응',menu:'구성원 변경 · 임박·만료를 Kafka로 넘겼을 때 생기는 문제와 막는 장치',
-  lede:'KTB4-5th-BE dev 4b13f19a 코드 기준이야. 두 기능 모두 Kafka 경로는 코드 기본값이 꺼져 있어. 각 문제는 문제, 해결 장치, 같은 조건 재실행 순서로 진행해.',
+  lede:'KTB4-5th-BE dev 4b13f19a 코드 기준이야. Kafka 경로는 코드 기본값이 꺼져 있지만, 임박·만료는 운영에서 2026-11-10부터 켜져 있어 (CLOUD PR #319). 각 문제는 문제, 해결 장치, 같은 조건 재실행 순서로 진행해.',
   list:mem.concat(exp),
   gloss:[['변경 이력','refrigerator_members의 joined_* / ended_* 컬럼. 보낼 구성원 사건과 순번.'],
    ['expiration_checks','날짜·냉장고마다 한 줄인 판정 예약. published_at(보냄), completed_at(판정 끝).'],
@@ -2088,7 +2114,97 @@ SPECS.kexp=o=>({nodes:[
    ['BE 소비자','Kafka 메시지를 받아 처리하는 리스너 스레드. 서버당 리스너마다 1개.'],
    ['Kafka 트랜잭션','여러 메시지를 전부 보내거나 전부 취소하는 묶음. read_committed 소비자에게는 커밋된 것만 보여.'],
    ['완료 순번','membership_notification_progress의 냉장고별 completed_sequence. "완료 + 1"만 처리.'],
-   ['최소 한 번 전달','같은 메시지가 두 번 올 수 있는 전달 방식. 받는 쪽이 중복을 걸러야 해.']]});
+   ['최소 한 번 전달','같은 메시지가 두 번 올 수 있는 전달 방식. 받는 쪽이 중복을 걸러야 해.'],
+   ['파티션','토픽을 나눈 줄. 키가 같은 메시지는 같은 파티션에 순서대로 쌓이고, 한 파티션은 순서대로 하나씩 처리돼.'],
+   ['소비자 그룹','같은 그룹 ID로 묶인 소비자들. 파티션을 나눠 맡고, 한 파티션은 그룹 안에서 한 소비자만 읽어.'],
+   ['offset','파티션에서 어디까지 처리했는지 적는 번호. 앞 메시지를 끝내야 다음으로 넘어가.']]});
+
+ /* ===== ⑧ V3 후보: 실패한 판정이 다른 냉장고를 막지 않게 ===== */
+ SPECS.kv3=o=>({nodes:[
+  {id:'B1',col:-1,type:'browser',name:'U1 · 앱',colr:'var(--u1)',sub:'냉장고 A에 재료 등록',nobadge:1},
+  {id:'AP',col:0,type:'box',w:210,h:120,title:'서버 · 재료 등록',sub:'요청 트랜잭션',stroke:'var(--s2)'},
+  {id:'UT',col:1,type:'cyl',w:320,label:'users',cls:'db-p',rows:[['ut','U1 행','잠금 없음']]},
+  {id:'RT',col:1,type:'cyl',w:320,label:'refrigerators',cls:'db-a',rows:[['rt','냉장고 A 행','잠금 없음']]},
+  {id:'EC',col:1,type:'cyl',w:320,label:'expiration_checks',cls:'db-a',rows:[['ec1','냉장고 A 판정','미완료'],['ec2','냉장고 B 판정','미완료']]},
+  {id:'ND',col:1,type:'cyl',w:320,label:'notifications',cls:'db-n',rows:[['nt','알림 (A · B)','0건 · 0건']]},
+  {id:'K',col:2,type:'kafka',w:270,h:106,title:'Kafka · 판정 토픽',sub:'키 = 냉장고 ID → 파티션',rows:[['kp0','파티션 0','A → B']]},
+  {id:'RK',col:2,type:'kafka',w:270,h:106,title:'Kafka · 재시도 토픽',sub:'실패한 판정만 따로',dash:1,rows:[['rk0','파티션 0','비어 있음']]},
+  {id:'C',col:3,type:'group',w:270,h:106,title:'소비자 그룹',sub:'be.expiration-check.v1',rows:[['g1','소비자 1 · Pod 1','파티션 0 담당']]},
+  {id:'RW',col:3,type:'box',w:230,h:100,title:'재처리 작업',sub:'기한 된 실패 판정만 선점',dash:1},
+  {id:'RC',col:3,type:'box',w:230,h:100,title:'재시도 토픽 소비자',sub:'지연 뒤 다시 처리',dash:1},
+  {id:'JW',col:3,type:'box',w:230,h:100,title:'판정 워커',sub:'냉장고별 작업 선점·실행',dash:1}],
+  edges:[['B1-AP','재료 등록'],['AP-UT','U1 행 쓰기 잠금'],['AP-RT','냉장고 A 쓰기 잠금'],['K-C','전달'],['C-RT','외래 키 검사'],['C-UT','외래 키 검사'],
+   ['C-ND','알림 저장'],['C-EC','판정 기록'],['RW-EC','실패 판정 선점'],['RW-ND','알림 저장'],['C-RK','실패 A 넘김'],['RK-RC','전달'],['RC-ND','알림 저장'],
+   ['JW-EC','작업 선점'],['JW-ND','알림 저장']]});
+ const v3=[
+ {name:'대안 1. 락 순서 맞추기',scene:'kv3',opt:{},show:['B1','AP','UT','RT','K','C','ND'],tags:['sol'],
+  intro:'⑦ 만료 7과 같은 상황이야. 재료 등록은 U1 → 냉장고 A, 알림 생성은 냉장고 A → U1 순서로 잠가서 순환이 생겼어. 두 경로가 같은 순서로 잠그면 어떻게 되는지 봐.',
+  cmp:['등록과 판정이 반대 순서로 잠가서 교착, A 재시도 동안 B도 대기.','같은 순서로 잠가서 한쪽은 기다리기만 하고 순환이 안 생겨.'],
+  steps:[
+  st('prob','반대 순서로 잠금','등록은 U1 행을, 소비자는 냉장고 A 행을 먼저 잡고 서로의 다음 잠금을 기다려.',['AP','UT','RT','C'],['AP-UT','C-RT','AP-RT','C-UT'],
+   async()=>{await both(fly('AP-UT','go',{label:'U1 먼저'}),fly('C-RT','go',{label:'냉장고 A 먼저'}));await both(fly('AP-RT','bad',{label:'대기'}),fly('C-UT','bad',{label:'대기'}));note('C','교착 · 롤백','bad');setR('kp0','A(재시도) → B(대기)','bad')}),
+  X({resp:'같은 행들을 잡는 경로는 같은 순서로 잠가야 순환 대기가 생기지 않아.'},st('fix','잠금 순서를 하나로','재료 등록과 알림 생성이 필요한 행을 같은 순서(예: 냉장고 → 사용자)로 잠그도록 맞춰. 먼저 잡은 쪽은 끝까지 가고, 늦은 쪽은 기다리기만 해.',['AP','C'],[],
+   async()=>{note('AP','냉장고 → 사용자','ok');note('C','냉장고 → 사용자','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','소비자가 냉장고 A를 먼저 잡았어. 등록도 냉장고 A부터 잡으려다 기다려. 소비자는 U1 검사까지 끝내고 A 알림을 커밋해. 그다음 등록이 진행되고, 소비자는 B로 넘어가.',['B1','AP','RT','UT','C','ND','K'],['C-RT','B1-AP','AP-RT','C-UT','C-ND','K-C'],
+   async()=>{resetData();note('AP','');note('C','');setR('kp0','A → B','pend');await fly('C-RT','go',{label:'냉장고 A 먼저'});await fly('B1-AP','go',{label:'재료 등록'});await fly('AP-RT','bad',{label:'냉장고 A 대기'});note('AP','기다림 (순환 없음)','warn');
+    await fly('C-UT','go',{label:'U1 검사'});await fly('C-ND','go',{label:'A 알림'});setR('nt','1건 · 0건','ok');note('AP','등록 진행','ok');await fly('K-C','go',{label:'B'});await fly('C-ND','go',{label:'B 알림'});setR('nt','1건 · 1건','ok');setR('kp0','offset 2','ok')}),
+  X({lim:['모든 쓰기 경로의 잠금 순서를 맞춰야 하고, 새 코드가 순서를 어기면 다시 생겨','교착이 아닌 실패(락 타임아웃, DB 장애)에는 여전히 B가 기다려 → 대안 2~4와 함께 봐야 해']},
+   st('sum','정리','교착 조건 하나를 없애. 파티션이 막히는 구조 자체는 그대로야.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'대안 2. 실패한 판정만 DB에서 재처리',scene:'kv3',opt:{},show:['K','C','EC','ND','RW'],tags:['sol'],
+  intro:'A의 알림 저장이 계속 실패한다고 해 봐. 지금은 소비자가 5초마다 A를 무한 재시도해서 B가 기다려.',
+  cmp:['A가 계속 실패하면 B도 계속 기다려.','A를 판정 행에 "재처리 대기"로 남기고 offset을 넘겨서 B를 처리해. A는 별도 작업이 다시 해.'],
+  steps:[
+  st('prob','A가 계속 실패','소비자가 A를 처리하다 실패하고, 5초마다 다시 시도해. B는 시작을 못 해.',['K','C','ND'],['K-C','C-ND'],
+   async()=>{setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-ND','bad',{label:'A 알림 실패'});setR('g1','A 재시도 반복 · B 대기','bad')}),
+  X({resp:'한 냉장고의 반복 실패가 원본 파티션을 붙잡으면 안 돼. 실패는 잃어버리지 않고 따로 다시 해야 해.'},st('fix','실패를 판정 행에 남기고 넘김','생성 트랜잭션은 롤백하고, 별도 트랜잭션으로 같은 판정 행에 재처리 상태·다음 시도 시각·실패 분류를 저장해. 이 저장이 성공해야만 원본 offset을 넘겨. 저장도 실패하면 원본을 Kafka에 그대로 둬.',['C','EC','RW'],[],
+   async()=>{reveal('RW');note('C','실패 기록 성공해야 offset 진행','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','A가 실패하면 판정 행에 "재처리 대기"를 적고 offset을 넘겨. 소비자는 바로 B를 처리해.',['K','C','ND','EC'],['K-C','C-ND','C-EC'],
+   async()=>{resetData();setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-ND','bad',{label:'A 알림 실패'});await fly('C-EC','go',{label:'재처리 대기 기록'});setR('ec1','재처리 대기 · 다음 시도 예정','pend');setR('g1','A 넘김 → B','ok');
+    await fly('K-C','go',{label:'B'});await fly('C-ND','go',{label:'B 알림'});setR('nt','0건 · 1건','ok');setR('ec2','완료','ok');setR('kp0','offset 2','ok')}),
+  st('re','재처리 작업이 A를 다시','재처리 작업이 기한이 된 실패 판정만 정해진 수만큼 선점해서 기존 처리기로 다시 실행해. 완료 검사가 있어서 원본이 다시 와도 두 번 만들지 않아.',['RW','EC','ND'],['RW-EC','RW-ND'],
+   async()=>{await back('RW-EC',{label:'기한 된 A 선점'});await fly('RW-ND','go',{label:'A 알림'});setR('nt','1건 · 1건','ok');setR('ec1','완료','ok')}),
+  X({lim:['실패를 저장할 DB까지 죽으면 격리하지 못해 (원본을 Kafka에 남김)','재처리 작업·선점 만료·멱등 처리가 새로 필요해'],todo:['재시도 간격·횟수 (예: 30초·2분·10분) 실측 후 결정','기준일이 지난 미완료 판정은 운영자 판단 (과거 판정이 현재 재고를 읽음)']},
+   st('sum','정리','이미 expiration_checks가 날짜·냉장고별 판정 원장이라, 같은 행에서 완료와 실패를 대조할 수 있어. 그래서 DB 방식부터 검증하자는 검토안이 있어.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'대안 3. 실패한 판정을 Kafka 재시도 토픽으로',scene:'kv3',opt:{},show:['K','C','RK','RC','ND'],tags:['sol'],
+  intro:'대안 2와 같은 상황이야. 이번엔 실패한 A를 DB가 아니라 별도 Kafka 토픽으로 넘겨.',
+  cmp:['A가 계속 실패하면 B도 계속 기다려.','A를 재시도 토픽으로 보내고 원래 파티션은 B로 넘어가.'],
+  steps:[
+  st('prob','A가 계속 실패','소비자가 A를 처리하다 실패하고 다시 시도해. B는 기다려.',['K','C','ND'],['K-C','C-ND'],
+   async()=>{setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-ND','bad',{label:'A 알림 실패'});setR('g1','A 재시도 반복 · B 대기','bad')}),
+  X({resp:'원래 파티션은 다음 메시지로 넘어가고, 실패한 메시지는 따로 다시 처리돼야 해.'},st('fix','재시도 토픽 분리','실패한 A를 재시도 토픽에 발행하고 원래 offset을 넘겨. 재시도 토픽 소비자가 지연을 두고 A를 다시 처리해.',['RK','RC'],[],
+   async()=>{reveal('RK','RC');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','A가 실패하면 재시도 토픽으로 넘기고, 원래 파티션은 바로 B를 처리해. 재시도 소비자가 나중에 A를 처리해.',['K','C','ND','RK','RC'],['K-C','C-ND','C-RK','RK-RC','RC-ND'],
+   async()=>{resetData();setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-ND','bad',{label:'A 알림 실패'});await fly('C-RK','go',{label:'A 넘김'});setR('rk0','A','pend');setR('g1','A 넘김 → B','ok');
+    await fly('K-C','go',{label:'B'});await fly('C-ND','go',{label:'B 알림'});setR('nt','0건 · 1건','ok');setR('kp0','offset 2','ok');await fly('RK-RC','go',{label:'A (지연 뒤)'});await fly('RC-ND','go',{label:'A 알림'});setR('nt','1건 · 1건','ok');setR('rk0','처리 끝','ok')}),
+  X({lim:['토픽·소비자·지연 정책이 늘어나','판정 상태가 expiration_checks와 Kafka 두 곳에 나뉘어'],alt:['이미 판정 원장(expiration_checks)이 있어서 DB 재처리(대안 2)부터 검증하자는 검토가 있어']},
+   st('sum','정리','원래 파티션은 풀려. 대신 실패 상태를 Kafka 쪽에서도 따라가야 해.',[],[],async()=>{await wait(600)}))]},
+
+ {name:'대안 4. Kafka 접수와 알림 생성 분리',scene:'kv3',opt:{},show:['K','C','EC','JW','ND'],tags:['sol'],
+  intro:'지금 소비자는 메시지를 받으면 그 자리에서 판정과 알림 저장까지 해. 그래서 무거운 일이 실패하면 파티션이 멈춰. 받는 일과 하는 일을 나누면 어떻게 되는지 봐.',
+  cmp:['소비자가 판정까지 하다가 실패하면 파티션이 멈춰.','소비자는 판정 작업만 등록하고 바로 넘어가. 냉장고별 실행은 별도 워커가 해.'],
+  steps:[
+  st('prob','소비자가 무거운 일까지 함','A의 판정과 알림 저장이 실패하면 소비자가 재시도하고 B는 기다려.',['K','C','ND'],['K-C','C-ND'],
+   async()=>{setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-ND','bad',{label:'A 알림 실패'});setR('g1','A 재시도 반복 · B 대기','bad')}),
+  X({resp:'Kafka 소비는 가볍고 실패하기 어려운 일만 해야 파티션이 멈추지 않아.'},st('fix','접수와 실행을 나눔','Kafka 소비자는 판정 작업을 DB에 등록(가벼운 저장)하고 바로 offset을 넘겨. 별도 판정 워커가 냉장고별로 작업을 선점해서 실행해. 푸시 워커와 같은 방식이야.',['C','JW','EC'],[],
+   async()=>{reveal('JW');note('C','등록만 하고 넘김','ok');await wait(900)})),
+  st('re','같은 조건으로 다시 실행','소비자는 A, B를 작업으로 등록하고 offset 2까지 넘겨. 판정 워커가 A를 실행하다 실패하면 A만 재시도 대기가 되고, B는 따로 끝나.',['K','C','EC','JW','ND'],['K-C','C-EC','JW-EC','JW-ND'],
+   async()=>{resetData();note('C','');setR('kp0','A → B','pend');await fly('K-C','go',{label:'A'});await fly('C-EC','go',{label:'A 작업 등록'});setR('ec1','작업 대기','pend');await fly('K-C','go',{label:'B'});await fly('C-EC','go',{label:'B 작업 등록'});setR('ec2','작업 대기','pend');setR('g1','A · B 접수 → offset 2','ok');setR('kp0','offset 2','ok');
+    await back('JW-EC',{label:'냉장고별 선점'});await fly('JW-ND','bad',{label:'A 실패'});setR('ec1','재시도 대기','pend');await fly('JW-ND','go',{label:'B 알림'});setR('nt','0건 · 1건','ok');setR('ec2','완료','ok')}),
+  X({lim:['Kafka의 역할이 "판정 요청 접수"로 줄어. 실행은 DB 큐와 워커가 맡아','작업 선점·재시도·동시 실행 수를 새로 운영해야 해']},
+   st('sum','정리','파티션은 접수만 하니 거의 멈추지 않아. 대신 실행 쪽은 DB 워커 구조를 하나 더 갖게 돼.',[],[],async()=>{await wait(600)}))]}
+ ];
+ v3.forEach((sc,i)=>{const nm=sc.scene+'_'+i;SPECS[nm]=SPECS[sc.scene];sc.scene=nm});
+ SCREENS.push({chip:'⑧ V3 후보: 파티션이 막히지 않게',title:'⑧ V3 후보: 파티션이 막히지 않게',menu:'⑦ 만료 7의 상황을 대안 네 가지로 다시 실행',
+  lede:'설계 후보이고 아직 구현하지 않았어. ⑦ 만료 7처럼 냉장고 A의 판정이 실패할 때, 같은 파티션의 B가 기다리지 않게 하는 방법 네 가지를 같은 상황으로 돌려 봐. 대안 1은 교착 조건을 줄이고, 2~4는 실패를 원래 파티션에서 떼어 내.',
+  list:v3,
+  gloss:[['파티션','토픽을 나눈 줄. 같은 키(냉장고 ID)는 같은 파티션에 순서대로 쌓이고, 소비자는 한 파티션을 순서대로 하나씩 처리해.'],
+   ['소비자 그룹','같은 그룹 ID의 소비자들이 파티션을 나눠 맡아. 운영에서는 Pod 2개가 파티션 0·1 / 2를 맡았어 (11/10 로그).'],
+   ['offset','파티션에서 어디까지 처리했는지 적는 번호. 앞 메시지를 끝내야 다음으로 넘어가서, 앞이 실패하면 뒤가 기다려.'],
+   ['교착','두 트랜잭션이 서로 상대의 잠금을 기다리는 상태. MySQL은 한쪽을 롤백해서 풀어.'],
+   ['외래 키 검사','자식 행을 INSERT할 때 부모 행(냉장고, 사용자)에 공유 잠금을 잡고 있는지 확인해.'],
+   ['재처리 대기','실패한 판정을 판정 행에 남긴 상태. 다음 시도 시각이 되면 별도 작업이 다시 처리해.']]});
 })();
 
 const PH={norm:['p-norm','정상'],prob:['p-prob','문제'],obs:['p-obs','관찰'],fix:['p-fix','해결 장치'],re:['p-re','다시 실행'],sum:['p-sum','정리'],flow:['p-norm','흐름'],br:['p-fix','선택']};
