@@ -39,8 +39,8 @@ h1{font-size:18px;margin:0;font-weight:600}
 .bar .key b{width:8px;height:8px;border-radius:50%;display:inline-block}
 .bar .clk{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink);flex:none}
 button:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
-/* 16:10 한 화면 = 그림(시간표 포함) 60 + 설명 40 */
-.frame{container:frame/inline-size;aspect-ratio:16/10;display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+/* 16:10 한 화면 = 그림(시간표 포함) 60 + 설명 40. 노트북 화면 전용: 그림 폭 600px(삽입 모드 최대 폭) 아래로는 줄이지 않는다 */
+.frame{min-width:598px;container:frame/inline-size;aspect-ratio:16/10;display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .fig{position:relative;min-height:0}
 .fig canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .exp{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px;min-height:0}
@@ -70,13 +70,6 @@ button:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offs
 .code:empty{display:none}
 .st:not(.now) .ex{display:none}            /* 코드 상자가 보일 때는 지금 단계만 풀이 */
 @container frame (max-width:660px){ .code{display:none} .st:not(.now) .ex{display:block} }
-@container frame (max-width:560px){ .st .ex,.st:not(.now) .ex{display:none} }
-@container frame (max-width:480px){
-  .ch span{display:none}.ch{min-height:0}
-  .card{font-size:10px;padding:5px 8px;gap:2px}
-  .st:not(.now) .bd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .st{padding-bottom:2px}
-}
 body.embed h1,body.embed .tabs{display:none}
 body.embed .wrap{max-width:600px;padding:2px}
 </style>

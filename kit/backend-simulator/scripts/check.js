@@ -8,8 +8,9 @@ let pw;try{pw=require(process.env.PW_PATH||'playwright')}catch(e){pw=require('/o
 const file=path.resolve(process.argv[2]||'index.html'),out=path.resolve(process.argv[3]||'check-out');
 fs.mkdirSync(path.join(out,'shots'),{recursive:true});
 const URL='file://'+file;
-const WIDTHS=[360,600,720,900];            // 가로 스크롤·비율
-const CARD_WIDTHS=[360,514,515,594,595,694,695,720,900];   // 화면 폭. 그림 안쪽 폭(=화면-34)으로 480·560·660 경계 전후
+/* 노트북 화면 전용. 삽입 모드는 블로그 본문 폭(최대 600), 일반 모드는 화면 폭 720 이상 */
+const VIEWS=[[600,'?embed'],[720,'?embed'],[720,''],[900,''],[1280,'']];     // 가로 스크롤·비율
+const CARD_VIEWS=[[600,'?embed'],[694,''],[695,''],[720,''],[900,''],[1280,'']]; // 그림 안쪽 폭 660 경계(화면 694/695) 전후
 const TIMES=[0,200,380,480];
 const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail||''});
 
@@ -29,7 +30,7 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
   await base.ctx.close();
 
   /* 1. 가로 스크롤 + 16:10 */
-  for(const q of ['','?embed'])for(const w of WIDTHS){
+  for(const [w,q] of VIEWS){
     const {ctx,page}=await open(w,q);
     const r=await page.evaluate(()=>{const f=document.getElementById('frame').getBoundingClientRect();return {sw:document.documentElement.scrollWidth,fw:f.width,fh:f.height}});
     add(`가로 스크롤 없음 · 폭 ${w}${q}`,r.sw<=w,`scrollWidth ${r.sw}`);
@@ -37,8 +38,8 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     await ctx.close();
   }
   /* 2. 설명 카드: 단계 3개, 칸 넘침, 코드 상자 잘림 — 상황 × 단계 × 폭 */
-  for(const w of CARD_WIDTHS){
-    const {ctx,page}=await open(w,'?embed'.slice(0,0));
+  for(const [w,q] of CARD_VIEWS){
+    const {ctx,page}=await open(w,q);
     for(const s of scenes){
       await page.evaluate(id=>__sim.scene(id),s);
       const steps=await page.evaluate(()=>__sim.steps);
@@ -49,13 +50,13 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
           const lis=[...c.querySelectorAll('.st')];
           return {n:lis.length,over:c.scrollHeight-c.clientHeight,preW:vis?pre.scrollWidth-pre.clientWidth:0,preH:vis?pre.scrollHeight-pre.clientHeight:0,vis,
             bottom:Math.max(...lis.map(li=>li.getBoundingClientRect().bottom),vis?pre.getBoundingClientRect().bottom:0)-c.getBoundingClientRect().bottom}}));
-        r.forEach((c,i)=>{const side=i?'오른쪽':'왼쪽',tag=`${s} ${k+1}단계 ${side} · 화면 폭 ${w}(그림 폭 ${fw})`;
-          if(w===900&&k===0)add(`단계 3개 · ${s} ${side}`,c.n===3,`${c.n}개`);
+        r.forEach((c,i)=>{const side=i?'오른쪽':'왼쪽',tag=`${s} ${k+1}단계 ${side} · 화면 폭 ${w}${q}(그림 안쪽 폭 ${fw})`;
+          if(w===900&&!q&&k===0)add(`단계 3개 · ${s} ${side}`,c.n===3,`${c.n}개`);
           add(`카드 넘침 없음 · ${tag}`,c.over<=1&&c.bottom<=1,`넘친 높이 ${Math.max(c.over,c.bottom).toFixed(0)}px`);
           if(c.vis)add(`코드 상자 잘림 없음 · ${tag}`,c.preW<=1&&c.preH<=1,`가로 ${c.preW} 세로 ${c.preH}`);
         });
         const vis=r.some(c=>c.vis);
-        if(k===0&&s===scenes[0])add(`코드 상자 표시 규칙 · 그림 폭 ${fw}`,vis===(fw>660),vis?'보임':'숨김');
+        if(k===0&&s===scenes[0])add(`코드 상자 표시 규칙 · 화면 폭 ${w}${q}(그림 안쪽 폭 ${fw})`,vis===(fw>660),vis?'보임':'숨김');
       }
     }
     await ctx.close();
@@ -132,9 +133,9 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     }
     await ctx.close();
   }
-  /* 5. 상황별·시각별 높이 (삽입 모드, 블로그 720 / 휴대폰 360) → iframe 높이 */
+  /* 5. 상황별·시각별 높이 (삽입 모드, 블로그 본문 720) → iframe 높이 */
   const heights={};
-  for(const w of [720,360]){
+  for(const w of [720]){
     const {ctx,page}=await open(w,'?embed');
     for(const s of scenes){
       await page.evaluate(id=>__sim.scene(id),s);
@@ -143,8 +144,8 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     }
     await ctx.close();
   }
-  /* 6. 스크린샷: 상황 × 단계 (900 일반, 720·360 삽입), 다크 1장 */
-  for(const [w,q] of [[900,''],[720,'?embed'],[360,'?embed']]){
+  /* 6. 스크린샷: 상황 × 단계 (900 일반, 720 삽입), 다크 1장 */
+  for(const [w,q] of [[900,''],[720,'?embed']]){
     const {ctx,page}=await open(w,q);
     for(const s of scenes){
       await page.evaluate(id=>__sim.scene(id),s);
@@ -164,9 +165,9 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
   const fail=results.filter(r=>!r.ok);
   const md=[`# 검사 결과 (${new Date().toISOString().slice(0,16)})`,'',`파일: ${file}`,`종류: ${kind} · 상황: ${scenes.join(', ')}`,'',
     `통과 ${results.length-fail.length} / 전체 ${results.length}`,'','## 실패','',fail.length?fail.map(r=>`- ${r.name}: ${r.detail}`).join('\n'):'없음','',
-    '## iframe 높이 (삽입 모드, 시각 0·200·380·480초 중 최대)','','| 상황 | 폭 720 | 폭 360 |','|---|---:|---:|',
-    ...scenes.map(s=>`| ${s} | ${heights[s+'@720']} | ${heights[s+'@360']} |`),'',
-    '## 확인 못 한 것 (사람이 볼 것)','','- 실제 휴대폰, 사파리','- 움직이는 동안의 글자 겹침: shots/ 스크린샷으로 직접 본다','- 글 내용이 코드·실측과 맞는지','',
+    '## iframe 높이 (삽입 모드, 시각 0·200·380·480초 중 최대)','','| 상황 | 블로그 폭 720 |','|---|---:|',
+    ...scenes.map(s=>`| ${s} | ${heights[s+'@720']} |`),'',
+    '## 확인 못 한 것 (사람이 볼 것)','','- 사파리, 실제 블로그에 넣은 화면','- 움직이는 동안의 글자 겹침: shots/ 스크린샷으로 직접 본다','- 글 내용이 코드·실측과 맞는지','',
     '## 전체','',...results.map(r=>`- ${r.ok?'통과':'실패'} · ${r.name}${r.detail?' — '+r.detail:''}`)].join('\n');
   fs.writeFileSync(path.join(out,'report.md'),md);
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,heights},null,1));
