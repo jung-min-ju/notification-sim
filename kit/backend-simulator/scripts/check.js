@@ -14,6 +14,96 @@ const CARD_VIEWS=[[600,'?embed'],[694,''],[695,''],[720,''],[900,''],[1280,'']];
 const TIMES=[0,200,380,480];
 const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail||''});
 
+/* ===== 단계형 뼈대 검사 ===== */
+async function stepChecks(open,scenes){
+  const VIEWS=[[720,'?embed'],[740,''],[900,''],[1280,'']];
+  const ov=(a,b,m=.5)=>a.x+m<b.x+b.w&&b.x+m<a.x+a.w&&a.y+m<b.y+b.h&&b.y+m<a.y+a.h;
+  const inside=(a,b,m=.5)=>a.x>=b.x-m&&a.y>=b.y-m&&a.x+a.w<=b.x+b.w+m&&a.y+a.h<=b.y+b.h+m;
+  /* 1. CONFIG 내용 */
+  {
+    const {ctx,page}=await open(900);
+    const C=await page.evaluate(()=>JSON.parse(JSON.stringify(__sim.config,(k,v)=>typeof v==='function'?undefined:v)));
+    const ids=new Set(C.nodes.map(n=>n.id)),eids=new Set(C.edges.map(e=>e.id)),keys=new Set(C.nodes.flatMap(n=>(n.rows||[]).map(r=>r.key)));
+    for(const sc of C.scenes){
+      const o=[];
+      if(sc.steps.length<3||sc.steps.length>8)o.push(`단계 ${sc.steps.length}개 (3~8)`);
+      sc.steps.forEach((st,i)=>{const t=`${i+1}단계`;
+        if(!['flow','prob','sum'].includes(st.group))o.push(`${t} group 값`);
+        if(!(st.doing&&st.doing.length>=2&&st.doing.length<=4))o.push(`${t} 지금 하는 일 ${st.doing?st.doing.length:0}개 (2~4)`);
+        (st.doing||[]).forEach(d=>{if(d.length>36)o.push(`${t} 글머리 ${d.length}자 (36 이하): ${d}`)});
+        if(st.title.length>28)o.push(`${t} 제목 ${st.title.length}자 (28 이하)`);
+        (st.active||[]).forEach(a=>{if(!ids.has(a))o.push(`${t} 없는 구성요소 ${a}`)});
+        (st.msgs||[]).forEach(m=>{if(!eids.has(m.edge))o.push(`${t} 없는 선 ${m.edge}`);Object.keys(m.set||{}).forEach(k=>{if(!keys.has(k))o.push(`${t} 없는 값 줄 ${k}`)})});
+        Object.keys(st.notes||{}).concat(Object.keys(st.covers||{})).forEach(a=>{if(!ids.has(a))o.push(`${t} 없는 구성요소 ${a}`)});
+        if(!st.code)o.push(`${t} 코드 상자 없음`);else st.code.lines.concat([st.code.at]).forEach(l=>{if(l.length>57)o.push(`${t} 코드 ${l.length}자: ${l}`)});
+      });
+      add(`단계 내용 규칙 · ${sc.id}`,o.length===0,o.join(' / '));
+    }
+    /* 2. 그림 배치: 구성요소 겹침, 선이 다른 구성요소를 지남, 선끼리 교차, 그림 밖 */
+    const o=[];const [VW,VH]=C.view;
+    const R=C.nodes.map(n=>({id:n.id,x:n.x,y:n.y,w:n.w,h:n.h}));
+    for(let i=0;i<R.length;i++){const a=R[i];if(!inside(a,{x:0,y:0,w:VW,h:VH}))o.push(`${a.id} 그림 밖`);for(let j=i+1;j<R.length;j++)if(ov({x:a.x-4,y:a.y-4,w:a.w+8,h:a.h+8},R[j]))o.push(`${a.id} ↔ ${R[j].id} 너무 가까움`)}
+    const segX=(a,b,c,d)=>{const cr=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);const d1=cr(c,d,a),d2=cr(c,d,b),d3=cr(a,b,c),d4=cr(a,b,d);return d1*d2<0&&d3*d4<0};
+    const segRect=(a,b,r)=>{const inR=p=>p[0]>r.x&&p[0]<r.x+r.w&&p[1]>r.y&&p[1]<r.y+r.h;if(inR(a)||inR(b))return true;const c=[[r.x,r.y],[r.x+r.w,r.y],[r.x+r.w,r.y+r.h],[r.x,r.y+r.h]];return [0,1,2,3].some(i=>segX(a,b,c[i],c[(i+1)%4]))};
+    const segs=[];C.edges.forEach(e=>{for(let i=1;i<e.pts.length;i++)segs.push({e,a:e.pts[i-1],b:e.pts[i]})});
+    segs.forEach(s=>R.forEach(r=>{const sh={x:r.x+1.5,y:r.y+1.5,w:r.w-3,h:r.h-3};if(segRect(s.a,s.b,sh)&&(r.id!==s.e.from&&r.id!==s.e.to||segRect(s.a,s.b,{x:r.x+3,y:r.y+3,w:r.w-6,h:r.h-6})))o.push(`선 ${s.e.id} ↔ ${r.id}`)}));
+    for(let i=0;i<segs.length;i++)for(let j=i+1;j<segs.length;j++)if(segs[i].e!==segs[j].e&&segX(segs[i].a,segs[i].b,segs[j].a,segs[j].b))o.push(`선 ${segs[i].e.id} ↔ 선 ${segs[j].e.id}`);
+    /* 구성요소 안 글자가 칸 안에 들어가는지, 값 줄의 이름과 값이 겹치는지 (모든 상황·단계 끝 상태) */
+    for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
+      for(let k=0;k<n;k++){await page.evaluate(k=>__sim.at(k),k);
+        const bad=await page.evaluate(()=>{const out=[];document.querySelectorAll('#svg .n').forEach(g=>{const id=g.dataset.id,n=__sim.config.nodes.find(x=>x.id===id);
+          g.querySelectorAll('text').forEach(t=>{if(!t.textContent||t.getAttribute('visibility')==='hidden')return;const b=t.getBBox();if(b.x<n.x+2||b.x+b.width>n.x+n.w-2||b.y<n.y||b.y+b.height>n.y+n.h)out.push(`${id} 글자 넘침 "${t.textContent}"`)});
+          const rk=[...g.querySelectorAll('.rk')],rv=[...g.querySelectorAll('.rv')];rk.forEach((k,i)=>{const a=k.getBBox(),b=rv[i].getBBox();if(a.x+a.width+6>b.x)out.push(`${id} 값 줄 겹침 "${k.textContent}" ↔ "${rv[i].textContent}"`)})});return out});
+        bad.forEach(b=>o.push(`${sc} ${k+1}단계: ${b}`));}}
+    add('그림 배치·구성요소 글자',o.length===0,[...new Set(o)].slice(0,14).join(' / '));
+    /* 3. 움직이는 메시지 이름표: 지나가는 선의 양끝이 아닌 구성요소와 겹치지 않는지, 그림 밖으로 나가지 않는지 */
+    const po=[];
+    for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
+      for(let k=0;k<n;k++){const us=(await page.evaluate(k=>__sim.msgTimes(k),k)).flatMap((u,j,arr)=>{const d=1/arr.length/4;return [u-d,u,u+d]});
+        for(const u of us){await page.evaluate(([k,u])=>__sim.at(k,u),[k,u]);
+          const r=await page.evaluate(()=>{const s=__sim.steps[__sim.step],C=__sim.config,out=[];
+            document.querySelectorAll('#svg .pill').forEach(p=>{const b=p.getBBox(),lab=p.textContent;const m=(s.msgs||[]).find(m=>m.label===lab)||{};const e=C.edges.find(e=>e.id===m.edge)||{};
+              C.nodes.forEach(n=>{if(n.id===e.from||n.id===e.to)return;if(b.x+1<n.x+n.w&&n.x+1<b.x+b.width&&b.y+1<n.y+n.h&&n.y+1<b.y+b.height)out.push(`"${lab}" ↔ ${n.id}`)});
+              if(b.x<0||b.y<0||b.x+b.width>C.view[0]||b.y+b.height>C.view[1])out.push(`"${lab}" 그림 밖`)});return out});
+          r.forEach(x=>po.push(`${sc} ${k+1}단계: ${x}`));}}}
+    add('메시지 이름표 겹침 없음',po.length===0,[...new Set(po)].slice(0,12).join(' / '));
+    /* 4. 이동: 다음·이전·단계 클릭·Enter */
+    await page.evaluate(id=>__sim.scene(id),scenes[0]);await page.evaluate(()=>__sim.at(0,0));
+    await page.click('#next');const a1=await page.evaluate(()=>__sim.step);
+    await page.click('#prev');const a2=await page.evaluate(()=>__sim.step);
+    await page.locator('#list .st').nth(2).click();await page.waitForTimeout(150);const a3=await page.evaluate(()=>({k:__sim.step,p:__sim.playing}));
+    await page.locator('#list .st').nth(1).focus();await page.keyboard.press('Enter');const a4=await page.evaluate(()=>__sim.step);
+    add('다음·이전·단계 클릭·Enter',a1===1&&a2===0&&a3.k===2&&a3.p&&a4===1,`다음→${a1} 이전→${a2} 클릭→${a3.k}(재생 ${a3.p}) Enter→${a4}`);
+    await ctx.close();
+  }
+  /* 5. 폭마다: 가로 스크롤, 16:10, 왼쪽 칸·코드 상자 넘침 (모든 상황·단계) */
+  const heights={};
+  for(const [w,q] of VIEWS){
+    const {ctx,page}=await open(w,q);
+    const r=await page.evaluate(()=>{const f=document.getElementById('frame').getBoundingClientRect();return {sw:document.documentElement.scrollWidth,fw:f.width,fh:f.height}});
+    add(`가로 스크롤 없음 · 폭 ${w}${q}`,r.sw<=w,`scrollWidth ${r.sw}`);
+    add(`16:10 이내 · 폭 ${w}${q}`,r.fh<=r.fw/1.6+1,`${r.fw.toFixed(0)}×${r.fh.toFixed(0)}`);
+    const o=[];let mx=0;
+    for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
+      for(let k=0;k<n;k++){await page.evaluate(k=>__sim.at(k),k);
+        const c=await page.evaluate(()=>{const s=document.querySelector('.side'),pre=document.getElementById('code');return {side:s.scrollHeight-s.clientHeight,pw:pre.scrollWidth-pre.clientWidth,ph:pre.scrollHeight-pre.clientHeight,h:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height)}});
+        if(c.side>1)o.push(`${sc} ${k+1}단계 왼쪽 칸 ${c.side}px 넘침`);if(c.pw>1||c.ph>1)o.push(`${sc} ${k+1}단계 코드 상자 잘림 (가로 ${c.pw} 세로 ${c.ph})`);
+        if(w===720&&q)heights[`${sc}@720`]=Math.max(heights[`${sc}@720`]||0,c.h);}}
+    add(`왼쪽 칸·코드 상자 넘침 없음 · 폭 ${w}${q}`,o.length===0,o.slice(0,10).join(' / '));
+    await ctx.close();
+  }
+  /* 6. 스크린샷: 상황 × 단계 끝(900), 메시지 이동 중 1장씩, 삽입 720 첫 단계, 다크 1장 */
+  {const {ctx,page}=await open(900);
+    for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
+      for(let k=0;k<n;k++){await page.evaluate(k=>__sim.at(k),k);await page.locator('.wrap').screenshot({path:path.join(out,'shots',`${sc}-${k+1}-900.png`)});
+        const us=await page.evaluate(k=>__sim.msgTimes(k),k);if(us.length){await page.evaluate(([k,u])=>__sim.at(k,u),[k,us[Math.floor(us.length/2)]]);await page.locator('.main').screenshot({path:path.join(out,'shots',`${sc}-${k+1}-move-900.png`)})}}}
+    await ctx.close()}
+  {const {ctx,page}=await open(720,'?embed');for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);await page.evaluate(()=>__sim.at(1));await page.locator('.wrap').screenshot({path:path.join(out,'shots',`${sc}-720-embed.png`)})}await ctx.close()}
+  {const {ctx,page}=await open(900,'','dark');await page.evaluate(()=>__sim.at(1,.5));await page.locator('.wrap').screenshot({path:path.join(out,'shots','dark-900.png')});await ctx.close()}
+  return heights;
+}
+
+
 (async()=>{
   const browser=await pw.chromium.launch();
   const errors=[];
@@ -26,8 +116,10 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     return {ctx,page};
   }
   const base=await open(900);
-  const scenes=await base.page.evaluate(()=>__sim.scenes),kind=await base.page.evaluate(()=>__sim.kind);
+  const scenes=await base.page.evaluate(()=>__sim.scenes),kind=await base.page.evaluate(()=>__sim.kind),type=await base.page.evaluate(()=>__sim.type||'time');
   await base.ctx.close();
+  let heights={};
+  if(type==='step'){heights=await stepChecks(open,scenes)}else{
 
   /* 1. 가로 스크롤 + 16:10 */
   for(const [w,q] of VIEWS){
@@ -134,7 +226,6 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     await ctx.close();
   }
   /* 5. 상황별·시각별 높이 (삽입 모드, 블로그 본문 720) → iframe 높이 */
-  const heights={};
   for(const w of [720]){
     const {ctx,page}=await open(w,'?embed');
     for(const s of scenes){
@@ -159,13 +250,14 @@ const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail
     await ctx.close();
   }
   {const {ctx,page}=await open(900,'','dark');await page.evaluate(()=>__sim.set(__sim.steps[1]+5));await page.locator('.wrap').screenshot({path:path.join(out,'shots','dark-900.png')});await ctx.close()}
+  }
   add('pageerror 0개',errors.length===0,errors.join(' / '));
   await browser.close();
 
   const fail=results.filter(r=>!r.ok);
-  const md=[`# 검사 결과 (${new Date().toISOString().slice(0,16)})`,'',`파일: ${file}`,`종류: ${kind} · 상황: ${scenes.join(', ')}`,'',
+  const md=[`# 검사 결과 (${new Date().toISOString().slice(0,16)})`,'',`파일: ${file}`,`뼈대: ${type==='step'?'단계형':'시간형'} · 종류: ${kind} · 상황: ${scenes.join(', ')}`,'',
     `통과 ${results.length-fail.length} / 전체 ${results.length}`,'','## 실패','',fail.length?fail.map(r=>`- ${r.name}: ${r.detail}`).join('\n'):'없음','',
-    '## iframe 높이 (삽입 모드, 시각 0·200·380·480초 중 최대)','','| 상황 | 블로그 폭 720 |','|---|---:|',
+    `## iframe 높이 (삽입 모드, ${type==='step'?'모든 단계':'시각 0·200·380·480초'} 중 최대)`,'','| 상황 | 블로그 폭 720 |','|---|---:|',
     ...scenes.map(s=>`| ${s} | ${heights[s+'@720']} |`),'',
     '## 확인 못 한 것 (사람이 볼 것)','','- 사파리, 실제 블로그에 넣은 화면','- 움직이는 동안의 글자 겹침: shots/ 스크린샷으로 직접 본다','- 글 내용이 코드·실측과 맞는지','',
     '## 전체','',...results.map(r=>`- ${r.ok?'통과':'실패'} · ${r.name}${r.detail?' — '+r.detail:''}`)].join('\n');

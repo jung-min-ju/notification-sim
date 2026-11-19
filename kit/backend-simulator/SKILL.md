@@ -22,7 +22,8 @@ cd notification-sim/kit/backend-simulator
 
 ## 먼저 읽을 것
 
-- `references/common.md`: 모든 종류에 쓰는 화면·움직임·글·색 규칙과 CONFIG 형식
+- `references/common.md`: 모든 종류에 쓰는 규칙(움직임·글·색·모델·삽입 모드·검사), 시간형 화면과 CONFIG 형식
+- `references/step.md`: 단계형 화면과 CONFIG 형식
 - `references/types/<종류>.md`: 고른 종류의 규칙
 - `references/dont-do.md`: 사용자가 싫어한 것과 대신 할 것
 
@@ -49,7 +50,7 @@ cd notification-sim/kit/backend-simulator
    - ①②: 단계 목록 → 시각. 실측이 없으면 순서만 쓴다(초 단위 숫자 없음).
    - ③④: 칸(슬롯) 기반 이산 사건 모델로 작업마다 시작·끝·결과를 미리 계산한다. ④는 실측 처리 시간에 맞추고, ③은 명세의 가정 조건으로 계산한다.
 
-5. **만들기.** `templates/index.html`을 상황 폴더에 복사하고 `CONFIG START`~`CONFIG END` 사이만 채운다. 엔진은 고치지 않는다. 엔진으로 못 그리는 것이 있으면 고치기 전에 무엇이 필요한지 사용자에게 말한다.
+5. **만들기.** 뼈대를 고른다. ①②는 단계형 `templates/index-step.html`, ③④는 시간형 `templates/index-time.html`이 기본이다. 기본과 다르게 고르면 명세에 이유를 적는다. 고른 뼈대를 상황 폴더에 `index.html`로 복사하고 `CONFIG START`~`CONFIG END` 사이만 채운다. 엔진은 고치지 않는다. 엔진으로 못 그리는 것이 있으면 고치기 전에 무엇이 필요한지 사용자에게 말한다.
 
 6. **검사.** `node scripts/check.js <폴더>/index.html <출력 폴더>`를 돌린다. 실패가 0이 될 때까지 고친다. 실패가 남은 채로 보고하지 않는다.
 
