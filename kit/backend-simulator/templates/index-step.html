@@ -265,8 +265,9 @@ function build(){
       el('text',{class:'rk',x:n.x+18,y:y+14},g).textContent=row.label;
       const v=el('text',{class:'rv',x:n.x+n.w-18,y:y+14,'text-anchor':'end'},g);ROW[row.key]={bg:g.lastChild.previousSibling.previousSibling,v,def:row.value}});
     const note=el('text',{class:'note',x:n.x+n.w/2,y:n.y+n.h-10,'text-anchor':'middle'},g);
-    const cv=el('rect',{class:'cv',x:n.x+1,y:n.y+1,width:n.w-2,height:n.h-2,rx:7,visibility:'hidden'},g);
-    const cvt=el('text',{class:'cvt',x:n.x+n.w/2,y:n.y+n.h/2+4,'text-anchor':'middle',visibility:'hidden'},g);
+    const cy=n.type==='db'?n.y+n.h/2:tY+(n.sub?20:8);       // 덮개는 이름 아래부터 덮는다
+    const cv=el('rect',{class:'cv',x:n.x+1,y:cy,width:n.w-2,height:n.y+n.h-1-cy,rx:6,visibility:'hidden'},g);
+    const cvt=el('text',{class:'cvt',x:n.x+n.w/2,y:cy+(n.y+n.h-cy)/2+4,'text-anchor':'middle',visibility:'hidden'},g);
     N[n.id]={...n,g,note,cv,cvt,r};
   });
   (CONFIG.texts||[]).forEach(t=>{el('text',{x:t.x,y:t.y,'text-anchor':t.align||'start','font-size':10.5,fill:'var(--ink3)'},gT).textContent=t.text});
