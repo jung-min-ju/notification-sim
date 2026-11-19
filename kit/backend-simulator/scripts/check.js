@@ -56,6 +56,17 @@ async function stepChecks(open,scenes){
           const rk=[...g.querySelectorAll('.rk')],rv=[...g.querySelectorAll('.rv')];rk.forEach((k,i)=>{const a=k.getBBox(),b=rv[i].getBBox();if(a.x+a.width+6>b.x)out.push(`${id} 값 줄 겹침 "${k.textContent}" ↔ "${rv[i].textContent}"`)})});return out});
         bad.forEach(b=>o.push(`${sc} ${k+1}단계: ${b}`));}}
     add('그림 배치·구성요소 글자',o.length===0,[...new Set(o)].slice(0,14).join(' / '));
+    /* 2-2. CONFIG에 적은 메모·덮개·바뀌는 값이 단계 끝에 실제로 그려졌는지 (2026-11-19: 메모가 주석에 묻혀 안 보이던 버그 뒤 추가) */
+    const miss=[];
+    for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
+      for(let k=0;k<n;k++){await page.evaluate(k=>__sim.at(k),k);
+        const r=await page.evaluate(()=>{const s=__sim.steps[__sim.step],out=[];const g=id=>document.querySelector(`#svg .n[data-id="${id}"]`);
+          Object.entries(s.notes||{}).forEach(([id,[tx]])=>{const n=g(id),e=n&&n.querySelector('.note');if(!e||e.textContent!==tx||e.getAttribute('fill')==='none')out.push(`메모 "${tx}"(${id}) 안 보임`)});
+          Object.entries(s.covers||{}).forEach(([id,tx])=>{const n=g(id),e=n&&n.querySelector('.cvt');if(!e||e.textContent!==tx||e.getAttribute('visibility')!=='visible')out.push(`덮개 "${tx}"(${id}) 안 보임`)});
+          (s.msgs||[]).forEach(m=>Object.entries(m.set||{}).forEach(([key,[v]])=>{const t=[...document.querySelectorAll('#svg .rv')].some(e=>e.textContent===v);if(!t)out.push(`값 "${v}"(${key}) 안 보임`)}));
+          return out});
+        r.forEach(x=>miss.push(`${sc} ${k+1}단계: ${x}`));}}
+    add('메모·덮개·바뀌는 값이 실제로 그려짐',miss.length===0,miss.slice(0,12).join(' / '));
     /* 3. 움직이는 메시지 이름표: 지나가는 선의 양끝이 아닌 구성요소와 겹치지 않는지, 그림 밖으로 나가지 않는지 */
     const po=[];
     for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
@@ -216,6 +227,11 @@ async function stepChecks(open,scenes){
         tx.forEach(a=>bx.forEach(b=>{if(a.area===b.area&&ov(a,b)&&!inside(a,b))found.add(`글자가 상자 ${b.s} 테두리에 걸침 "${a.s}" (t=${Math.round(t)})`)}));
         tx.forEach(a=>{const bd=L.bounds.find(b=>b.area===a.area);if(bd&&!inside(a,bd))found.add(`글자가 영역 밖 "${a.s}" (t=${Math.round(t)})`)});
       }
+      const lost=await page.evaluate(()=>{const out=[];__sim.panels.forEach((p,pi)=>{
+          const chk=(arr,f)=>(arr||[]).forEach(x=>{const t=(x.from+Math.min(x.to,__sim.end))/2;if(!isFinite(t))return;const tx=typeof x.text==='function'?x.text(t):x.text;
+            const L=__sim.layout(t);if(!L.items.some(i=>i.kind==='text'&&i.s===tx))out.push(`패널${pi+1} ${f} "${tx}" 안 보임 (t=${Math.round(t)})`)});
+          chk(p.notes,'메모');chk(p.blocks,'막힘 표시')});return out});
+      add(`메모·막힘 표시가 실제로 그려짐 · ${s}`,lost.length===0,lost.slice(0,8).join(' / '));
       add(`그린 글자 겹침·넘침 없음 · ${s}`,found.size===0,[...found].slice(0,12).join(' / ')+(found.size>12?` 외 ${found.size-12}건`:''));
     }
     await ctx.close();
