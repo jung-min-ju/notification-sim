@@ -74,7 +74,7 @@
 
 ## 검사 (`kit/backend-simulator/scripts/check.js`, 2026-11-19)
 
-- 통과 18 / 전체 18
+- 통과 19 / 전체 19
 - iframe 높이(블로그 본문 폭 720):
 
 | 상황 | 높이 |
