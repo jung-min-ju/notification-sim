@@ -292,7 +292,8 @@ function render(){
   $('prev').disabled=K===0;$('next').disabled=K===steps().length-1;
   const act=new Set(s.active||[]),used=new Set(msgs(s).map(m=>m.edge));
   for(const id in N){const n=N[id],covered=!!(s.covers||{})[id];n.g.classList.toggle('on',act.has(id));n.g.classList.toggle('off',act.size>0&&!act.has(id)&&!covered);
-    const nt=TAU>=msgs(s).length*D?(s.notes||{})[id]:null;      // 메모는 메시지가 다 도착한 뒤에 보인다n.note.textContent=nt?nt[0]:'';n.note.setAttribute('fill',nt?`var(--${nt[1]==='ok'?'ok':nt[1]==='bad'?'bad':'retry'})`:'none');
+    const nt=TAU>=msgs(s).length*D?(s.notes||{})[id]:null;      // 메모는 메시지가 다 도착한 뒤에 보인다
+    n.note.textContent=nt?nt[0]:'';n.note.setAttribute('fill',nt?`var(--${nt[1]==='ok'?'ok':nt[1]==='bad'?'bad':'retry'})`:'none');
     const cvr=(s.covers||{})[id];n.cv.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.textContent=cvr||''}
   for(const id in E){const e=E[id],m=msgs(s).find(m=>m.edge===id);e.g.setAttribute('class','e'+(used.has(id)?' on '+(m.kind||'req'):' off'))}
   const st=rowsAt(K,TAU);for(const k in ROW){const [v,tone]=st[k]||[ROW[k].def,''];ROW[k].v.textContent=v;ROW[k].bg.setAttribute('class','rbg '+(tone||''))}
