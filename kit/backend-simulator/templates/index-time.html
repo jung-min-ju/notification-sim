@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* ===== 엔진 영역: 고치지 않는다. 바꿀 것은 아래 CONFIG에만 쓴다. ===== */
+:root{
+  --bg:#ffffff;--card:#ffffff;--ink:#1f2328;--ink2:#59636e;--ink3:#8c959f;--line:#d8dee4;--soft:#f6f8fa;--grid:#eef1f4;
+  --cur:#c2571a;--wrk:#2b66c9;--retry:#c98f00;--bad:#cf222e;--bad-bg:#ffebe9;--ok:#1a7f37;
+  --cur-bg:#fff3e8;--wrk-bg:#eef4ff;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 var(--f-ui);word-break:keep-all;-webkit-text-size-adjust:100%}
+.wrap{max-width:960px;margin:0 auto;padding:16px 16px 24px;display:flex;flex-direction:column;gap:10px}
+h1{font-size:18px;margin:0;font-weight:600}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button{font:inherit;font-size:13px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink2);cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.bar{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink3);min-width:0}
+.bar button{font:600 11px/1 var(--f-num);padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink2);cursor:pointer;flex:none}
+.bar .key{display:flex;gap:10px;min-width:0;overflow:hidden;white-space:nowrap}
+.bar .key span{display:inline-flex;align-items:center;gap:5px}
+.bar .key b{width:8px;height:8px;border-radius:50%;display:inline-block}
+.bar .clk{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink);flex:none}
+button:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
+/* 16:10 한 화면 = 그림(시간표 포함) 70 + 설명 30. 노트북 화면 전용: 그림 폭 600px(삽입 모드 최대 폭) 아래로는 줄이지 않는다 */
+.frame{min-width:598px;container:frame/inline-size;aspect-ratio:16/10;display:grid;grid-template-rows:minmax(0,7fr) minmax(0,3fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+.fig{position:relative;min-height:0}
+.fig canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.exp{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px;min-height:0}
+.card{min-width:0;min-height:0;overflow:hidden;border-radius:10px;padding:7px 10px;display:flex;flex-direction:column;gap:3px;
+  font-size:clamp(10px,calc((48cqi - 40px)/28),13.5px);line-height:1.35}
+.card.l{background:var(--cur-bg)}.card.r{background:var(--wrk-bg)}
+.ch{display:flex;align-items:center;gap:6px;font-weight:600;font-size:.95em;min-height:1.35em}
+.ch i{width:7px;height:7px;border-radius:50%;flex:none}
+.card.l .ch{color:var(--cur)}.card.l .ch i{background:var(--cur)}
+.card.r .ch{color:var(--wrk)}.card.r .ch i{background:var(--wrk)}
+.steps{list-style:none;margin:0;padding:0}
+.st{display:flex;gap:7px;padding-bottom:3px;cursor:pointer;border-radius:5px}
+.st:last-child{padding-bottom:0}
+.st .cc{flex:none;width:11px;position:relative;display:flex;justify-content:center;padding-top:.35em}
+.st .cc b{display:block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink3);background:transparent;position:relative;z-index:1}
+.st:not(:last-child) .cc::after{content:"";position:absolute;left:50%;top:calc(.35em + 8px);bottom:-3px;width:1.5px;transform:translateX(-50%);background:var(--line)}
+.st .tx{min-width:0;flex:1}
+.st .bd{display:block;color:var(--ink3)}
+.st .ex{display:block;font-size:.86em;color:var(--ink2);opacity:.9}
+.st.past .cc b{background:var(--ink3)}.st.past .bd{color:var(--ink2)}
+.st.now .bd{color:var(--ink);font-weight:600}
+.card.l .st.now .cc b{border-color:var(--cur);background:var(--cur);box-shadow:0 0 0 2px var(--cur-bg),0 0 0 3.5px var(--cur)}
+.card.r .st.now .cc b{border-color:var(--wrk);background:var(--wrk);box-shadow:0 0 0 2px var(--wrk-bg),0 0 0 3.5px var(--wrk)}
+@container frame (max-width:660px){ .card{padding:5px 9px;gap:1px;line-height:1.3} .st{padding-bottom:1px} .ch{min-height:1.2em} }
+body.embed h1,body.embed .tabs{display:none}
+body.embed .wrap{max-width:600px;padding:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="ttl"></h1>
+  <div class="tabs" id="tabs" role="group" aria-label="상황"></div>
+  <div class="bar">
+    <button type="button" id="pp" aria-label="일시정지">❚❚</button>
+    <button type="button" id="again">처음부터</button>
+    <span class="key" id="key"></span>
+    <span class="clk" id="clk"></span>
+  </div>
+  <div class="frame" id="frame">
+    <div class="fig"><canvas id="cv" aria-label="흐름 그림과 시간표"></canvas></div>
+    <div class="exp">
+      <div class="card l"><div class="ch"><i></i><span id="hl"></span></div><ol class="steps" id="sl"></ol></div>
+      <div class="card r"><div class="ch"><i></i><span id="hr"></span></div><ol class="steps" id="sr"></ol></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== CONFIG START =====================
+   이 블록만 채운다. 형식은 references/common.md의 "시간형 CONFIG 형식"을 따른다.
+   src는 근거 파일:줄이다. 화면에는 나오지 않고 README에 옮겨 적는다.
+   아래 내용은 예시: 푸시 발송 구조 비교(#192)의 재시도 지연·재시작 두 상황.
+   숫자 출처와 가정은 README에 적는다. 화면에는 적지 않는다.        */
+const CONFIG=(()=>{
+  const N=32000,T=453.788,C=20,PER=200,RPER=5,NT=N/PER;
+  const rate=N/T,E=300+C/rate;                  // 재시도할 시각(08:05) + 한 칸 비는 시간
+  const R=180,DOWN=20,LEASE=30;                 // 재시작 08:03, 다시 뜨기까지 20초, 선점 만료 30초
+  const PROC=T/(NT/C+0.95),MV=7;
+  const clock=t=>{const s=Math.max(0,Math.floor(t));return '08:'+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+
+  /* 칸이 비는 순서대로 작업을 배정하는 이산 사건 모델 */
+  function simulate(kind,sc){
+    const jobs=[],free=[...Array(C)].map((_,j)=>j*PROC/C);
+    if(kind==='cur'){
+      let next=0;
+      while(next<NT){
+        let j=0;for(let i=1;i<C;i++)if(free[i]<free[j])j=i;
+        const t0=free[j];if(sc==='restart'&&t0>=R)break;
+        const o={i:next,slot:j,start:t0,end:t0+PROC,fate:'ok'};
+        if(sc==='restart'&&o.end>R){o.end=R;o.fate='cut'}
+        jobs.push(o);free[j]=o.end;next++;
+      }
+      const retryStart=sc==='retry'?Math.max(...free,T):null;
+      return {jobs,retryStart,retrySlots:[0,1,2,3]};
+    }
+    const queue=[...Array(NT)].map((_,i)=>({i,at:0}));let rs=null,rSlots=[],retry=0;
+    while(queue.length||(sc==='retry'&&retry<4)){
+      let j=0;for(let i=1;i<C;i++)if(free[i]<free[j])j=i;
+      const t0=free[j];
+      if(sc==='restart'&&t0>=R&&t0<R+DOWN){free[j]=R+DOWN;continue}
+      if(sc==='retry'&&retry<4&&t0>=E){if(rs==null)rs=t0;rSlots.push(j);free[j]=t0+4;retry++;continue}
+      if(!queue.length){free[j]=E;continue}
+      const k=queue.findIndex(q=>q.at<=t0);
+      if(k<0){free[j]=Math.min(...queue.map(q=>q.at));continue}
+      const q=queue.splice(k,1)[0],prev=jobs.find(o=>o.i===q.i);
+      const o={i:q.i,slot:j,start:t0,end:t0+PROC,fate:'ok',again:!!prev};
+      if(sc==='restart'&&t0<R&&o.end>R){o.end=R;o.fate='cut';queue.unshift({i:q.i,at:R+DOWN+LEASE})}
+      jobs.push(o);free[j]=o.end;
+    }
+    return {jobs,retryStart:rs,retrySlots:rSlots};
+  }
+  /* 작업 → 점. hops: [{box,t}] t는 그 상자로 떠나는 시각 */
+  function tokens(kind,sc,res){
+    const out=[];
+    for(let i=0;i<NT;i++){
+      const mine=res.jobs.filter(o=>o.i===i),hops=[{box:'q',t:0}];
+      mine.forEach(o=>{hops.push({box:'srv',t:o.start,slot:o.slot,until:o.end});
+        if(o.fate==='cut')hops.push({box:'q',t:o.end,cut:true});else hops.push({box:'push',t:o.end})});
+      out.push({id:'f'+i,tag:'f',color:'ink3',r:3,hops});
+    }
+    if(sc==='retry')for(let k=0;k<4;k++){
+      const st=res.retryStart,slot=res.retrySlots[k];
+      out.push({id:'r'+k,tag:'r',color:'retry',r:5,hops:[
+        {box:'srv',t:PROC,slot:k},{box:'retry',t:PROC},
+        {box:'srv',t:st,slot,until:st+4},{box:'push',t:st+MV+2}]});
+    }
+    return out;
+  }
+  const boxes=(kind,sc)=>{
+    const b=[
+      {id:'q',type:'pool',x:8,y:56,w:150,h:72,grid:{cols:16,dx:8.8,dy:6.6,ox:9,oy:6},
+        label:t=>kind==='cur'?(sc==='restart'&&t>=R?'DB에 대기로 남은 작업':'실행기에 한꺼번에 넣은 작업'):'DB에서 꺼낼 작업',
+        count:c=>(c.n('q')*PER).toLocaleString()+'건 남음'},
+      {id:'srv',type:'slots',x:190,y:56,w:116,h:136,slots:{n:20,cols:4,size:20,gap:7},label:()=>'서버 · 보내는 중 (20칸)',
+        cover:t=>sc!=='restart'||t<R?null:(kind==='cur'?{text:'서버 재시작',sub:t>=R+DOWN?'다시 떴지만 보낼 실행이 없음':''}:(t<R+DOWN?{text:'서버 재시작'}:null))},
+      {id:'push',type:'sink',x:324,y:112,w:60,h:24,label:()=>'외부 푸시',labelAlign:'center',
+        count:c=>(c.arrived('push',tk=>tk.tag==='f')*PER).toLocaleString()+'건 보냄'}
+    ];
+    if(sc==='retry')b.push({id:'retry',type:'pool',x:8,y:166,w:150,h:24,grid:{cols:6,dx:16,dy:0,ox:12,oy:12},label:()=>'재시도할 작업'});
+    return b;
+  };
+  const edges=sc=>{const e=[{from:'q',to:'srv',pts:[[158,92],[190,92]]},{from:'srv',to:'push',pts:[[306,124],[324,124]]}];if(sc==='retry')e.push({from:'retry',to:'srv',pts:[[158,178],[190,178]]});return e};
+
+  function scene(sc){
+    const rc=simulate('cur',sc),rw=simulate('wrk',sc);
+    const doneW=Math.max(...rw.jobs.filter(o=>o.fate==='ok').map(o=>o.end));
+    const info={E,R,DOWN,LEASE,T,rc,rw,doneW};
+    const mk=(kind,name,color,res)=>({name,color,boxes:boxes(kind,sc),edges:edges(sc),tokens:tokens(kind,sc,res),
+      notes:sc==='retry'?[{from:PROC+MV,to:E,x:150,y:178,align:'right',color:'ink3',text:t=>'재시도까지 '+Math.ceil(E-t)+'초'}]:[],
+      blocks:sc==='retry'&&kind==='cur'?[{from:E,to:res.retryStart,x:174,y1:168,y2:188,text:'못 들어감',tx:150,ty:178,align:'right'}]:[],
+      status:t=>statusOf(kind,sc,t,res,info)});
+    return {info,panels:[mk('cur','현재 구조','cur',rc),mk('wrk','DB 워커 구조','wrk',rw)]};
+  }
+  function statusOf(kind,sc,t,res,info){
+    if(sc==='retry'){
+      if(t<E)return [kind==='cur'?'32,000건을 실행기에 다 넣고 끝나길 기다리는 중':'칸이 빌 때마다 DB에서 다음 작업을 꺼내는 중','neu'];
+      if(t<res.retryStart)return ['재시도할 시각인데 '+(t-E).toFixed(0)+'초째 못 들어감','bad'];
+      return ['재시도 시작 · '+(res.retryStart-E).toFixed(1)+'초 기다림',res.retryStart-E>5?'bad':'ok'];
+    }
+    if(t<R)return ['보내는 중','neu'];
+    if(kind==='cur')return ['08:03 재시작 뒤 아무도 안 보냄 · 남은 작업은 정오에 만료','bad'];
+    if(t<R+DOWN)return ['재시작 중','bad'];
+    return t<info.doneW?['다시 떠서 DB에 남은 작업을 이어서 보냄','ok']:['모두 보냄 · '+clock(info.doneW),'ok'];
+  }
+
+  return {
+    title:'푸시 발송 구조 비교',
+    kind:'compare',                       // map | flow | risk | compare
+    badge:null,                           // risk에서만: {panel:1,text:'예측 · 실측 전'}
+    speed:24,                             // 실제 1초에 모델 몇 초
+    move:MV,                              // 상자 사이 이동에 걸리는 모델 시간
+    axis:{unit:'sec',tick:60,fmt:t=>clock(t).slice(0,5),clock},
+    scenes:[
+      {id:'retry',tab:'재시도 지연',end:500,legend:[['ink3','점 1개 = 첫 발송 작업 200건'],['retry','점 1개 = 재시도 작업 5건']],
+        build:()=>scene('retry'),
+        steps:i=>[0,i.E,i.rc.retryStart],
+        timeline:i=>({
+          rows:[{panel:0,label:'발송',box:'srv',filter:tk=>tk.tag==='f'},{panel:0,label:'재시도',box:'srv',filter:tk=>tk.tag==='r',color:'retry'},
+                {panel:1,label:'발송',box:'srv',filter:tk=>tk.tag==='f'},{panel:1,label:'재시도',box:'srv',filter:tk=>tk.tag==='r',color:'retry'}],
+          marks:[{t:i.E,label:'재시도할 시각 '+clock(i.E).slice(0,5),color:'retry'}],
+          waits:[{row:1,a:i.E,b:i.rc.retryStart},{row:3,a:i.E,b:i.rw.retryStart}]}),
+        cards:{
+          L:{head:'현재 구조',steps:[
+            {body:'32,000건을 실행기에 한꺼번에 넣어요',ex:'작업마다 가상 스레드를 만들고 세마포어 20개로 막아요',
+             src:'PushDispatchService.java:40'},
+            {body:'재시도할 시각이 돼도 실행기가 안 비어요',ex:'try 블록은 넣은 작업이 모두 끝나야 빠져나와요',
+             src:'PushDispatchService.java:44'},
+            {body:'첫 발송이 다 끝난 뒤에야 재시도해요',ex:'다음 회차는 앞 회차 전체가 끝나야 시작해요',
+             src:'NotificationScheduler.java:102'}]},
+          R:{head:'DB 워커 구조',steps:[
+            {body:'빈 칸 수만큼만 DB에서 작업을 꺼내요',ex:'선점(lease): 꺼낸 작업에 담당 표시를 남겨요',
+             src:'PushDispatchWorker.java:37'},
+            {body:'칸이 하나 비면 재시도 작업도 꺼내요',ex:'첫 발송과 재시도를 같은 조회에서 골라요',
+             src:'PushLeaseService.java:34'},
+            {body:'재시도가 기다리지 않고 들어가요',ex:'대신 그만큼 첫 발송이 조금 밀려요',
+             src:'application.yml:142'}]}}},
+      {id:'restart',tab:'발송 중 서버 재시작',end:560,legend:[['ink3','점 1개 = 발송 작업 200건'],['bad','✕ 보내던 중 끊긴 작업']],
+        build:()=>scene('restart'),
+        steps:i=>[0,i.R,i.R+i.DOWN+i.LEASE],
+        timeline:i=>({
+          rows:[{panel:0,label:'발송',box:'srv'},{panel:1,label:'발송',box:'srv'}],
+          marks:[{t:i.R,label:'08:03 서버 재시작',color:'bad'}],
+          waits:[{row:0,a:i.R,b:560,text:'발송 멈춤 · 남은 작업 정오 만료'}],
+          labels:[{row:1,t:i.doneW,text:'모두 보냄',tone:'ok'}]}),
+        cards:{
+          L:{head:'현재 구조',steps:[
+            {body:'08시 배치 실행 하나가 발송을 이어 가요',ex:'발송 루프가 스케줄러 실행 안에 들어 있어요',
+             src:'NotificationScheduler.java:48'},
+            {body:'08:03 재시작으로 보내던 작업이 끊겨요',ex:'실행기 안의 가상 스레드가 함께 사라져요',
+             src:'PushDispatchService.java:44'},
+            {body:'다시 떠도 남은 작업을 보낼 실행이 없어요',ex:'dispatchDueJobs()는 08시 배치에서만 불려요',
+             src:'NotificationScheduler.java:97'}]},
+          R:{head:'DB 워커 구조',steps:[
+            {body:'워커가 1초마다 빈 칸을 채워요',ex:'폴링: 정해진 간격으로 DB를 다시 확인해요',
+             src:'PushWorkerScheduler.java:14'},
+            {body:'끊긴 작업은 담당 표시만 남고 DB에 있어요',ex:'선점 만료 시각이 지나면 다른 실행이 가져가요',
+             src:'PushDispatchWorker.java:77'},
+            {body:'다시 떠서 남은 작업을 이어서 보내요',ex:'어디까지 보냈는지는 서버가 아니라 DB가 알아요',
+             src:'PushLeaseService.java:24'}]}}}
+    ]
+  };
+})();
+/* ====================== CONFIG END ====================== */
+
+/* ===================== 엔진 (고치지 않는다) ===================== */
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const Q=new URLSearchParams(location.search),EMBED=Q.has('embed');
+if(EMBED)document.body.classList.add('embed');
+if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
+const W=800,H=350,TOP=214;                  // 논리 크기: 그림 0~208, 시간표 214~350
+const HEADS={map:['요청이 지나가는 곳','데이터가 남는 곳'],flow:['요청 안에서 끝나는 일','워커가 나중에 하는 일'],risk:['평소','문제 조건'],compare:['현재 구조','바꾼 구조']};
+const MV=CONFIG.move||7;
+let COL={};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+function readColors(){['bg','card','ink','ink2','ink3','line','soft','grid','cur','wrk','retry','bad','bad-bg','ok','cur-bg','wrk-bg'].forEach(k=>COL[k]=css(k));COL.FS=css('f-ui');COL.FM=css('f-num')}
+const col=c=>COL[c]||c;
+const lerp=(a,b,u)=>a+(b-a)*u,clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),ease=u=>{u=clamp(u,0,1);return u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2};
+const cv=$('cv'),g=cv.getContext('2d');
+let REC=null;
+function text(s,x,y,o={}){const sz=o.s||11;g.font=`${o.w||400} ${sz}px ${o.m?COL.FM:COL.FS}`;g.fillStyle=col(o.c||'ink');g.textAlign=o.a||'left';g.textBaseline=o.b||'alphabetic';g.fillText(s,x,y);const w=g.measureText(s).width;
+  if(REC&&s){const m=g.getTransform(),S=cv.width/W,a=o.a||'left',x0=a==='center'?x-w/2:a==='right'?x-w:x,y0=o.b==='middle'?y-sz/2:y-sz*.78;
+    REC.push({kind:'text',s,x:(m.a*x0+m.e)/S,y:(m.d*y0+m.f)/S,w:w*m.a/S,h:sz*m.d/S*(o.b==='middle'?1:.98),area:REC.area})}
+  return w}
+function rr(x,y,w,h,r){g.beginPath();g.roundRect(x,y,w,h,r)}
+function dot(x,y,r,c,a){g.globalAlpha=a==null?1:a;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fillStyle=col(c);g.fill();g.globalAlpha=1}
+
+let SC,INFO,PANELS,STEPS,TL,T=0,playing=!EMBED,started=!EMBED,last=null,END;
+/* ---- 점 위치 ---- */
+function slotPos(b,k){const s=b.slots,gw=s.cols*s.size+(s.cols-1)*s.gap,rows=Math.ceil(s.n/s.cols),gh=rows*s.size+(rows-1)*s.gap;
+  return [b.x+(b.w-gw)/2+(k%s.cols)*(s.size+s.gap)+s.size/2,b.y+(b.h-gh)/2+Math.floor(k/s.cols)*(s.size+s.gap)+s.size/2]}
+function poolPos(b,rank){const gr=b.grid;return [b.x+gr.ox+(rank%gr.cols)*gr.dx,b.y+gr.oy+Math.floor(rank/gr.cols)*gr.dy]}
+function center(b){return [b.x+b.w/2,b.y+b.h/2]}
+function along(pts,u){const L=[];let tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);L.push(d);tot+=d}
+  let r=u*tot;for(let i=0;i<L.length;i++){if(r<=L[i]||i===L.length-1){const v=L[i]?clamp(r/L[i],0,1):1;return [lerp(pts[i][0],pts[i+1][0],v),lerp(pts[i][1],pts[i+1][1],v)]}r-=L[i]}return pts[pts.length-1]}
+function prep(p){
+  p.B={};p.boxes.forEach(b=>p.B[b.id]=b);
+  p.tokens.forEach((tk,idx)=>{tk.idx=idx;tk.hops.forEach((h,k)=>{h.arrive=k===0?h.t:h.t+MV;h.leave=k<tk.hops.length-1?tk.hops[k+1].t:Infinity})});
+}
+function stateAt(p,t){
+  // 상자마다 지금 머무는 점 목록(도착 순)
+  const rest={},list=[];
+  p.tokens.forEach(tk=>{
+    const hs=tk.hops;if(t<hs[0].t)return;
+    let k=0;while(k+1<hs.length&&hs[k+1].t<=t)k++;
+    const h=hs[k],b=p.B[h.box];
+    const moving=k>0&&t<h.arrive;
+    const st={tk,k,h,b,moving,c:h.color||tk.color};
+    if(!moving){if(b.type==='sink'&&t-h.arrive>MV*.6)return;(rest[h.box]=rest[h.box]||[]).push(st)}
+    list.push(st);
+  });
+  Object.values(rest).forEach(a=>a.sort((x,y)=>x.h.arrive-y.h.arrive||x.tk.idx-y.tk.idx).forEach((s,i)=>s.rank=i));
+  return {rest,list};
+}
+function ctxOf(p,t,S){return {t,
+  n:id=>(S.rest[id]||[]).filter(s=>p.B[id].type!=='sink').length,
+  arrived:(id,f)=>p.tokens.filter(tk=>(!f||f(tk))&&tk.hops.some((h,k)=>h.box===id&&h.arrive<=t)).length}}
+function posOf(s,p,S,t){
+  const b=s.b;
+  if(b.type==='slots')return slotPos(b,s.h.slot||0);
+  if(b.type==='pool')return poolPos(b,s.rank!=null?s.rank:(S.rest[b.id]||[]).length);
+  return center(b);
+}
+function fromPos(s,p){const prev=s.tk.hops[s.k-1],b=p.B[prev.box];
+  if(b.type==='slots')return slotPos(b,prev.slot||0);if(b.type==='pool')return poolPos(b,0);return center(b)}
+
+/* ---- 패널 그리기 ---- */
+function drawPanel(p,ox,pw,t,pi){
+  g.save();g.translate(ox,0);if(REC){REC.area='p'+pi;REC.bounds.push({area:'p'+pi,x:ox,y:0,w:pw,h:198});p.boxes.forEach(b=>REC.push({kind:'box',s:b.id,x:ox+b.x,y:b.y,w:b.w,h:b.h,area:'p'+pi}))}
+  const S=stateAt(p,t),ctx=ctxOf(p,t,S);
+  const nw=text(p.name,8,15,{s:13,w:600,c:p.color});
+  if(CONFIG.badge&&CONFIG.badge.panel===pi){g.font=`600 10px ${COL.FS}`;const bw=g.measureText(CONFIG.badge.text).width+12;
+    rr(16+nw,5,bw,15,7.5);g.strokeStyle=col('ink3');g.lineWidth=1;g.stroke();text(CONFIG.badge.text,22+nw,15.5,{s:10,w:600,c:'ink2'})}
+  const st=typeof p.status==='function'?p.status(t,ctx):[...(p.status||[])].reverse().find(x=>x.t<=t)||{};
+  const [stx,tone]=Array.isArray(st)?st:[st.text,st.tone];
+  if(stx)text(stx,8,31,{s:11,w:tone==='neu'?400:600,c:tone==='bad'?'bad':tone==='ok'?'ok':'ink2'});
+  g.strokeStyle=col('ink3');g.lineWidth=1.2;
+  (p.edges||[]).forEach(e=>{g.globalAlpha=e.dim?.3:1;g.beginPath();e.pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();
+    const [x1,y1]=e.pts[e.pts.length-1],[x0,y0]=e.pts[e.pts.length-2],a=Math.atan2(y1-y0,x1-x0);
+    g.beginPath();g.moveTo(x1,y1);g.lineTo(x1-6*Math.cos(a-.45),y1-6*Math.sin(a-.45));g.lineTo(x1-6*Math.cos(a+.45),y1-6*Math.sin(a+.45));g.closePath();g.fillStyle=col('ink3');g.fill();g.globalAlpha=1});
+  p.boxes.forEach(b=>{
+    g.globalAlpha=b.dim?.35:1;
+    const lb=typeof b.label==='function'?b.label(t):b.label;
+    if(lb)text(lb,b.labelAlign==='center'?b.x+b.w/2:b.x,b.y-6,{s:10.5,w:600,c:'ink2',a:b.labelAlign||'left'});
+    rr(b.x,b.y,b.w,b.h,7);if(b.type!=='slots'){g.fillStyle=col(b.fill||'soft');g.fill()}
+    g.strokeStyle=col(b.stroke||(b.type==='slots'?p.color:'line'));g.lineWidth=1.2;g.stroke();
+    if(b.type==='slots')for(let k=0;k<b.slots.n;k++){const [x,y]=slotPos(b,k),h=b.slots.size;rr(x-h/2,y-h/2,h,h,5);g.fillStyle=col('grid');g.fill()}
+    g.globalAlpha=1;
+  });
+  // 점
+  S.list.forEach(s=>{
+    const r=s.tk.r||3;
+    if(s.moving){const [ax,ay]=fromPos(s,p),[bx,by]=posOf(s,p,S,t),u=ease((t-s.h.t)/MV);
+      const prev=s.tk.hops[s.k-1].box,e=(p.edges||[]).find(e=>e.from===prev&&e.to===s.h.box)||(p.edges||[]).find(e=>e.from===s.h.box&&e.to===prev);
+      const pts=e?[[ax,ay],...(e.from===prev?e.pts:[...e.pts].reverse()),[bx,by]]:[[ax,ay],[bx,by]];
+      const [mx,my]=along(pts,u);dot(mx,my,r,s.c);
+      if(s.h.cut){const a=1-(t-s.h.t)/MV;g.globalAlpha=clamp(a,0,1);g.strokeStyle=col('bad');g.lineWidth=2;g.beginPath();g.moveTo(ax-5,ay-5);g.lineTo(ax+5,ay+5);g.moveTo(ax+5,ay-5);g.lineTo(ax-5,ay+5);g.stroke();g.globalAlpha=1}
+      return}
+    const [x,y]=posOf(s,p,S,t);
+    if(s.b.type==='sink'){const u=(t-s.h.arrive)/(MV*.6);dot(x,y,r*(1-u*.5),s.c,1-u);return}
+    dot(x,y,r,s.c);
+    if(s.b.type==='slots'){const end=s.h.until!=null?s.h.until:s.h.leave;if(isFinite(end)&&end>s.h.arrive){const u=clamp((t-s.h.arrive)/(end-s.h.arrive),0,1);
+      g.beginPath();g.arc(x,y,r+4,-Math.PI/2,-Math.PI/2+u*Math.PI*2);g.strokeStyle=col(s.c);g.lineWidth=2;g.stroke()}}
+  });
+  // 덮개, 숫자, 메모, 막힘
+  p.boxes.forEach(b=>{
+    const cv_=b.cover&&b.cover(t);
+    if(cv_){g.globalAlpha=.9;rr(b.x+1,b.y+1,b.w-2,b.h-2,6);g.fillStyle=col('bad-bg');g.fill();g.globalAlpha=1;
+      text(cv_.text,b.x+b.w/2,b.y+b.h/2,{s:13,w:700,c:'bad',a:'center'});if(cv_.sub)text(cv_.sub,b.x+b.w/2,b.y+b.h/2+16,{s:9.5,w:600,c:'bad',a:'center'})}
+    if(b.count){const s=b.count(ctx);if(s)text(s,b.x+b.w/2,b.y+b.h+13,{s:11,w:600,c:'ink',a:'center',m:false})}
+  });
+  (p.notes||[]).forEach(n=>{if(t>=n.from&&t<n.to)text(typeof n.text==='function'?n.text(t):n.text,n.x,n.y,{s:10,w:600,c:n.color||'ink3',a:n.align||'left',b:'middle'})});
+  (p.blocks||[]).forEach(k=>{if(t>=k.from&&t<k.to){g.strokeStyle=col('bad');g.lineWidth=3;g.beginPath();g.moveTo(k.x,k.y1);g.lineTo(k.x,k.y2);g.stroke();
+    text(k.text,k.tx,k.ty,{s:10,w:700,c:'bad',a:k.align||'left',b:'middle'})}});
+  g.restore();
+}
+/* ---- 시간표 ---- */
+function intervals(p,row){
+  const iv=[];p.tokens.forEach(tk=>{if(row.filter&&!row.filter(tk))return;tk.hops.forEach(h=>{const e=isFinite(h.leave)?h.leave:END;if(h.box===row.box&&h.t>=0&&e-h.t>.01)iv.push([h.t,e])})});
+  iv.sort((a,b)=>a[0]-b[0]);const out=[],tol=END*.004;
+  iv.forEach(([a,b])=>{if(out.length&&a<=out[out.length-1][1]+tol)out[out.length-1][1]=Math.max(out[out.length-1][1],b);else out.push([a,b])});
+  return out;
+}
+function drawTimeline(t){
+  if(REC){REC.area='tl';REC.bounds.push({area:'tl',x:0,y:TOP,w:W,h:H-TOP})}
+  const PL=124,PR=10,xs=v=>PL+(W-PL-PR)*clamp(v,0,END)/END;
+  g.strokeStyle=col('line');g.lineWidth=1;g.beginPath();g.moveTo(0,TOP+.5);g.lineTo(W,TOP+.5);g.stroke();
+  const RH=16,RG=5,GG=12,Y0=TOP+20,AX=H-6;
+  const ticks=CONFIG.axis.unit==='sec'?(()=>{const a=[];for(let v=0;v<=END;v+=CONFIG.axis.tick)a.push({t:v,label:CONFIG.axis.fmt(v)});return a})():(SC.ticks||[]);
+  ticks.forEach(k=>{const x=xs(k.t);g.strokeStyle=col('grid');g.beginPath();g.moveTo(x,Y0-3);g.lineTo(x,AX-11);g.stroke();text(k.label,x,AX,{s:9.5,c:'ink3',a:'center',m:CONFIG.axis.unit==='sec'})});
+  let y=Y0,lastPanel=null;const ys=[];
+  TL.rows.forEach((row,i)=>{if(lastPanel!=null&&row.panel!==lastPanel)y+=GG-RG;ys.push(y);
+    const p=PANELS[row.panel];
+    if(row.panel!==lastPanel){dot(5,y+RH/2,3,p.color);text(PANELS.length>1?p.name:'',12,y+RH/2+.5,{s:10.5,w:600,c:p.color,b:'middle'})}
+    text(row.label,PL-6,y+RH/2+.5,{s:10,c:'ink2',a:'right',b:'middle'});
+    rr(xs(0),y,xs(END)-xs(0),RH,3);g.fillStyle=col('soft');g.fill();
+    g.save();g.beginPath();g.rect(0,0,xs(t),H);g.clip();
+    intervals(p,row).forEach(([a,b])=>{rr(xs(a),y,Math.max(2,xs(b)-xs(a)),RH,3);g.globalAlpha=.85;g.fillStyle=col(row.color||p.color);g.fill();g.globalAlpha=1});
+    g.restore();
+    lastPanel=row.panel;y+=RH+RG;
+  });
+  (TL.marks||[]).forEach(m=>{const x=xs(m.t);g.setLineDash([4,3]);g.strokeStyle=col(m.color||'ink');g.lineWidth=1.3;g.beginPath();g.moveTo(x,Y0-4);g.lineTo(x,AX-11);g.stroke();g.setLineDash([]);
+    g.font=`600 10px ${COL.FS}`;const w=g.measureText(m.label).width;text(m.label,clamp(x,PL+w/2,W-PR-w/2),TOP+11,{s:10,w:600,c:m.color||'ink',a:'center'})});
+  (TL.waits||[]).forEach(wt=>{if(wt.b==null||t<wt.a)return;const yy=ys[wt.row],e=Math.min(t,wt.b),x0=xs(wt.a),w=xs(e)-x0,gap=wt.b-wt.a;
+    if(gap<=1&&!wt.text)return;
+    if(w>0){rr(x0,yy-1,w,RH+2,3);g.fillStyle=col('bad-bg');g.fill();g.setLineDash([3,2]);g.strokeStyle=col('bad');g.lineWidth=1;g.stroke();g.setLineDash([])}
+    if(t>=wt.b||wt.text){const lab=wt.text||(gap.toFixed(0)+'초 기다림');g.font=`600 9.5px ${COL.FS}`;const lw=g.measureText(lab).width;
+      const full=xs(wt.b)-x0;
+      if(full>=70&&full>=lw+8){if(w>=lw+8)text(lab,x0+w/2,yy+RH/2+.5,{s:9.5,w:600,c:'bad',a:'center',b:'middle'})}
+      else if(t>=wt.b){const bar=intervals(PANELS[TL.rows[wt.row].panel],TL.rows[wt.row]).find(([a])=>Math.abs(a-wt.b)<1);
+        text(wt.text||(gap.toFixed(gap<10?1:0)+'초 뒤 시작'),Math.max(xs(wt.b),bar?xs(bar[1]):0)+5,yy+RH/2+.5,{s:9.5,w:600,c:'bad',a:'left',b:'middle'})}}});
+  (TL.labels||[]).forEach(l=>{if(t<l.t)return;const yy=ys[l.row];text(l.text,xs(l.t)+5,yy+RH/2+.5,{s:9.5,w:600,c:l.tone==='bad'?'bad':l.tone==='ok'?'ok':'ink',b:'middle'})});
+  const x=xs(Math.min(t,END));g.strokeStyle=col('ink');g.lineWidth=1.2;g.beginPath();g.moveTo(x,Y0-4);g.lineTo(x,AX-11);g.stroke();
+}
+/* ---- 화면 ---- */
+function render(){
+  if(!SC||!cv.width)return;
+  readColors();
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cv.width,cv.height);g.setTransform(cv.width/W,0,0,cv.height/H,0,0);
+  const t=Math.min(T,END);
+  if(PANELS.length===1)drawPanel(PANELS[0],0,W,t,0);
+  else{const pw=(W-16)/2;drawPanel(PANELS[0],0,pw,t,0);g.strokeStyle=col('line');g.lineWidth=1;g.beginPath();g.moveTo(W/2+.5,6);g.lineTo(W/2+.5,194);g.stroke();drawPanel(PANELS[1],pw+16,pw,t,1)}
+  drawTimeline(t);
+  $('clk').textContent=CONFIG.axis.unit==='sec'?CONFIG.axis.clock(t):((SC.ticks||[]).filter(k=>k.t<=t).pop()||{label:''}).label;
+  updSteps(t);
+}
+let stepEls=[[],[]];
+function buildCards(){
+  const heads=HEADS[CONFIG.kind]||HEADS.compare;
+  [['L','hl','sl','cl',0],['R','hr','sr','cr',1]].forEach(([side,h,s,c,i])=>{
+    const cd=SC.cards[side];$(h).textContent=cd.head||heads[i];
+    const ol=$(s);ol.innerHTML='';stepEls[i]=[];
+    cd.steps.forEach((stp,k)=>{
+      const li=document.createElement('li');li.className='st';li.tabIndex=0;li.setAttribute('role','button');
+      li.innerHTML='<span class="cc"><b></b></span><span class="tx"><span class="bd"></span><span class="ex"></span></span>';
+      li.querySelector('.bd').textContent=stp.body;li.querySelector('.ex').textContent=stp.ex||'';
+      li.setAttribute('aria-label',(k+1)+'단계: '+stp.body);
+      const go=()=>{T=STEPS[k];playing=true;started=true;render()};
+      li.addEventListener('click',go);li.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}});
+      ol.appendChild(li);stepEls[i].push(li);
+    });
+  });
+}
+let curStep=-1;
+function updSteps(t){
+  let k=0;STEPS.forEach((s,i)=>{if(t>=s)k=i});
+  stepEls.forEach(arr=>arr.forEach((li,i)=>{li.classList.toggle('past',i<k);li.classList.toggle('now',i===k);li.setAttribute('aria-current',i===k?'step':'false')}));
+}
+function setScene(id){
+  SC=CONFIG.scenes.find(s=>s.id===id)||CONFIG.scenes[0];
+  const b=SC.build();INFO=b.info||{};PANELS=b.panels;PANELS.forEach(prep);
+  END=typeof SC.end==='function'?SC.end(INFO):SC.end;
+  STEPS=typeof SC.steps==='function'?SC.steps(INFO):SC.steps;
+  TL=typeof SC.timeline==='function'?SC.timeline(INFO):SC.timeline;
+  $('key').innerHTML='';(SC.legend||[]).forEach(([c,s])=>{const sp=document.createElement('span'),bb=document.createElement('b');bb.style.background=`var(--${c})`;sp.appendChild(bb);sp.appendChild(document.createTextNode(s));$('key').appendChild(sp)});
+  [...$('tabs').children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.s===SC.id));
+  T=0;curStep=-1;buildCards();render();
+}
+$('ttl').textContent=CONFIG.title;document.title=CONFIG.title;
+CONFIG.scenes.forEach(s=>{const b=document.createElement('button');b.type='button';b.dataset.s=s.id;b.textContent=s.tab;b.onclick=()=>{setScene(s.id);playing=true;started=true;updPP()};$('tabs').appendChild(b)});
+function size(){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,w=Math.round(r.width*d),h=Math.round(r.height*d);if(w&&(w!==cv.width||h!==cv.height)){cv.width=w;cv.height=h}render()}
+function updPP(){$('pp').textContent=playing?'❚❚':'▶';$('pp').setAttribute('aria-label',playing?'일시정지':'재생')}
+$('pp').onclick=()=>{playing=!playing;started=true;updPP()};
+$('again').onclick=()=>{T=0;playing=true;started=true;updPP();render()};
+function loop(ts){if(last!=null&&playing){T+=Math.min(.1,(ts-last)/1000)*CONFIG.speed;if(T>END+CONFIG.speed*2.5)T=0;render()}last=ts;requestAnimationFrame(loop)}
+new ResizeObserver(()=>size()).observe($('frame'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
+setScene(Q.get('s')||CONFIG.scenes[0].id);size();
+if(EMBED&&'IntersectionObserver' in window){new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){if(!started){started=true;T=0}playing=true}else playing=false;updPP()})},{threshold:.2}).observe($('frame'))}
+else{playing=true;started=true}
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;T=STEPS[1]||0;render()}
+updPP();requestAnimationFrame(loop);
+window.__sim={set(t){T=t;playing=false;updPP();render()},play(){playing=true;updPP()},scene(id){setScene(id)},get t(){return T},get end(){return END},
+  get steps(){return STEPS},get scenes(){return CONFIG.scenes.map(s=>s.id)},get kind(){return CONFIG.kind},info:()=>INFO,get panels(){return PANELS},layout(t){T=t;playing=false;REC=[];REC.bounds=[];render();const r={items:REC,bounds:REC.bounds};REC=null;return r},get cards(){return SC.cards},get playing(){return playing}};
+})();
+</script>
+</body>
+</html>

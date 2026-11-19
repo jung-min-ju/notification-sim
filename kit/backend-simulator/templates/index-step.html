@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* ===== 단계형 뼈대 엔진: 고치지 않는다. 바꿀 것은 CONFIG에만 쓴다. ===== */
+:root{
+  --bg:#ffffff;--card:#ffffff;--ink:#1f2328;--ink2:#59636e;--ink3:#8c959f;--line:#d8dee4;--soft:#f6f8fa;--grid:#eef1f4;
+  --cur:#c2571a;--wrk:#2b66c9;--retry:#c98f00;--bad:#cf222e;--bad-bg:#ffebe9;--ok:#1a7f37;--ok-bg:#e8f5ec;--pend-bg:#fff6dd;
+  --cur-bg:#fff3e8;--wrk-bg:#eef4ff;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;--ok-bg:#12261a;--pend-bg:#2e2611;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;--ok-bg:#12261a;--pend-bg:#2e2611;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 var(--f-ui);word-break:keep-all;-webkit-text-size-adjust:100%}
+.wrap{max-width:1040px;margin:0 auto;padding:16px 16px 24px;display:flex;flex-direction:column;gap:10px}
+h1{font-size:18px;margin:0;font-weight:600}
+.chap{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:12.5px}
+.chap a{padding:3px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);text-decoration:none}
+.chap a[aria-current="page"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.chap i{color:var(--ink3);font-style:normal}
+.bar{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);flex-wrap:wrap}
+.bar select,.bar button{font:inherit;font-size:12.5px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);cursor:pointer}
+.bar #play{background:var(--wrk);color:#fff;border-color:var(--wrk);font-weight:600;min-width:72px}
+.bar button:disabled{opacity:.45;cursor:default}
+.bar .cnt{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink)}
+button:focus-visible,select:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
+/* 16:10 한 화면 = 왼쪽 단계 30 + 오른쪽 그림 70 */
+.frame{container:frame/inline-size;aspect-ratio:16/10;min-width:698px;display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+.side{min-height:0;overflow:hidden;border-right:1px solid var(--line);padding:9px 11px;display:flex;flex-direction:column;gap:6px;font-size:clamp(10.5px,1.4cqi,13.5px);line-height:1.38}
+.now{background:var(--wrk-bg);border-radius:9px;padding:8px 10px}
+.now .grp{font-size:.82em;font-weight:600;color:var(--wrk)}
+.now .grp.prob{color:var(--bad)}.now .grp.sum{color:var(--ink2)}
+.now h2{margin:2px 0 0;font-size:1.12em;line-height:1.3}
+.doing{border:1px dashed var(--line);border-radius:9px;padding:6px 10px}
+.doing b{display:block;font-size:.86em;color:var(--wrk);margin-bottom:2px}
+.doing ul{margin:0;padding:0;list-style:none}
+.doing li{position:relative;padding-left:1.1em;color:var(--ink)}
+.doing li::before{content:"→";position:absolute;left:0;color:var(--ink3)}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;min-height:0}
+.list .gh{font-size:.78em;font-weight:600;color:var(--ink3);margin:3px 0 0}
+.list .gh.prob{color:var(--bad)}
+.st{display:flex;gap:7px;padding:1px 6px;border-radius:6px;cursor:pointer;color:var(--ink3);font-size:.93em}
+.st span:first-child{font:600 .9em var(--f-num);width:1.2em;flex:none;padding-top:.08em}
+.st.past{color:var(--ink2)}
+.st.cur{background:var(--wrk-bg);color:var(--wrk);font-weight:600}
+.main{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
+.main svg{width:100%;height:100%;display:block}
+.key{display:flex;flex-wrap:wrap;gap:2px 12px;padding:0 12px 8px;font-size:11.5px;color:var(--ink2)}
+.key span{display:inline-flex;align-items:center;gap:5px}
+.key b{width:14px;height:0;border-top:2px solid;display:inline-block}
+.key b.dash{border-top:1.5px dashed var(--ink3);width:14px}
+svg text{font-family:var(--f-ui)}
+.n rect.b,.n path.b{fill:var(--card);stroke:var(--line);stroke-width:1.3}
+.n .t{font-size:12.5px;font-weight:600;fill:var(--ink)}
+.n .s{font-size:10px;fill:var(--ink2)}
+.n .rk{font-size:10px;fill:var(--ink2)}
+.n .rv{font-size:10px;font-weight:600;fill:var(--ink)}
+.n .rbg{fill:var(--soft)}
+.n .rbg.pend{fill:var(--pend-bg)}.n .rbg.ok{fill:var(--ok-bg)}.n .rbg.bad{fill:var(--bad-bg)}
+.n .note{font-size:10px;font-weight:600}
+.n.on rect.b,.n.on path.b{stroke:var(--wrk);stroke-width:2.2}
+.n.on .t{fill:var(--wrk)}
+.n.off{opacity:.3}
+.n.cand rect.b{stroke-dasharray:4 3}
+.n .cv{fill:var(--bad-bg);opacity:.92}
+.n .cvt{font-size:12px;font-weight:700;fill:var(--bad)}
+.e path{fill:none;stroke:var(--line);stroke-width:1.3}
+.e.off{opacity:.35}
+.e.on path{stroke-width:2}
+.e.req.on path{stroke:var(--wrk)}.e.res.on path{stroke:var(--ok)}.e.sig.on path{stroke:var(--cur)}.e.fail.on path{stroke:var(--bad)}
+.pill rect{stroke:none}
+.pill text{font-size:10px;font-weight:600;fill:#fff}
+.pill.res rect{fill:var(--ok)}.pill.req rect{fill:var(--wrk)}.pill.sig rect{fill:var(--cur)}.pill.fail rect{fill:var(--bad)}
+.dotm{stroke:var(--bg);stroke-width:1.5}
+body.embed h1,body.embed .chap{display:none}
+body.embed .wrap{max-width:720px;padding:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="ttl"></h1>
+  <nav class="chap" id="chap" aria-label="화면"></nav>
+  <div class="bar">
+    <select id="scene" aria-label="상황"></select>
+    <button type="button" id="play">재생</button>
+    <button type="button" id="prev">이전</button>
+    <button type="button" id="next">다음</button>
+    <button type="button" id="first">처음으로</button>
+    <label>속도 <select id="speed"><option value="0.6">느리게</option><option value="1" selected>보통</option><option value="1.6">빠르게</option></select></label>
+    <span class="cnt" id="cnt"></span>
+  </div>
+  <div class="frame" id="frame">
+    <aside class="side">
+      <div class="now"><div class="grp" id="grp"></div><h2 id="stitle"></h2></div>
+      <div class="doing"><b>지금 하는 일</b><ul id="doing"></ul></div>
+      <ol class="list" id="list"></ol>
+    </aside>
+    <div class="main">
+      <svg id="svg" role="img" aria-label="구성요소 그림"></svg>
+      <div class="key" id="key"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== CONFIG START =====================
+   이 블록만 채운다. 형식은 references/step.md "CONFIG 형식".
+   src는 근거 파일:줄이다. 화면에는 나오지 않고 README에 옮겨 적는다.
+   예시: 다먹자 알림 발송 V2(DB 워커) — KTB4-5th-BE dev ad6550f 기준.   */
+const CONFIG={
+  title:'알림 발송 흐름: 08시 배치와 DB 워커',
+  kind:'flow',                                  // map | flow (단계형은 이 둘의 기본)
+  view:[800,660],                               // 그림 논리 크기
+  chapters:null,                                // 화면 이야기: [{label:'① 정상 흐름',href:'../a/'},...] 지금 화면은 current:true
+  nodes:[
+    {id:'B', type:'client',x:10, y:470,w:122,h:90, title:'U1 · 노트북',sub:'S2에 SSE로 연결'},
+    {id:'S1',type:'box',   x:160,y:30, w:130,h:130,title:'서버 S1',sub:'08시 배치 실행'},
+    {id:'R', type:'box',   x:160,y:250,w:130,h:80, title:'Redis Pub/Sub',sub:'구독 중인 서버 모두에 전달'},
+    {id:'S2',type:'box',   x:160,y:440,w:130,h:150,title:'서버 S2',sub:'SSE 연결 보관'},
+    {id:'J', type:'db',    x:380,y:30, w:200,h:150,title:'발송 작업 테이블',rows:[{key:'job',label:'냉장고1 · U1 노트북',value:'없음'}]},
+    {id:'ND',type:'db',    x:380,y:420,w:200,h:170,title:'알림 테이블',rows:[{key:'noti',label:'알림 · 수신자',value:'없음'},{key:'unread',label:'U1 미읽음',value:'0'}]},
+    {id:'W1',type:'box',   x:610,y:30, w:130,h:100,title:'S1 워커',sub:'1초마다 빈 칸 확인'},
+    {id:'W2',type:'box',   x:610,y:230,w:130,h:100,title:'S2 워커',sub:'1초마다 빈 칸 확인'},
+    {id:'WP',type:'ext',   x:610,y:470,w:130,h:90, title:'외부 Web Push',sub:'제공자 수락 ≠ 단말 수신'}
+  ],
+  texts:[{x:480,y:625,text:'두 테이블은 같은 DB 안에 있어요',align:'middle'}],
+  edges:[
+    {id:'S1-J', from:'S1',to:'J', pts:[[290,80],[380,80]]},
+    {id:'S1-ND',from:'S1',to:'ND',pts:[[290,140],[335,140],[335,470],[380,470]]},
+    {id:'S1-R', from:'S1',to:'R', pts:[[225,160],[225,250]]},
+    {id:'R-S2', from:'R', to:'S2',pts:[[225,330],[225,440]]},
+    {id:'S2-B', from:'S2',to:'B', pts:[[160,495],[132,495]]},
+    {id:'B-S2', from:'B', to:'S2',pts:[[132,535],[160,535]]},
+    {id:'S2-ND',from:'S2',to:'ND',pts:[[290,540],[380,540]]},
+    {id:'W1-J', from:'W1',to:'J', pts:[[610,80],[580,80]]},
+    {id:'W2-J', from:'W2',to:'J', pts:[[610,280],[540,280],[540,180]]},
+    {id:'W1-WP',from:'W1',to:'WP',pts:[[740,90],[772,90],[772,515],[740,515]]},
+    {id:'W2-WP',from:'W2',to:'WP',pts:[[675,330],[675,470]]}
+  ],
+  legend:[['req','요청·저장'],['res','응답·조회 결과'],['sig','신호·외부 호출'],['fail','실패']],
+  scenes:[
+   {id:'flow',tab:'전체 흐름: 배치는 만들고 워커가 보냄',steps:[
+    {group:'flow',title:'08시 배치가 냉장고마다 알림을 만들어요',active:['S1'],
+     doing:['S1의 08시 배치가 알림 대상 냉장고를 하나씩 처리해요','냉장고1에 임박 재료가 있어 알림을 만들어요'],
+     notes:{S1:['냉장고1 임박 알림','pend']},
+     src:'NotificationScheduler.java:46'},
+    {group:'flow',title:'알림과 대기 작업을 함께 저장해요',active:['S1','ND','J'],
+     doing:['알림과 받는 사람 기록을 알림 테이블에 저장해요','보낼 기기마다 발송 작업을 "대기"로 저장해요','둘은 한 트랜잭션이라 같이 커밋돼요'],
+     msgs:[{edge:'S1-ND',label:'알림 · 수신자',kind:'req',set:{noti:['냉장고1 임박 알림','ok'],unread:['1','ok']}},
+           {edge:'S1-J',label:'대기 작업',kind:'req',set:{job:['대기','pend']}}],
+     notes:{S1:['함께 커밋','ok']},
+     src:'ExpirationNotificationService.java:55'},
+    {group:'flow',title:'커밋 뒤 화면 갱신 신호를 보내요',active:['S1','R','S2','B','ND'],
+     doing:['커밋이 끝나면 Redis에 "U1 알림 바뀜"을 보내요','S2가 받아 U1 노트북에 SSE로 알려요','노트북은 DB의 최신 상태를 다시 조회해요'],
+     msgs:[{edge:'S1-R',label:'U1 신호',kind:'sig'},{edge:'R-S2',label:'U1 신호',kind:'sig'},{edge:'S2-B',label:'SSE 안내',kind:'sig'},
+           {edge:'B-S2',label:'최신 상태 조회',kind:'req'},{edge:'S2-ND',label:'조회',kind:'req'},{edge:'S2-ND',rev:true,label:'미읽음 1',kind:'res'},{edge:'B-S2',rev:true,label:'응답',kind:'res'}],
+     notes:{B:['새 알림 보임','ok']},
+     src:'NotificationRedisPubSub.java:25'},
+    {group:'flow',title:'워커가 빈 칸만큼 대기 작업을 골라요',active:['W1','J'],
+     doing:['S1 워커는 08시 배치와 따로 1초마다 돌아요','비어 있는 칸 수만큼만 대기 작업을 골라요'],
+     msgs:[{edge:'W1-J',label:'대기 작업 고르기',kind:'req'},{edge:'W1-J',rev:true,label:'냉장고1 · U1 노트북',kind:'res'}],
+     src:'PushDispatchWorker.java:37'},
+    {group:'flow',title:'고른 작업에 담당 표시를 남겨요',active:['W1','J'],
+     doing:['상태를 "처리 중"으로 바꾸고 담당 토큰을 저장해요','점유 만료 시각도 함께 저장하고 바로 커밋해요','선점: 다른 워커가 같은 작업을 못 잡게 하는 표시'],
+     msgs:[{edge:'W1-J',label:'처리 중 · 토큰 A',kind:'req',set:{job:['처리 중 · S1 워커','pend']}}],
+     src:'PushNotificationRepository.java:62'},
+    {group:'flow',title:'외부 Web Push로 보내요',active:['W1','WP'],
+     doing:['DB 트랜잭션 밖에서 외부 Web Push를 불러요','외부 응답을 기다리는 동안 DB를 붙잡지 않아요'],
+     msgs:[{edge:'W1-WP',label:'푸시',kind:'sig'},{edge:'W1-WP',rev:true,label:'수락',kind:'res'}],
+     notes:{WP:['수락','ok']},
+     src:'PushDispatchWorker.java:82'},
+    {group:'flow',title:'담당이 맞을 때만 결과를 저장해요',active:['W1','J'],
+     doing:['토큰이 지금도 S1 워커 것일 때만 "수락"으로 바꿔요','저장이 끝나면 칸을 비우고 다음 작업을 골라요'],
+     msgs:[{edge:'W1-J',label:'결과 저장 · 토큰 A',kind:'req',set:{job:['수락','ok']}}],
+     src:'PushNotificationRepository.java:133'},
+    {group:'sum',title:'배치는 만들고 끝나고, 발송은 워커가 해요',active:['S1','W1','R'],
+     doing:['08시 배치는 알림과 대기 작업을 저장하고 끝나요','발송과 결과 저장은 DB 워커가 처리 여력만큼 해요','화면 갱신은 Redis Pub/Sub과 SSE가 따로 맡아요'],
+     notes:{S1:['만들고 끝남','ok'],W1:['여력만큼 발송','ok'],R:['화면 갱신 신호','ok']},
+     src:'application.yml:142'}
+   ]},
+   {id:'stuck',tab:'워커가 응답을 오래 기다리면',init:{job:['대기','pend']},steps:[
+    {group:'flow',title:'S1 워커가 작업에 담당 표시를 남겨요',active:['W1','J'],
+     doing:['S1 워커가 대기 작업을 골라 "처리 중"으로 바꿔요','담당 토큰 A와 점유 만료 시각을 저장해요'],
+     msgs:[{edge:'W1-J',label:'처리 중 · 토큰 A',kind:'req',set:{job:['처리 중 · S1 워커','pend']}}],
+     src:'PushLeaseService.java:45'},
+    {group:'prob',title:'외부 응답을 30초 넘게 기다려요',active:['W1','WP'],
+     doing:['S1 워커가 푸시를 보냈는데 응답이 오지 않아요','점유 시간(기본 30초)이 그대로 지나가요'],
+     msgs:[{edge:'W1-WP',label:'푸시',kind:'sig'},{edge:'W1-WP',label:'응답 없음',kind:'fail',fail:true}],
+     covers:{W1:'응답 기다리는 중'},
+     src:'application.yml:145'},
+    {group:'prob',title:'점유가 끝난 작업을 S2 워커가 가져가요',active:['W2','J'],
+     doing:['점유 만료가 지난 "처리 중" 작업도 다시 고를 수 있어요','S2 워커가 토큰 B로 담당을 바꿔요'],
+     msgs:[{edge:'W2-J',label:'다시 고르기',kind:'req'},{edge:'W2-J',label:'처리 중 · 토큰 B',kind:'req',set:{job:['처리 중 · S2 워커','pend']}}],
+     covers:{W1:'응답 기다리는 중'},
+     src:'PushNotificationRepository.java:52'},
+    {group:'flow',title:'S2 워커가 보내고 결과를 저장해요',active:['W2','WP','J'],
+     doing:['S2 워커가 같은 작업을 다시 보내요','토큰 B가 맞으니 "수락"으로 저장돼요'],
+     msgs:[{edge:'W2-WP',label:'푸시',kind:'sig'},{edge:'W2-WP',rev:true,label:'수락',kind:'res'},{edge:'W2-J',label:'결과 저장 · 토큰 B',kind:'req',set:{job:['수락','ok']}}],
+     covers:{W1:'응답 기다리는 중'},
+     src:'PushDispatchWorker.java:124'},
+    {group:'prob',title:'늦게 돌아온 S1 워커의 결과는 저장되지 않아요',active:['W1','J'],
+     doing:['S1 워커가 뒤늦게 토큰 A로 결과를 저장하려 해요','조건에 맞는 행이 없어 바뀌지 않아요','토큰: 지금 누가 담당인지 가리는 값'],
+     msgs:[{edge:'W1-J',label:'결과 저장 · 토큰 A',kind:'fail',fail:true}],
+     notes:{J:['0행 변경','bad']},
+     src:'PushNotificationRepository.java:133'},
+    {group:'sum',title:'담당 토큰과 점유 만료가 작업을 지켜요',active:['J','W1','W2'],
+     doing:['멈춘 워커의 작업은 점유가 끝나면 다른 워커가 이어 가요','결과는 지금 담당인 워커만 저장할 수 있어요'],
+     notes:{J:['수락 1번만 기록','ok']},
+     src:'PushNotificationUpdater.java:24'}
+   ]}
+  ]
+};
+/* ====================== CONFIG END ====================== */
+
+/* ===================== 엔진 (고치지 않는다) ===================== */
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+const Q=new URLSearchParams(location.search),EMBED=Q.has('embed');
+if(EMBED)document.body.classList.add('embed');
+if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
+const D=1.15,HOLD=1.8;                       // 메시지 하나 이동 시간, 단계 끝에서 멈추는 시간(초, 보통 속도)
+const GROUP={flow:'흐름',prob:'문제',sum:'정리'};
+const [VW,VH]=CONFIG.view;
+const svg=$('svg');svg.setAttribute('viewBox',`0 0 ${VW} ${VH}`);svg.setAttribute('preserveAspectRatio','xMidYMin meet');
+const el=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e};
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),ease=u=>{u=clamp(u,0,1);return u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2};
+function along(pts,u){const L=[];let tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);L.push(d);tot+=d}
+  let r=u*tot;for(let i=0;i<L.length;i++){if(r<=L[i]||i===L.length-1){const v=L[i]?clamp(r/L[i],0,1):1;return [pts[i][0]+(pts[i+1][0]-pts[i][0])*v,pts[i][1]+(pts[i+1][1]-pts[i][1])*v]}r-=L[i]}return pts[pts.length-1]}
+const N={},E={},ROW={};
+/* ---- 그림 만들기 ---- */
+function build(){
+  svg.innerHTML='';
+  const gE=el('g',{},svg),gN=el('g',{},svg),gT=el('g',{},svg);
+  CONFIG.edges.forEach(e=>{const g=el('g',{class:'e'},gE);el('path',{d:'M'+e.pts.map(p=>p.join(',')).join('L')},g);
+    const [x1,y1]=e.pts[e.pts.length-1],[x0,y0]=e.pts[e.pts.length-2],a=Math.atan2(y1-y0,x1-x0);
+    el('path',{d:`M${x1},${y1}L${x1-6*Math.cos(a-.45)},${y1-6*Math.sin(a-.45)}M${x1},${y1}L${x1-6*Math.cos(a+.45)},${y1-6*Math.sin(a+.45)}`},g);E[e.id]={...e,g}});
+  CONFIG.nodes.forEach(n=>{
+    const g=el('g',{class:'n'+(n.candidate?' cand':''),'data-id':n.id},gN);const r={x:n.x,y:n.y,w:n.w,h:n.h};
+    if(n.type==='db'){const ry=9;el('path',{class:'b',d:`M${n.x},${n.y+ry}A${n.w/2},${ry} 0 0 1 ${n.x+n.w},${n.y+ry}V${n.y+n.h-ry}A${n.w/2},${ry} 0 0 1 ${n.x},${n.y+n.h-ry}Z`},g);
+      el('path',{class:'b',d:`M${n.x},${n.y+ry}A${n.w/2},${ry} 0 0 0 ${n.x+n.w},${n.y+ry}`,fill:'none'},g)}
+    else el('rect',{class:'b',x:n.x,y:n.y,width:n.w,height:n.h,rx:n.type==='client'?12:8},g);
+    const tY=n.type==='db'?n.y+34:n.y+22;
+    el('text',{class:'t',x:n.x+n.w/2,y:tY,'text-anchor':'middle'},g).textContent=n.title;
+    if(n.sub)el('text',{class:'s',x:n.x+n.w/2,y:tY+15,'text-anchor':'middle'},g).textContent=n.sub;
+    (n.rows||[]).forEach((row,i)=>{const y=tY+12+i*26;el('rect',{class:'rbg',x:n.x+10,y,width:n.w-20,height:20,rx:4},g);
+      el('text',{class:'rk',x:n.x+18,y:y+14},g).textContent=row.label;
+      const v=el('text',{class:'rv',x:n.x+n.w-18,y:y+14,'text-anchor':'end'},g);ROW[row.key]={bg:g.lastChild.previousSibling.previousSibling,v,def:row.value}});
+    const note=el('text',{class:'note',x:n.x+n.w/2,y:n.y+n.h-10,'text-anchor':'middle'},g);
+    const cy=n.type==='db'?n.y+n.h/2:tY+(n.sub?20:8);       // 덮개는 이름 아래부터 덮는다
+    const cv=el('rect',{class:'cv',x:n.x+1,y:cy,width:n.w-2,height:n.y+n.h-1-cy,rx:6,visibility:'hidden'},g);
+    const cvt=el('text',{class:'cvt',x:n.x+n.w/2,y:cy+(n.y+n.h-cy)/2+4,'text-anchor':'middle',visibility:'hidden'},g);
+    N[n.id]={...n,g,note,cv,cvt,r};
+  });
+  (CONFIG.texts||[]).forEach(t=>{el('text',{x:t.x,y:t.y,'text-anchor':t.align||'start','font-size':10.5,fill:'var(--ink3)'},gT).textContent=t.text});
+  PILLS=el('g',{},svg);
+}
+let PILLS;
+/* ---- 상태 ---- */
+let SC,K=0,TAU=0,playing=false,started=false,SPEED=1;
+const steps=()=>SC.steps;
+const msgs=s=>s.msgs||[];
+const stepLen=s=>msgs(s).length*D+HOLD;
+function rowsAt(k,tau){
+  const st={};CONFIG.nodes.forEach(n=>(n.rows||[]).forEach(r=>st[r.key]=[r.value,'']));
+  Object.assign(st,SC.init||{});
+  for(let i=0;i<=k;i++)msgs(steps()[i]).forEach((m,j)=>{if(m.set&&(i<k||tau>=(j+1)*D))Object.assign(st,m.set)});
+  return st;
+}
+function render(){
+  const s=steps()[K];
+  $('grp').textContent=GROUP[s.group]||'';$('grp').className='grp '+(s.group||'');
+  $('stitle').textContent=s.title;
+  const ul=$('doing');ul.innerHTML='';s.doing.forEach(d=>{const li=document.createElement('li');li.textContent=d;ul.appendChild(li)});
+  $('cnt').textContent=(K+1)+' / '+steps().length;
+  [...$('list').querySelectorAll('.st')].forEach((li,i)=>{li.classList.toggle('cur',i===K);li.classList.toggle('past',i<K);li.setAttribute('aria-current',i===K?'step':'false')});
+  $('prev').disabled=K===0;$('next').disabled=K===steps().length-1;
+  const act=new Set(s.active||[]),used=new Set(msgs(s).map(m=>m.edge));
+  for(const id in N){const n=N[id],covered=!!(s.covers||{})[id];n.g.classList.toggle('on',act.has(id));n.g.classList.toggle('off',act.size>0&&!act.has(id)&&!covered);
+    const nt=TAU>=msgs(s).length*D?(s.notes||{})[id]:null;      // 메모는 메시지가 다 도착한 뒤에 보인다
+    n.note.textContent=nt?nt[0]:'';n.note.setAttribute('fill',nt?`var(--${nt[1]==='ok'?'ok':nt[1]==='bad'?'bad':'retry'})`:'none');
+    const cvr=(s.covers||{})[id];n.cv.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.textContent=cvr||''}
+  for(const id in E){const e=E[id],m=msgs(s).find(m=>m.edge===id);e.g.setAttribute('class','e'+(used.has(id)?' on '+(m.kind||'req'):' off'))}
+  const st=rowsAt(K,TAU);for(const k in ROW){const [v,tone]=st[k]||[ROW[k].def,''];ROW[k].v.textContent=v;ROW[k].bg.setAttribute('class','rbg '+(tone||''))}
+  // 움직이는 메시지
+  PILLS.innerHTML='';
+  msgs(s).forEach((m,j)=>{const a=j*D,u=(TAU-a)/D;if(u<0||u>1)return;
+    const e=E[m.edge],pts=m.rev?[...e.pts].reverse():e.pts,[x,y]=along(pts,ease(u)),kind=m.kind||'req';
+    el('circle',{class:'dotm',cx:x,cy:y,r:5,fill:`var(--${kind==='res'?'ok':kind==='sig'?'cur':kind==='fail'?'bad':'wrk'})`},PILLS);
+    if(m.fail&&u>.55){const [fx,fy]=along(pts,.55),g=el('g',{stroke:'var(--bad)','stroke-width':2.5},PILLS);el('path',{d:`M${fx-6},${fy-6}L${fx+6},${fy+6}M${fx+6},${fy-6}L${fx-6},${fy+6}`},g)}
+    if(m.label){const g=el('g',{class:'pill '+kind},PILLS),t=el('text',{x:0,y:0,'text-anchor':'middle'},g);t.textContent=m.label;
+      const bb=t.getBBox(),w=bb.width+12,h=16;let px=x,py=y-14;px=clamp(px,w/2+2,VW-w/2-2);py=clamp(py,h/2+2,VH-h/2-2);
+      el('rect',{x:px-w/2,y:py-h/2,width:w,height:h,rx:8},g);g.appendChild(t);t.setAttribute('x',px);t.setAttribute('y',py+3.5)}
+  });
+  $('play').textContent=playing?'일시정지':'재생';
+}
+function go(k,play){K=clamp(k,0,steps().length-1);TAU=0;if(play!=null)playing=play;started=true;render()}
+function setScene(id){
+  SC=CONFIG.scenes.find(s=>s.id===id)||CONFIG.scenes[0];$('scene').value=SC.id;
+  const ol=$('list');ol.innerHTML='';let lastG=null;
+  SC.steps.forEach((s,i)=>{if(s.group!==lastG){const h=document.createElement('li');h.className='gh '+(s.group||'');h.textContent=GROUP[s.group]||'';ol.appendChild(h);lastG=s.group}
+    const li=document.createElement('li');li.className='st';li.tabIndex=0;li.setAttribute('role','button');li.setAttribute('aria-label',(i+1)+'단계: '+s.title);
+    li.innerHTML='<span></span><span></span>';li.children[0].textContent=i+1;li.children[1].textContent=s.title;
+    const f=()=>go(i,true);li.onclick=f;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f()}};ol.appendChild(li)});
+  K=0;TAU=0;render();
+}
+/* ---- 화면 ---- */
+$('ttl').textContent=CONFIG.title;document.title=CONFIG.title;
+if(CONFIG.chapters){CONFIG.chapters.forEach((c,i)=>{if(i){const s=document.createElement('i');s.textContent='→';$('chap').appendChild(s)}const a=document.createElement('a');a.href=c.href||'#';a.textContent=c.label;if(c.current)a.setAttribute('aria-current','page');$('chap').appendChild(a)})}
+else $('chap').remove();
+CONFIG.scenes.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.tab;$('scene').appendChild(o)});
+$('scene').onchange=e=>{setScene(e.target.value);playing=true;started=true;render()};
+const colOf=k=>k==='res'?'ok':k==='sig'?'cur':k==='fail'?'bad':'wrk';
+CONFIG.legend.forEach(([k,t])=>{const s=document.createElement('span'),b=document.createElement('b');b.style.borderColor=`var(--${colOf(k)})`;s.appendChild(b);s.appendChild(document.createTextNode(t));$('key').appendChild(s)});
+if(CONFIG.nodes.some(n=>n.candidate)){const s=document.createElement('span'),b=document.createElement('b');b.className='dash';s.appendChild(b);s.appendChild(document.createTextNode('해결 후보로 추가되는 장치'));$('key').appendChild(s)}
+$('play').onclick=()=>{if(!playing&&K===steps().length-1&&TAU>=stepLen(steps()[K]))go(0);playing=!playing;started=true;render()};
+$('prev').onclick=()=>go(K-1,false);$('next').onclick=()=>go(K+1,false);$('first').onclick=()=>go(0,false);
+$('speed').onchange=e=>{SPEED=+e.target.value};
+let last=null;
+function loop(ts){if(last!=null&&playing){TAU+=Math.min(.1,(ts-last)/1000)*SPEED;const s=steps()[K];
+  if(TAU>=stepLen(s)){if(K<steps().length-1){K++;TAU=0}else{TAU=stepLen(s);playing=false}}render()}last=ts;requestAnimationFrame(loop)}
+build();setScene(Q.get('s')||CONFIG.scenes[0].id);
+if(EMBED&&'IntersectionObserver' in window){new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){if(!started){started=true;go(0)}playing=true}else playing=false;render()}),{threshold:.2}).observe($('frame'))}
+else{playing=true;started=true}
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;TAU=stepLen(steps()[0]);render()}
+requestAnimationFrame(loop);
+window.__sim={type:'step',get kind(){return CONFIG.kind},get scenes(){return CONFIG.scenes.map(s=>s.id)},scene(id){setScene(id);playing=false;render()},
+  get steps(){return SC.steps},get step(){return K},get playing(){return playing},
+  at(k,u){K=k;const s=steps()[k];TAU=u==null?stepLen(s):u*msgs(s).length*D;playing=false;render()},
+  msgTimes(k){return msgs(steps()[k]).map((m,j)=>(j+.5)/Math.max(1,msgs(steps()[k]).length))},
+  config:CONFIG};
+})();
+</script>
+</body>
+</html>
