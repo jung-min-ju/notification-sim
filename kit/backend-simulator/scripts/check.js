@@ -10,7 +10,7 @@ fs.mkdirSync(path.join(out,'shots'),{recursive:true});
 const URL='file://'+file;
 /* 노트북 화면 전용. 삽입 모드는 블로그 본문 폭(최대 600), 일반 모드는 화면 폭 720 이상 */
 const VIEWS=[[600,'?embed'],[720,'?embed'],[720,''],[900,''],[1280,'']];     // 가로 스크롤·비율
-const CARD_VIEWS=[[600,'?embed'],[694,''],[695,''],[720,''],[900,''],[1280,'']]; // 그림 안쪽 폭 660 경계(화면 694/695) 전후
+const CARD_VIEWS=[[600,'?embed'],[720,'?embed'],[720,''],[900,''],[1280,'']];
 const TIMES=[0,200,380,480];
 const results=[];const add=(name,ok,detail)=>results.push({name,ok,detail:detail||''});
 
@@ -35,7 +35,7 @@ async function stepChecks(open,scenes){
         (st.active||[]).forEach(a=>{if(!ids.has(a))o.push(`${t} 없는 구성요소 ${a}`)});
         (st.msgs||[]).forEach(m=>{if(!eids.has(m.edge))o.push(`${t} 없는 선 ${m.edge}`);Object.keys(m.set||{}).forEach(k=>{if(!keys.has(k))o.push(`${t} 없는 값 줄 ${k}`)})});
         Object.keys(st.notes||{}).concat(Object.keys(st.covers||{})).forEach(a=>{if(!ids.has(a))o.push(`${t} 없는 구성요소 ${a}`)});
-        if(!st.code)o.push(`${t} 코드 상자 없음`);else st.code.lines.concat([st.code.at]).forEach(l=>{if(l.length>57)o.push(`${t} 코드 ${l.length}자: ${l}`)});
+        if(!st.src)o.push(`${t} 근거(src) 없음`);
       });
       add(`단계 내용 규칙 · ${sc.id}`,o.length===0,o.join(' / '));
     }
@@ -86,10 +86,10 @@ async function stepChecks(open,scenes){
     const o=[];let mx=0;
     for(const sc of scenes){await page.evaluate(id=>__sim.scene(id),sc);const n=await page.evaluate(()=>__sim.steps.length);
       for(let k=0;k<n;k++){await page.evaluate(k=>__sim.at(k),k);
-        const c=await page.evaluate(()=>{const s=document.querySelector('.side'),pre=document.getElementById('code');return {side:s.scrollHeight-s.clientHeight,pw:pre.scrollWidth-pre.clientWidth,ph:pre.scrollHeight-pre.clientHeight,h:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height)}});
-        if(c.side>1)o.push(`${sc} ${k+1}단계 왼쪽 칸 ${c.side}px 넘침`);if(c.pw>1||c.ph>1)o.push(`${sc} ${k+1}단계 코드 상자 잘림 (가로 ${c.pw} 세로 ${c.ph})`);
+        const c=await page.evaluate(()=>{const s=document.querySelector('.side');return {side:s.scrollHeight-s.clientHeight,h:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height)}});
+        if(c.side>1)o.push(`${sc} ${k+1}단계 왼쪽 칸 ${c.side}px 넘침`);
         if(w===720&&q)heights[`${sc}@720`]=Math.max(heights[`${sc}@720`]||0,c.h);}}
-    add(`왼쪽 칸·코드 상자 넘침 없음 · 폭 ${w}${q}`,o.length===0,o.slice(0,10).join(' / '));
+    add(`왼쪽 칸 넘침 없음 · 폭 ${w}${q}`,o.length===0,o.slice(0,10).join(' / '));
     await ctx.close();
   }
   /* 6. 스크린샷: 상황 × 단계 끝(900), 메시지 이동 중 1장씩, 삽입 720 첫 단계, 다크 1장 */
@@ -138,28 +138,23 @@ async function stepChecks(open,scenes){
       for(let k=0;k<steps.length;k++){
         await page.evaluate(t=>__sim.set(t),steps[k]+0.01);await page.waitForTimeout(30);
         const fw=await page.evaluate(()=>document.getElementById('frame').clientWidth);
-        const r=await page.evaluate(()=>[...document.querySelectorAll('.card')].map(c=>{const pre=c.querySelector('.code'),vis=pre&&getComputedStyle(pre).display!=='none';
-          const lis=[...c.querySelectorAll('.st')];
-          return {n:lis.length,over:c.scrollHeight-c.clientHeight,preW:vis?pre.scrollWidth-pre.clientWidth:0,preH:vis?pre.scrollHeight-pre.clientHeight:0,vis,
-            bottom:Math.max(...lis.map(li=>li.getBoundingClientRect().bottom),vis?pre.getBoundingClientRect().bottom:0)-c.getBoundingClientRect().bottom}}));
+        const r=await page.evaluate(()=>[...document.querySelectorAll('.card')].map(c=>{const lis=[...c.querySelectorAll('.st')];
+          return {n:lis.length,over:c.scrollHeight-c.clientHeight,bottom:Math.max(...lis.map(li=>li.getBoundingClientRect().bottom))-c.getBoundingClientRect().bottom}}));
         r.forEach((c,i)=>{const side=i?'오른쪽':'왼쪽',tag=`${s} ${k+1}단계 ${side} · 화면 폭 ${w}${q}(그림 안쪽 폭 ${fw})`;
           if(w===900&&!q&&k===0)add(`단계 3개 · ${s} ${side}`,c.n===3,`${c.n}개`);
           add(`카드 넘침 없음 · ${tag}`,c.over<=1&&c.bottom<=1,`넘친 높이 ${Math.max(c.over,c.bottom).toFixed(0)}px`);
-          if(c.vis)add(`코드 상자 잘림 없음 · ${tag}`,c.preW<=1&&c.preH<=1,`가로 ${c.preW} 세로 ${c.preH}`);
         });
-        const vis=r.some(c=>c.vis);
-        if(k===0&&s===scenes[0])add(`코드 상자 표시 규칙 · 화면 폭 ${w}${q}(그림 안쪽 폭 ${fw})`,vis===(fw>660),vis?'보임':'숨김');
       }
     }
     await ctx.close();
   }
-  /* 3. 코드 줄 길이 ≤ 57, 단계 클릭 → 그 시각으로 이동하고 재생 유지 */
+  /* 3. 단계마다 근거(src), 단계 클릭 → 그 시각으로 이동하고 재생 유지 */
   {
     const {ctx,page}=await open(900);
     for(const s of scenes){
       await page.evaluate(id=>__sim.scene(id),s);
-      const long=await page.evaluate(()=>{const o=[];['L','R'].forEach(sd=>__sim.cards[sd].steps.forEach((st,k)=>{if(!st.code)o.push(`${sd}${k+1} 코드 없음`);else st.code.lines.concat([st.code.at]).forEach(l=>{if(l.length>57)o.push(`${sd}${k+1}: ${l.length}자 ${l}`)})}));return o});
-      add(`코드 줄 57자 이하 · ${s}`,long.length===0,long.join(' / '));
+      const nos=await page.evaluate(()=>{const o=[];['L','R'].forEach(sd=>__sim.cards[sd].steps.forEach((st,k)=>{if(!st.src)o.push(`${sd}${k+1}`)}));return o});
+      add(`단계마다 근거(src) · ${s}`,nos.length===0,nos.length?'없는 단계: '+nos.join(', '):'');
       const steps=await page.evaluate(()=>__sim.steps);
       const li=page.locator('#sl .st').nth(1);
       await li.click();await page.waitForTimeout(400);

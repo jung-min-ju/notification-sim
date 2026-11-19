@@ -26,7 +26,7 @@
 | `SKILL.md` | 만드는 순서 (종류 고르기 → 근거 → 명세 확인 → 모델 → 만들기 → 검사 → README) |
 | `references/` | 공통 규칙, 단계형 규칙(`step.md`), 종류별 규칙, 하지 말 것 |
 | `templates/` | 뼈대 두 가지: 단계형 `index-step.html`(구조 지도·흐름 추적, 예시: 알림 발송 V2), 시간형 `index-time.html`(문제 예측·개선 비교, 예시: #192). 종류별 명세, README 형식 |
-| `scripts/check.js` | Playwright 검사: 가로 스크롤, 16:10, 카드 넘침, 코드 상자, 단계 이동, 겹침, iframe 높이, 스크린샷 |
+| `scripts/check.js` | Playwright 검사: 가로 스크롤, 16:10, 카드·단계 칸 넘침, 단계마다 근거, 단계 이동, 겹침, iframe 높이, 스크린샷 |
 
 노트북 화면(16:10) 전용이다. 휴대폰 폭은 대상이 아니다.
 

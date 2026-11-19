@@ -39,8 +39,8 @@ h1{font-size:18px;margin:0;font-weight:600}
 .bar .key b{width:8px;height:8px;border-radius:50%;display:inline-block}
 .bar .clk{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink);flex:none}
 button:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
-/* 16:10 한 화면 = 그림(시간표 포함) 60 + 설명 40. 노트북 화면 전용: 그림 폭 600px(삽입 모드 최대 폭) 아래로는 줄이지 않는다 */
-.frame{min-width:598px;container:frame/inline-size;aspect-ratio:16/10;display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+/* 16:10 한 화면 = 그림(시간표 포함) 70 + 설명 30. 노트북 화면 전용: 그림 폭 600px(삽입 모드 최대 폭) 아래로는 줄이지 않는다 */
+.frame{min-width:598px;container:frame/inline-size;aspect-ratio:16/10;display:grid;grid-template-rows:minmax(0,7fr) minmax(0,3fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .fig{position:relative;min-height:0}
 .fig canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .exp{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px;min-height:0}
@@ -64,12 +64,7 @@ button:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offs
 .st.now .bd{color:var(--ink);font-weight:600}
 .card.l .st.now .cc b{border-color:var(--cur);background:var(--cur);box-shadow:0 0 0 2px var(--cur-bg),0 0 0 3.5px var(--cur)}
 .card.r .st.now .cc b{border-color:var(--wrk);background:var(--wrk);box-shadow:0 0 0 2px var(--wrk-bg),0 0 0 3.5px var(--wrk)}
-.code{margin:auto 0 0;padding:4px 7px;border-radius:6px;background:var(--bg);color:var(--ink);white-space:pre;overflow:hidden;
-  font:clamp(7.5px,calc((48cqi - 38px)/34.5),11.5px)/1.35 var(--f-num)}
-.code .at{color:var(--ink3)}
-.code:empty{display:none}
-.st:not(.now) .ex{display:none}            /* 코드 상자가 보일 때는 지금 단계만 풀이 */
-@container frame (max-width:660px){ .code{display:none} .st:not(.now) .ex{display:block} }
+@container frame (max-width:660px){ .card{padding:5px 9px;gap:1px;line-height:1.3} .st{padding-bottom:1px} .ch{min-height:1.2em} }
 body.embed h1,body.embed .tabs{display:none}
 body.embed .wrap{max-width:600px;padding:2px}
 </style>
@@ -87,15 +82,16 @@ body.embed .wrap{max-width:600px;padding:2px}
   <div class="frame" id="frame">
     <div class="fig"><canvas id="cv" aria-label="흐름 그림과 시간표"></canvas></div>
     <div class="exp">
-      <div class="card l"><div class="ch"><i></i><span id="hl"></span></div><ol class="steps" id="sl"></ol><pre class="code" id="cl"></pre></div>
-      <div class="card r"><div class="ch"><i></i><span id="hr"></span></div><ol class="steps" id="sr"></ol><pre class="code" id="cr"></pre></div>
+      <div class="card l"><div class="ch"><i></i><span id="hl"></span></div><ol class="steps" id="sl"></ol></div>
+      <div class="card r"><div class="ch"><i></i><span id="hr"></span></div><ol class="steps" id="sr"></ol></div>
     </div>
   </div>
 </div>
 
 <script>
 /* ===================== CONFIG START =====================
-   이 블록만 채운다. 형식은 references/common.md의 "CONFIG 형식"을 따른다.
+   이 블록만 채운다. 형식은 references/common.md의 "시간형 CONFIG 형식"을 따른다.
+   src는 근거 파일:줄이다. 화면에는 나오지 않고 README에 옮겨 적는다.
    아래 내용은 예시: 푸시 발송 구조 비교(#192)의 재시도 지연·재시작 두 상황.
    숫자 출처와 가정은 README에 적는다. 화면에는 적지 않는다.        */
 const CONFIG=(()=>{
@@ -209,18 +205,18 @@ const CONFIG=(()=>{
         cards:{
           L:{head:'현재 구조',steps:[
             {body:'32,000건을 실행기에 한꺼번에 넣어요',ex:'작업마다 가상 스레드를 만들고 세마포어 20개로 막아요',
-             code:{at:'PushDispatchService.java:40',lines:['dueJobs = pushNotificationRepository.findDueJobs(now());','Semaphore permits = new Semaphore(concurrency);','for (PushNotification job : dueJobs) {','    executor.submit(() -> dispatchWithPermit(job, ...));']}},
+             src:'PushDispatchService.java:40'},
             {body:'재시도할 시각이 돼도 실행기가 안 비어요',ex:'try 블록은 넣은 작업이 모두 끝나야 빠져나와요',
-             code:{at:'PushDispatchService.java:44',lines:['try (ExecutorService executor = ...) {','    ...','}   // 모든 작업이 끝나야 여기로 와요','return pushNotificationRepository.findNextAttemptAt();']}},
+             src:'PushDispatchService.java:44'},
             {body:'첫 발송이 다 끝난 뒤에야 재시도해요',ex:'다음 회차는 앞 회차 전체가 끝나야 시작해요',
-             code:{at:'NotificationScheduler.java:102',lines:['while (nextAttemptAt.isPresent() && ...) {','  if (!waitUntil(nextAttemptAt.get())) {','    ...','  nextAttemptAt = pushDispatchService.dispatchDueJobs();']}}]},
+             src:'NotificationScheduler.java:102'}]},
           R:{head:'DB 워커 구조',steps:[
             {body:'빈 칸 수만큼만 DB에서 작업을 꺼내요',ex:'선점(lease): 꺼낸 작업에 담당 표시를 남겨요',
-             code:{at:'PushDispatchWorker.java:37',lines:['int freeSlotCount = slots.freeSlotCount();','List<LeasedJob> leasedJobs = leaseJobs(freeSlotCount);','slots.occupy(leasedJobs.size());','leasedJobs.forEach(this::start);']}},
+             src:'PushDispatchWorker.java:37'},
             {body:'칸이 하나 비면 재시도 작업도 꺼내요',ex:'첫 발송과 재시도를 같은 조회에서 골라요',
-             code:{at:'PushLeaseService.java:34',lines:['private List<Long> findLeaseableJobIds(int maxJobCount) {','  if (maxJobCount <= 0) return emptyList();','  return repository','      .findLeaseableJobIdsWithSkipLock(now(clock), ...);']}},
+             src:'PushLeaseService.java:34'},
             {body:'재시도가 기다리지 않고 들어가요',ex:'대신 그만큼 첫 발송이 조금 밀려요',
-             code:{at:'application.yml:142',lines:['dispatch:','  poll-interval: ${PUSH_DISPATCH_POLL_INTERVAL:1s}','  concurrency: ${PUSH_DISPATCH_CONCURRENCY:20}']}}]}}},
+             src:'application.yml:142'}]}}},
       {id:'restart',tab:'발송 중 서버 재시작',end:560,legend:[['ink3','점 1개 = 발송 작업 200건'],['bad','✕ 보내던 중 끊긴 작업']],
         build:()=>scene('restart'),
         steps:i=>[0,i.R,i.R+i.DOWN+i.LEASE],
@@ -232,18 +228,18 @@ const CONFIG=(()=>{
         cards:{
           L:{head:'현재 구조',steps:[
             {body:'08시 배치 실행 하나가 발송을 이어 가요',ex:'발송 루프가 스케줄러 실행 안에 들어 있어요',
-             code:{at:'NotificationScheduler.java:48',lines:['@Scheduled(cron = "0 0 8 * * *", zone = "Asia/Seoul")','public void runExpirationNotificationBatch() {','    ...','    sendPushNotifications();']}},
+             src:'NotificationScheduler.java:48'},
             {body:'08:03 재시작으로 보내던 작업이 끊겨요',ex:'실행기 안의 가상 스레드가 함께 사라져요',
-             code:{at:'PushDispatchService.java:44',lines:['try (ExecutorService executor = ...) {','    for (PushNotification job : dueJobs) {','        executor.submit(() -> ...);','    }']}},
+             src:'PushDispatchService.java:44'},
             {body:'다시 떠도 남은 작업을 보낼 실행이 없어요',ex:'dispatchDueJobs()는 08시 배치에서만 불려요',
-             code:{at:'NotificationScheduler.java:97',lines:['int createdCount = ...createExpirationJobs();','...','Optional<LocalDateTime> nextAttemptAt =','        pushDispatchService.dispatchDueJobs();']}}]},
+             src:'NotificationScheduler.java:97'}]},
           R:{head:'DB 워커 구조',steps:[
             {body:'워커가 1초마다 빈 칸을 채워요',ex:'폴링: 정해진 간격으로 DB를 다시 확인해요',
-             code:{at:'PushWorkerScheduler.java:14',lines:['@Scheduled(fixedDelayString = "${...poll-interval:1s}")','public void poll() {','    worker.poll();','}']}},
+             src:'PushWorkerScheduler.java:14'},
             {body:'끊긴 작업은 담당 표시만 남고 DB에 있어요',ex:'선점 만료 시각이 지나면 다른 실행이 가져가요',
-             code:{at:'PushDispatchWorker.java:77',lines:['LocalDateTime sendAt = BusinessTime.now(clock);','if (!sendAt.isBefore(job.getLeaseUntil())) {','    return;','}']}},
+             src:'PushDispatchWorker.java:77'},
             {body:'다시 떠서 남은 작업을 이어서 보내요',ex:'어디까지 보냈는지는 서버가 아니라 DB가 알아요',
-             code:{at:'PushLeaseService.java:24',lines:['public List<LeasedJob> lease(int maxJobCount, ...) {','    SelectedJobIds jobIds = new SelectedJobIds(','            findLeaseableJobIds(maxJobCount));','    return recordLease(jobIds, leaseDuration);']}}]}}}
+             src:'PushLeaseService.java:24'}]}}}
     ]
   };
 })();
@@ -256,7 +252,7 @@ const $=id=>document.getElementById(id);
 const Q=new URLSearchParams(location.search),EMBED=Q.has('embed');
 if(EMBED)document.body.classList.add('embed');
 if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
-const W=800,H=300,TOP=200;                  // 논리 크기: 그림 0~196, 시간표 200~300
+const W=800,H=350,TOP=214;                  // 논리 크기: 그림 0~208, 시간표 214~350
 const HEADS={map:['요청이 지나가는 곳','데이터가 남는 곳'],flow:['요청 안에서 끝나는 일','워커가 나중에 하는 일'],risk:['평소','문제 조건'],compare:['현재 구조','바꾼 구조']};
 const MV=CONFIG.move||7;
 let COL={};
@@ -373,7 +369,7 @@ function drawTimeline(t){
   if(REC){REC.area='tl';REC.bounds.push({area:'tl',x:0,y:TOP,w:W,h:H-TOP})}
   const PL=124,PR=10,xs=v=>PL+(W-PL-PR)*clamp(v,0,END)/END;
   g.strokeStyle=col('line');g.lineWidth=1;g.beginPath();g.moveTo(0,TOP+.5);g.lineTo(W,TOP+.5);g.stroke();
-  const RH=12,RG=3,GG=7,Y0=TOP+17,AX=H-6;
+  const RH=16,RG=5,GG=12,Y0=TOP+20,AX=H-6;
   const ticks=CONFIG.axis.unit==='sec'?(()=>{const a=[];for(let v=0;v<=END;v+=CONFIG.axis.tick)a.push({t:v,label:CONFIG.axis.fmt(v)});return a})():(SC.ticks||[]);
   ticks.forEach(k=>{const x=xs(k.t);g.strokeStyle=col('grid');g.beginPath();g.moveTo(x,Y0-3);g.lineTo(x,AX-11);g.stroke();text(k.label,x,AX,{s:9.5,c:'ink3',a:'center',m:CONFIG.axis.unit==='sec'})});
   let y=Y0,lastPanel=null;const ys=[];
@@ -433,8 +429,6 @@ let curStep=-1;
 function updSteps(t){
   let k=0;STEPS.forEach((s,i)=>{if(t>=s)k=i});
   stepEls.forEach(arr=>arr.forEach((li,i)=>{li.classList.toggle('past',i<k);li.classList.toggle('now',i===k);li.setAttribute('aria-current',i===k?'step':'false')}));
-  if(k!==curStep){curStep=k;[['L','cl'],['R','cr']].forEach(([side,id])=>{const cd=SC.cards[side].steps[k].code,el=$(id);
-    el.innerHTML='';if(!cd)return;const at=document.createElement('span');at.className='at';at.textContent=cd.at;el.appendChild(at);el.appendChild(document.createTextNode('\n'+cd.lines.join('\n')))})}
 }
 function setScene(id){
   SC=CONFIG.scenes.find(s=>s.id===id)||CONFIG.scenes[0];

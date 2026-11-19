@@ -39,7 +39,7 @@ h1{font-size:18px;margin:0;font-weight:600}
 .bar button:disabled{opacity:.45;cursor:default}
 .bar .cnt{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink)}
 button:focus-visible,select:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
-/* 16:10 한 화면 = 왼쪽 단계 30 + 오른쪽 그림·코드 70 */
+/* 16:10 한 화면 = 왼쪽 단계 30 + 오른쪽 그림 70 */
 .frame{container:frame/inline-size;aspect-ratio:16/10;min-width:698px;display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .side{min-height:0;overflow:hidden;border-right:1px solid var(--line);padding:9px 11px;display:flex;flex-direction:column;gap:6px;font-size:clamp(10.5px,1.4cqi,13.5px);line-height:1.38}
 .now{background:var(--wrk-bg);border-radius:9px;padding:8px 10px}
@@ -58,15 +58,12 @@ button:focus-visible,select:focus-visible,.st:focus-visible{outline:2px solid va
 .st span:first-child{font:600 .9em var(--f-num);width:1.2em;flex:none;padding-top:.08em}
 .st.past{color:var(--ink2)}
 .st.cur{background:var(--wrk-bg);color:var(--wrk);font-weight:600}
-.main{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto auto}
+.main{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
 .main svg{width:100%;height:100%;display:block}
-.key{display:flex;flex-wrap:wrap;gap:2px 12px;padding:0 12px 4px;font-size:11.5px;color:var(--ink2)}
+.key{display:flex;flex-wrap:wrap;gap:2px 12px;padding:0 12px 8px;font-size:11.5px;color:var(--ink2)}
 .key span{display:inline-flex;align-items:center;gap:5px}
 .key b{width:14px;height:0;border-top:2px solid;display:inline-block}
 .key b.dash{border-top:1.5px dashed var(--ink3);width:14px}
-.code{margin:0 10px 10px;padding:5px 8px;border-radius:6px;background:var(--soft);color:var(--ink);white-space:pre;overflow:hidden;min-height:5.6em;
-  font:clamp(8px,calc((70cqi - 40px)/34.5),11.5px)/1.35 var(--f-num)}
-.code .at{color:var(--ink3)}
 svg text{font-family:var(--f-ui)}
 .n rect.b,.n path.b{fill:var(--card);stroke:var(--line);stroke-width:1.3}
 .n .t{font-size:12.5px;font-weight:600;fill:var(--ink)}
@@ -116,44 +113,44 @@ body.embed .wrap{max-width:720px;padding:2px}
     <div class="main">
       <svg id="svg" role="img" aria-label="구성요소 그림"></svg>
       <div class="key" id="key"></div>
-      <pre class="code" id="code"></pre>
     </div>
   </div>
 </div>
 
 <script>
 /* ===================== CONFIG START =====================
-   이 블록만 채운다. 형식은 references/common.md "단계형 CONFIG 형식".
+   이 블록만 채운다. 형식은 references/step.md "CONFIG 형식".
+   src는 근거 파일:줄이다. 화면에는 나오지 않고 README에 옮겨 적는다.
    예시: 다먹자 알림 발송 V2(DB 워커) — KTB4-5th-BE dev ad6550f 기준.   */
 const CONFIG={
   title:'알림 발송 흐름: 08시 배치와 DB 워커',
   kind:'flow',                                  // map | flow (단계형은 이 둘의 기본)
-  view:[800,420],                               // 그림 논리 크기
+  view:[800,660],                               // 그림 논리 크기
   chapters:null,                                // 화면 이야기: [{label:'① 정상 흐름',href:'../a/'},...] 지금 화면은 current:true
   nodes:[
-    {id:'B', type:'client',x:10, y:300,w:122,h:70, title:'U1 · 노트북',sub:'S2에 SSE로 연결'},
-    {id:'S1',type:'box',   x:160,y:30, w:130,h:110,title:'서버 S1',sub:'08시 배치 실행'},
-    {id:'R', type:'box',   x:160,y:180,w:130,h:66, title:'Redis Pub/Sub',sub:'구독 중인 서버 모두에 전달'},
-    {id:'S2',type:'box',   x:160,y:286,w:130,h:110,title:'서버 S2',sub:'SSE 연결 보관'},
-    {id:'J', type:'db',    x:380,y:30, w:200,h:120,title:'발송 작업 테이블',rows:[{key:'job',label:'냉장고1 · U1 노트북',value:'없음'}]},
-    {id:'ND',type:'db',    x:380,y:250,w:200,h:130,title:'알림 테이블',rows:[{key:'noti',label:'알림 · 수신자',value:'없음'},{key:'unread',label:'U1 미읽음',value:'0'}]},
-    {id:'W1',type:'box',   x:610,y:30, w:130,h:84, title:'S1 워커',sub:'1초마다 빈 칸 확인'},
-    {id:'W2',type:'box',   x:610,y:150,w:130,h:84, title:'S2 워커',sub:'1초마다 빈 칸 확인'},
-    {id:'WP',type:'ext',   x:610,y:300,w:130,h:70, title:'외부 Web Push',sub:'제공자 수락 ≠ 단말 수신'}
+    {id:'B', type:'client',x:10, y:470,w:122,h:90, title:'U1 · 노트북',sub:'S2에 SSE로 연결'},
+    {id:'S1',type:'box',   x:160,y:30, w:130,h:130,title:'서버 S1',sub:'08시 배치 실행'},
+    {id:'R', type:'box',   x:160,y:250,w:130,h:80, title:'Redis Pub/Sub',sub:'구독 중인 서버 모두에 전달'},
+    {id:'S2',type:'box',   x:160,y:440,w:130,h:150,title:'서버 S2',sub:'SSE 연결 보관'},
+    {id:'J', type:'db',    x:380,y:30, w:200,h:150,title:'발송 작업 테이블',rows:[{key:'job',label:'냉장고1 · U1 노트북',value:'없음'}]},
+    {id:'ND',type:'db',    x:380,y:420,w:200,h:170,title:'알림 테이블',rows:[{key:'noti',label:'알림 · 수신자',value:'없음'},{key:'unread',label:'U1 미읽음',value:'0'}]},
+    {id:'W1',type:'box',   x:610,y:30, w:130,h:100,title:'S1 워커',sub:'1초마다 빈 칸 확인'},
+    {id:'W2',type:'box',   x:610,y:230,w:130,h:100,title:'S2 워커',sub:'1초마다 빈 칸 확인'},
+    {id:'WP',type:'ext',   x:610,y:470,w:130,h:90, title:'외부 Web Push',sub:'제공자 수락 ≠ 단말 수신'}
   ],
-  texts:[{x:480,y:404,text:'두 테이블은 같은 DB 안에 있어요',align:'middle'}],
+  texts:[{x:480,y:625,text:'두 테이블은 같은 DB 안에 있어요',align:'middle'}],
   edges:[
-    {id:'S1-J', from:'S1',to:'J', pts:[[290,70],[380,70]]},
-    {id:'S1-ND',from:'S1',to:'ND',pts:[[290,112],[335,112],[335,280],[380,280]]},
-    {id:'S1-R', from:'S1',to:'R', pts:[[225,140],[225,180]]},
-    {id:'R-S2', from:'R', to:'S2',pts:[[225,246],[225,286]]},
-    {id:'S2-B', from:'S2',to:'B', pts:[[160,318],[132,318]]},
-    {id:'B-S2', from:'B', to:'S2',pts:[[132,350],[160,350]]},
-    {id:'S2-ND',from:'S2',to:'ND',pts:[[290,340],[380,340]]},
-    {id:'W1-J', from:'W1',to:'J', pts:[[610,62],[580,62]]},
-    {id:'W2-J', from:'W2',to:'J', pts:[[610,192],[540,192],[540,150]]},
-    {id:'W1-WP',from:'W1',to:'WP',pts:[[740,72],[772,72],[772,335],[740,335]]},
-    {id:'W2-WP',from:'W2',to:'WP',pts:[[675,234],[675,300]]}
+    {id:'S1-J', from:'S1',to:'J', pts:[[290,80],[380,80]]},
+    {id:'S1-ND',from:'S1',to:'ND',pts:[[290,140],[335,140],[335,470],[380,470]]},
+    {id:'S1-R', from:'S1',to:'R', pts:[[225,160],[225,250]]},
+    {id:'R-S2', from:'R', to:'S2',pts:[[225,330],[225,440]]},
+    {id:'S2-B', from:'S2',to:'B', pts:[[160,495],[132,495]]},
+    {id:'B-S2', from:'B', to:'S2',pts:[[132,535],[160,535]]},
+    {id:'S2-ND',from:'S2',to:'ND',pts:[[290,540],[380,540]]},
+    {id:'W1-J', from:'W1',to:'J', pts:[[610,80],[580,80]]},
+    {id:'W2-J', from:'W2',to:'J', pts:[[610,280],[540,280],[540,180]]},
+    {id:'W1-WP',from:'W1',to:'WP',pts:[[740,90],[772,90],[772,515],[740,515]]},
+    {id:'W2-WP',from:'W2',to:'WP',pts:[[675,330],[675,470]]}
   ],
   legend:[['req','요청·저장'],['res','응답·조회 결과'],['sig','신호·외부 호출'],['fail','실패']],
   scenes:[
@@ -161,70 +158,70 @@ const CONFIG={
     {group:'flow',title:'08시 배치가 냉장고마다 알림을 만들어요',active:['S1'],
      doing:['S1의 08시 배치가 알림 대상 냉장고를 하나씩 처리해요','냉장고1에 임박 재료가 있어 알림을 만들어요'],
      notes:{S1:['냉장고1 임박 알림','pend']},
-     code:{at:'NotificationScheduler.java:46',lines:['@Scheduled(cron = "${...cron:0 0 8 * * *}", ...)','public void runExpirationNotificationBatch() {','    ...','    processRefrigerators(refrigeratorIds, businessDate);']}},
+     src:'NotificationScheduler.java:46'},
     {group:'flow',title:'알림과 대기 작업을 함께 저장해요',active:['S1','ND','J'],
      doing:['알림과 받는 사람 기록을 알림 테이블에 저장해요','보낼 기기마다 발송 작업을 "대기"로 저장해요','둘은 한 트랜잭션이라 같이 커밋돼요'],
      msgs:[{edge:'S1-ND',label:'알림 · 수신자',kind:'req',set:{noti:['냉장고1 임박 알림','ok'],unread:['1','ok']}},
            {edge:'S1-J',label:'대기 작업',kind:'req',set:{job:['대기','pend']}}],
      notes:{S1:['함께 커밋','ok']},
-     code:{at:'ExpirationNotificationService.java:55',lines:['notifications = createNotifications(...);','    notificationIds.add(saveNotification(...));','...','...createExpirationJobs(notificationIds, businessDate);']}},
+     src:'ExpirationNotificationService.java:55'},
     {group:'flow',title:'커밋 뒤 화면 갱신 신호를 보내요',active:['S1','R','S2','B','ND'],
      doing:['커밋이 끝나면 Redis에 "U1 알림 바뀜"을 보내요','S2가 받아 U1 노트북에 SSE로 알려요','노트북은 DB의 최신 상태를 다시 조회해요'],
      msgs:[{edge:'S1-R',label:'U1 신호',kind:'sig'},{edge:'R-S2',label:'U1 신호',kind:'sig'},{edge:'S2-B',label:'SSE 안내',kind:'sig'},
            {edge:'B-S2',label:'최신 상태 조회',kind:'req'},{edge:'S2-ND',label:'조회',kind:'req'},{edge:'S2-ND',rev:true,label:'미읽음 1',kind:'res'},{edge:'B-S2',rev:true,label:'응답',kind:'res'}],
      notes:{B:['새 알림 보임','ok']},
-     code:{at:'NotificationRedisPubSub.java:25',lines:['@TransactionalEventListener','public void afterCommit(NotificationChanged changed) {','    try {','        redis.convertAndSend(CHANNEL, ...);']}},
+     src:'NotificationRedisPubSub.java:25'},
     {group:'flow',title:'워커가 빈 칸만큼 대기 작업을 골라요',active:['W1','J'],
      doing:['S1 워커는 08시 배치와 따로 1초마다 돌아요','비어 있는 칸 수만큼만 대기 작업을 골라요'],
      msgs:[{edge:'W1-J',label:'대기 작업 고르기',kind:'req'},{edge:'W1-J',rev:true,label:'냉장고1 · U1 노트북',kind:'res'}],
-     code:{at:'PushDispatchWorker.java:37',lines:['int freeSlotCount = slots.freeSlotCount();','List<LeasedJob> leasedJobs = leaseJobs(freeSlotCount);','slots.occupy(leasedJobs.size());','leasedJobs.forEach(this::start);']}},
+     src:'PushDispatchWorker.java:37'},
     {group:'flow',title:'고른 작업에 담당 표시를 남겨요',active:['W1','J'],
      doing:['상태를 "처리 중"으로 바꾸고 담당 토큰을 저장해요','점유 만료 시각도 함께 저장하고 바로 커밋해요','선점: 다른 워커가 같은 작업을 못 잡게 하는 표시'],
      msgs:[{edge:'W1-J',label:'처리 중 · 토큰 A',kind:'req',set:{job:['처리 중 · S1 워커','pend']}}],
-     code:{at:'PushNotificationRepository.java:62',lines:['UPDATE push_notifications','SET status = \'PROCESSING\',','    lease_token = :leaseToken,','    lease_until = :endAt,']}},
+     src:'PushNotificationRepository.java:62'},
     {group:'flow',title:'외부 Web Push로 보내요',active:['W1','WP'],
      doing:['DB 트랜잭션 밖에서 외부 Web Push를 불러요','외부 응답을 기다리는 동안 DB를 붙잡지 않아요'],
      msgs:[{edge:'W1-WP',label:'푸시',kind:'sig'},{edge:'W1-WP',rev:true,label:'수락',kind:'res'}],
      notes:{WP:['수락','ok']},
-     code:{at:'PushDispatchWorker.java:82',lines:['if (job.isExpired(sendAt)) {','    ...','PushSendResult result = send(job, sendAt);','recordResult(leasedJob, job, result);']}},
+     src:'PushDispatchWorker.java:82'},
     {group:'flow',title:'담당이 맞을 때만 결과를 저장해요',active:['W1','J'],
      doing:['토큰이 지금도 S1 워커 것일 때만 "수락"으로 바꿔요','저장이 끝나면 칸을 비우고 다음 작업을 골라요'],
      msgs:[{edge:'W1-J',label:'결과 저장 · 토큰 A',kind:'req',set:{job:['수락','ok']}}],
-     code:{at:'PushNotificationRepository.java:133',lines:['WHERE push_notification_id = :jobId','    AND status = \'PROCESSING\'','    AND lease_token = :leaseToken','    AND lease_until > :now']}},
+     src:'PushNotificationRepository.java:133'},
     {group:'sum',title:'배치는 만들고 끝나고, 발송은 워커가 해요',active:['S1','W1','R'],
      doing:['08시 배치는 알림과 대기 작업을 저장하고 끝나요','발송과 결과 저장은 DB 워커가 처리 여력만큼 해요','화면 갱신은 Redis Pub/Sub과 SSE가 따로 맡아요'],
      notes:{S1:['만들고 끝남','ok'],W1:['여력만큼 발송','ok'],R:['화면 갱신 신호','ok']},
-     code:{at:'application.yml:142',lines:['dispatch:','  poll-interval: ${PUSH_DISPATCH_POLL_INTERVAL:1s}','  lease-duration: ${PUSH_DISPATCH_LEASE_DURATION:30s}','  concurrency: ${PUSH_DISPATCH_CONCURRENCY:20}']}}
+     src:'application.yml:142'}
    ]},
    {id:'stuck',tab:'워커가 응답을 오래 기다리면',init:{job:['대기','pend']},steps:[
     {group:'flow',title:'S1 워커가 작업에 담당 표시를 남겨요',active:['W1','J'],
      doing:['S1 워커가 대기 작업을 골라 "처리 중"으로 바꿔요','담당 토큰 A와 점유 만료 시각을 저장해요'],
      msgs:[{edge:'W1-J',label:'처리 중 · 토큰 A',kind:'req',set:{job:['처리 중 · S1 워커','pend']}}],
-     code:{at:'PushLeaseService.java:45',lines:['String leaseToken = UUID.randomUUID().toString();','...','LocalDateTime endAt = leaseDuration.expiresAt(startAt);','repository.leasePushJobs(..., leaseToken, ..., endAt);']}},
+     src:'PushLeaseService.java:45'},
     {group:'prob',title:'외부 응답을 30초 넘게 기다려요',active:['W1','WP'],
      doing:['S1 워커가 푸시를 보냈는데 응답이 오지 않아요','점유 시간(기본 30초)이 그대로 지나가요'],
      msgs:[{edge:'W1-WP',label:'푸시',kind:'sig'},{edge:'W1-WP',label:'응답 없음',kind:'fail',fail:true}],
      covers:{W1:'응답 기다리는 중'},
-     code:{at:'application.yml:145',lines:['dispatch:','  ...','  lease-duration: ${PUSH_DISPATCH_LEASE_DURATION:30s}']}},
+     src:'application.yml:145'},
     {group:'prob',title:'점유가 끝난 작업을 S2 워커가 가져가요',active:['W2','J'],
      doing:['점유 만료가 지난 "처리 중" 작업도 다시 고를 수 있어요','S2 워커가 토큰 B로 담당을 바꿔요'],
      msgs:[{edge:'W2-J',label:'다시 고르기',kind:'req'},{edge:'W2-J',label:'처리 중 · 토큰 B',kind:'req',set:{job:['처리 중 · S2 워커','pend']}}],
      covers:{W1:'응답 기다리는 중'},
-     code:{at:'PushNotificationRepository.java:52',lines:['WHERE (status IN (\'PENDING\', \'RETRY\') AND ...)','    OR (status = \'PROCESSING\' AND lease_until <= :now)','LIMIT :limit','FOR UPDATE SKIP LOCKED']}},
+     src:'PushNotificationRepository.java:52'},
     {group:'flow',title:'S2 워커가 보내고 결과를 저장해요',active:['W2','WP','J'],
      doing:['S2 워커가 같은 작업을 다시 보내요','토큰 B가 맞으니 "수락"으로 저장돼요'],
      msgs:[{edge:'W2-WP',label:'푸시',kind:'sig'},{edge:'W2-WP',rev:true,label:'수락',kind:'res'},{edge:'W2-J',label:'결과 저장 · 토큰 B',kind:'req',set:{job:['수락','ok']}}],
      covers:{W1:'응답 기다리는 중'},
-     code:{at:'PushDispatchWorker.java:124',lines:['private void recordResult(LeasedJob leasedJob, ...) {','  LocalDateTime completedAt = BusinessTime.now(clock);','  switch (result) {','    case ACCEPTED -> pushNotificationUpdater.accept(...);']}},
+     src:'PushDispatchWorker.java:124'},
     {group:'prob',title:'늦게 돌아온 S1 워커의 결과는 저장되지 않아요',active:['W1','J'],
      doing:['S1 워커가 뒤늦게 토큰 A로 결과를 저장하려 해요','조건에 맞는 행이 없어 바뀌지 않아요','토큰: 지금 누가 담당인지 가리는 값'],
      msgs:[{edge:'W1-J',label:'결과 저장 · 토큰 A',kind:'fail',fail:true}],
      notes:{J:['0행 변경','bad']},
-     code:{at:'PushNotificationRepository.java:133',lines:['WHERE push_notification_id = :jobId','    AND status = \'PROCESSING\'','    AND lease_token = :leaseToken','    AND lease_until > :now']}},
+     src:'PushNotificationRepository.java:133'},
     {group:'sum',title:'담당 토큰과 점유 만료가 작업을 지켜요',active:['J','W1','W2'],
      doing:['멈춘 워커의 작업은 점유가 끝나면 다른 워커가 이어 가요','결과는 지금 담당인 워커만 저장할 수 있어요'],
      notes:{J:['수락 1번만 기록','ok']},
-     code:{at:'PushNotificationUpdater.java:24',lines:['public boolean accept(LeasedJob job, ...) {','    return pushNotificationRepository','            .acceptLeasedPushJob(job.jobId(), ...) == 1;','}']}}
+     src:'PushNotificationUpdater.java:24'}
    ]}
   ]
 };
@@ -309,7 +306,6 @@ function render(){
       const bb=t.getBBox(),w=bb.width+12,h=16;let px=x,py=y-14;px=clamp(px,w/2+2,VW-w/2-2);py=clamp(py,h/2+2,VH-h/2-2);
       el('rect',{x:px-w/2,y:py-h/2,width:w,height:h,rx:8},g);g.appendChild(t);t.setAttribute('x',px);t.setAttribute('y',py+3.5)}
   });
-  const c=$('code');c.innerHTML='';if(s.code){const at=document.createElement('span');at.className='at';at.textContent=s.code.at;c.appendChild(at);c.appendChild(document.createTextNode('\n'+s.code.lines.join('\n')))}
   $('play').textContent=playing?'일시정지':'재생';
 }
 function go(k,play){K=clamp(k,0,steps().length-1);TAU=0;if(play!=null)playing=play;started=true;render()}
