@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>냉장고 구성원 내보내기 흐름</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* ===== 단계형 뼈대 엔진: 고치지 않는다. 바꿀 것은 CONFIG에만 쓴다. ===== */
+:root{
+  --bg:#ffffff;--card:#ffffff;--ink:#1f2328;--ink2:#59636e;--ink3:#8c959f;--line:#d8dee4;--soft:#f6f8fa;--grid:#eef1f4;
+  --cur:#c2571a;--wrk:#2b66c9;--retry:#c98f00;--bad:#cf222e;--bad-bg:#ffebe9;--ok:#1a7f37;--ok-bg:#e8f5ec;--pend-bg:#fff6dd;
+  --cur-bg:#fff3e8;--wrk-bg:#eef4ff;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;--ok-bg:#12261a;--pend-bg:#2e2611;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117;--card:#0d1117;--ink:#e6edf3;--ink2:#9da7b3;--ink3:#6e7781;--line:#30363d;--soft:#161b22;--grid:#21262d;
+  --cur:#e07a3c;--wrk:#5a8ae0;--retry:#e0b040;--bad:#ff7b72;--bad-bg:#3a1d1d;--ok:#56d364;--ok-bg:#12261a;--pend-bg:#2e2611;
+  --cur-bg:#2a1c10;--wrk-bg:#121c30;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 var(--f-ui);word-break:keep-all;-webkit-text-size-adjust:100%}
+.wrap{max-width:1040px;margin:0 auto;padding:16px 16px 24px;display:flex;flex-direction:column;gap:10px}
+h1{font-size:18px;margin:0;font-weight:600}
+.chap{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:12.5px}
+.chap a{padding:3px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);text-decoration:none}
+.chap a[aria-current="page"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.chap i{color:var(--ink3);font-style:normal}
+.bar{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);flex-wrap:wrap}
+.bar select,.bar button{font:inherit;font-size:12.5px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);cursor:pointer}
+.bar #play{background:var(--wrk);color:#fff;border-color:var(--wrk);font-weight:600;min-width:72px}
+.bar button:disabled{opacity:.45;cursor:default}
+.bar .cnt{margin-left:auto;font:600 12.5px var(--f-num);color:var(--ink)}
+button:focus-visible,select:focus-visible,.st:focus-visible{outline:2px solid var(--wrk);outline-offset:2px}
+/* 16:10 한 화면 = 왼쪽 단계 30 + 오른쪽 그림 70 */
+.frame{container:frame/inline-size;aspect-ratio:16/10;min-width:698px;display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+.side{min-height:0;overflow:hidden;border-right:1px solid var(--line);padding:9px 11px;display:flex;flex-direction:column;gap:6px;font-size:clamp(10.5px,1.4cqi,13.5px);line-height:1.38}
+.now{background:var(--wrk-bg);border-radius:9px;padding:8px 10px}
+.now .grp{font-size:.82em;font-weight:600;color:var(--wrk)}
+.now .grp.prob{color:var(--bad)}.now .grp.sum{color:var(--ink2)}
+.now h2{margin:2px 0 0;font-size:1.12em;line-height:1.3}
+.doing{border:1px dashed var(--line);border-radius:9px;padding:6px 10px}
+.doing b{display:block;font-size:.86em;color:var(--wrk);margin-bottom:2px}
+.doing ul{margin:0;padding:0;list-style:none}
+.doing li{position:relative;padding-left:1.1em;color:var(--ink)}
+.doing li::before{content:"→";position:absolute;left:0;color:var(--ink3)}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;min-height:0}
+.list .gh{font-size:.78em;font-weight:600;color:var(--ink3);margin:3px 0 0}
+.list .gh.prob{color:var(--bad)}
+.st{display:flex;gap:7px;padding:1px 6px;border-radius:6px;cursor:pointer;color:var(--ink3);font-size:.93em}
+.st span:first-child{font:600 .9em var(--f-num);width:1.2em;flex:none;padding-top:.08em}
+.st.past{color:var(--ink2)}
+.st.cur{background:var(--wrk-bg);color:var(--wrk);font-weight:600}
+.main{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
+.main svg{width:100%;height:100%;display:block}
+.key{display:flex;flex-wrap:wrap;gap:2px 12px;padding:0 12px 8px;font-size:11.5px;color:var(--ink2)}
+.key span{display:inline-flex;align-items:center;gap:5px}
+.key b{width:14px;height:0;border-top:2px solid;display:inline-block}
+.key b.dash{border-top:1.5px dashed var(--ink3);width:14px}
+svg text{font-family:var(--f-ui)}
+.n rect.b,.n path.b{fill:var(--card);stroke:var(--line);stroke-width:1.3}
+.n .t{font-size:12.5px;font-weight:600;fill:var(--ink)}
+.n .s{font-size:10px;fill:var(--ink2)}
+.n .rk{font-size:10px;fill:var(--ink2)}
+.n .rv{font-size:10px;font-weight:600;fill:var(--ink)}
+.n .rbg{fill:var(--soft)}
+.n .rbg.pend{fill:var(--pend-bg)}.n .rbg.ok{fill:var(--ok-bg)}.n .rbg.bad{fill:var(--bad-bg)}
+.n .note{font-size:10px;font-weight:600}
+.n.on rect.b,.n.on path.b{stroke:var(--wrk);stroke-width:2.2}
+.n.on .t{fill:var(--wrk)}
+.n.off{opacity:.3}
+.n.cand rect.b{stroke-dasharray:4 3}
+.n .cv{fill:var(--bad-bg);opacity:.92}
+.n .cvt{font-size:12px;font-weight:700;fill:var(--bad)}
+.e path{fill:none;stroke:var(--line);stroke-width:1.3}
+.e.off{opacity:.35}
+.e.on path{stroke-width:2}
+.e.req.on path{stroke:var(--wrk)}.e.res.on path{stroke:var(--ok)}.e.sig.on path{stroke:var(--cur)}.e.fail.on path{stroke:var(--bad)}
+.pill rect{stroke:none}
+.pill text{font-size:10px;font-weight:600;fill:#fff}
+.pill.res rect{fill:var(--ok)}.pill.req rect{fill:var(--wrk)}.pill.sig rect{fill:var(--cur)}.pill.fail rect{fill:var(--bad)}
+.dotm{stroke:var(--bg);stroke-width:1.5}
+body.embed h1,body.embed .chap{display:none}
+body.embed .wrap{max-width:720px;padding:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="ttl"></h1>
+  <nav class="chap" id="chap" aria-label="화면"></nav>
+  <div class="bar">
+    <select id="scene" aria-label="상황"></select>
+    <button type="button" id="play">재생</button>
+    <button type="button" id="prev">이전</button>
+    <button type="button" id="next">다음</button>
+    <button type="button" id="first">처음으로</button>
+    <label>속도 <select id="speed"><option value="0.6">느리게</option><option value="1" selected>보통</option><option value="1.6">빠르게</option></select></label>
+    <span class="cnt" id="cnt"></span>
+  </div>
+  <div class="frame" id="frame">
+    <aside class="side">
+      <div class="now"><div class="grp" id="grp"></div><h2 id="stitle"></h2></div>
+      <div class="doing"><b>지금 하는 일</b><ul id="doing"></ul></div>
+      <ol class="list" id="list"></ol>
+    </aside>
+    <div class="main">
+      <svg id="svg" role="img" aria-label="구성요소 그림"></svg>
+      <div class="key" id="key"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== CONFIG START =====================
+   이 블록만 채운다. 형식은 kit/backend-simulator/references/step.md "CONFIG 형식".
+   냉장고 구성원 내보내기 — KTB4-5th-BE dev ad6550f 기준(2026-11-19 확인).
+   src는 근거 파일:줄이다. 화면에는 나오지 않고 README에 옮겨 적는다.   */
+const CONFIG={
+  title:'냉장고 구성원 내보내기 흐름',
+  kind:'flow',
+  view:[800,660],
+  chapters:null,
+  nodes:[
+    {id:'C', type:'client',x:10, y:30, w:120,h:80, title:'방장 기기',sub:'내보내기 요청'},
+    {id:'M', type:'client',x:10, y:420,w:120,h:70, title:'내보내진 구성원 M',sub:'S2에 SSE로 연결'},
+    {id:'U2',type:'client',x:10, y:520,w:120,h:70, title:'남은 구성원 U2',sub:'S2에 SSE로 연결'},
+    {id:'S1',type:'box',   x:160,y:30, w:130,h:140,title:'서버 S1',sub:'요청 처리'},
+    {id:'R', type:'box',   x:160,y:250,w:130,h:80, title:'Redis Pub/Sub',sub:'모든 서버에 신호 전달'},
+    {id:'S2',type:'box',   x:160,y:420,w:130,h:200,title:'서버 S2',sub:'SSE 연결 · 알림 리스너'},
+    {id:'MT',type:'db',    x:360,y:30, w:200,h:170,title:'구성원 테이블',rows:[
+      {key:'mshare',label:'M 공유 참여',value:'참여 중'},{key:'mpersonal',label:'M 개인 냉장고',value:'대기'},
+      {key:'change',label:'변경 기록',value:'없음'},{key:'sent',label:'전송 위치',value:'0'}]},
+    {id:'ND',type:'db',    x:360,y:400,w:200,h:150,title:'알림 테이블',rows:[
+      {key:'noti',label:'알림 · 수신자',value:'없음'},{key:'unread',label:'U2 미읽음',value:'0'},{key:'progress',label:'처리 위치',value:'0'}]},
+    {id:'K', type:'box',   x:600,y:30, w:140,h:80, title:'구성원 전송 담당',sub:'1초마다 보낼 기록 확인'},
+    {id:'T', type:'box',   x:600,y:250,w:140,h:80, title:'Kafka 토픽',sub:'구성원 사건'}
+  ],
+  texts:[{x:460,y:226,text:'두 테이블은 같은 DB 안에 있어요',align:'middle'}],
+  edges:[
+    {id:'C-S1', from:'C', to:'S1',pts:[[130,70],[160,70]]},
+    {id:'S1-MT',from:'S1',to:'MT',pts:[[290,70],[360,70]]},
+    {id:'S1-ND',from:'S1',to:'ND',pts:[[290,140],[325,140],[325,450],[360,450]]},
+    {id:'S1-R', from:'S1',to:'R', pts:[[225,170],[225,250]]},
+    {id:'R-S2', from:'R', to:'S2',pts:[[200,330],[200,420]]},
+    {id:'S2-R', from:'S2',to:'R', pts:[[250,420],[250,330]]},
+    {id:'S2-M', from:'S2',to:'M', pts:[[160,455],[130,455]]},
+    {id:'S2-U2',from:'S2',to:'U2',pts:[[160,555],[130,555]]},
+    {id:'S2-ND',from:'S2',to:'ND',pts:[[290,510],[360,510]]},
+    {id:'K-MT', from:'K', to:'MT',pts:[[600,70],[560,70]]},
+    {id:'K-T',  from:'K', to:'T', pts:[[670,110],[670,250]]},
+    {id:'T-S2', from:'T', to:'S2',pts:[[670,330],[670,640],[225,640],[225,620]]}
+  ],
+  legend:[['req','요청·저장'],['res','응답·조회 결과'],['sig','신호·외부 호출'],['fail','실패']],
+  scenes:[
+   {id:'basic',tab:'기본 흐름 (Kafka 꺼짐)',steps:[
+    {group:'flow',title:'방장이 구성원 내보내기를 요청해요',active:['C','S1'],
+     doing:['방장 기기가 구성원 M을 내보내 달라고 해요','서버 S1이 한 트랜잭션 안에서 처리해요'],
+     msgs:[{edge:'C-S1',label:'내보내기 요청',kind:'req'}],
+     src:'MembershipController.java:62'},
+    {group:'flow',title:'관련 사용자와 냉장고를 잠가요',active:['S1','MT'],
+     doing:['방장과 M, 관련 냉장고 행을 잠가요','항상 ID 순서로 잠가서 교착을 막아요','교착: 서로의 잠금을 기다리며 멈추는 것'],
+     msgs:[{edge:'S1-MT',label:'잠금 (ID 순)',kind:'req'}],
+     src:'MembershipService.java:85'},
+    {group:'flow',title:'구성원을 개인 냉장고로 돌려보내요',active:['S1','MT'],
+     doing:['M의 공유 참여를 끝내요','M의 개인 냉장고를 다시 선택해요'],
+     msgs:[{edge:'S1-MT',label:'참여 종료',kind:'req',set:{mshare:['종료','ok'],mpersonal:['선택됨','ok']}}],
+     src:'MembershipService.java:96'},
+    {group:'flow',title:'남은 구성원에게 알림을 저장해요',active:['S1','ND'],
+     doing:['당사자 M을 뺀 구성원이 받아요(방장 포함)','같은 트랜잭션이라 함께 커밋돼요'],
+     msgs:[{edge:'S1-ND',label:'알림 · 수신자',kind:'req',set:{noti:['M 내보내짐','ok'],unread:['1','ok']}}],
+     src:'MembershipNotificationService.java:66'},
+    {group:'flow',title:'커밋 뒤 Redis로 신호 두 개를 보내요',active:['S1','R'],
+     doing:['커밋이 끝난 뒤에만 신호를 보내요','신호에는 상태를 담지 않아요'],
+     msgs:[{edge:'S1-R',label:'U2 알림 바뀜',kind:'sig'},{edge:'S1-R',label:'추방: M',kind:'sig'}],
+     src:'NotificationRedisPubSub.java:35'},
+    {group:'flow',title:'S2가 두 기기에 알려요',active:['R','S2','M','U2'],
+     doing:['M 기기에는 kicked 이벤트를 보내요','U2 기기에는 알림이 바뀌었다고 알려요'],
+     msgs:[{edge:'R-S2',label:'추방: M',kind:'sig'},{edge:'S2-M',label:'kicked',kind:'sig'},
+           {edge:'R-S2',label:'U2 알림 바뀜',kind:'sig'},{edge:'S2-U2',label:'SSE 안내',kind:'sig'}],
+     notes:{M:['kicked 받음','ok'],U2:['새 알림','ok']},
+     src:'NotificationSseConnection.java:88'},
+    {group:'sum',title:'상태와 알림을 한 트랜잭션에서 바꿔요',active:['S1','MT','ND'],
+     doing:['구성원 상태와 알림이 함께 커밋되거나 취소돼요','기기 알림은 커밋 뒤 Redis가 맡아요'],
+     notes:{MT:['함께 커밋','ok'],ND:['함께 커밋','ok']},
+     src:'MembershipService.java:31'}
+   ]},
+   {id:'kafka',tab:'Kafka 경로 켜짐',steps:[
+    {group:'flow',title:'방장이 구성원 내보내기를 요청해요',active:['C','S1'],
+     doing:['방장 기기가 구성원 M을 내보내 달라고 해요','요청 처리는 기본 흐름과 같아요'],
+     msgs:[{edge:'C-S1',label:'내보내기 요청',kind:'req'}],
+     src:'MembershipController.java:62'},
+    {group:'flow',title:'잠그고 개인 냉장고로 돌려보내요',active:['S1','MT'],
+     doing:['ID 순서로 잠근 뒤 M의 공유 참여를 끝내요','M의 개인 냉장고를 다시 선택해요'],
+     msgs:[{edge:'S1-MT',label:'잠금 (ID 순)',kind:'req'},{edge:'S1-MT',label:'참여 종료',kind:'req',set:{mshare:['종료','ok'],mpersonal:['선택됨','ok']}}],
+     src:'MembershipService.java:85'},
+    {group:'flow',title:'알림 대신 변경 기록을 남겨요',active:['S1','MT'],
+     doing:['이 경로에서는 요청 안에서 알림을 만들지 않아요','받을 사람 목록을 변경 기록에 같이 남겨요'],
+     msgs:[{edge:'S1-MT',label:'변경 기록 · 순번 1',kind:'req',set:{change:['순번 1','pend']}}],
+     src:'MembershipNotificationService.java:59'},
+    {group:'flow',title:'추방 신호는 커밋 뒤 바로 나가요',active:['S1','R','S2','M'],
+     doing:['추방 신호는 Kafka를 거치지 않아요','M 기기는 바로 kicked를 받아요'],
+     msgs:[{edge:'S1-R',label:'추방: M',kind:'sig'},{edge:'R-S2',label:'추방: M',kind:'sig'},{edge:'S2-M',label:'kicked',kind:'sig'}],
+     notes:{M:['kicked 받음','ok']},
+     src:'MembershipService.java:98'},
+    {group:'flow',title:'전송 담당이 기록을 Kafka로 보내요',active:['K','MT','T'],
+     doing:['전송 담당은 1초마다 보낼 기록을 찾아요','냉장고 ID를 키로 보내 순서를 지켜요','키: 같은 키는 같은 파티션으로 가요'],
+     msgs:[{edge:'K-MT',label:'보낼 기록 찾기',kind:'req'},{edge:'K-MT',rev:true,label:'순번 1',kind:'res'},{edge:'K-T',label:'냉장고 키',kind:'sig'}],
+     src:'MembershipKafkaSender.java:106'},
+    {group:'flow',title:'보낸 위치를 기록해요',active:['K','MT'],
+     doing:['Kafka가 커밋을 확인한 뒤에만 위치를 남겨요','실패하면 기록이 남아 다음에 다시 보내요'],
+     msgs:[{edge:'K-MT',label:'전송 위치 1',kind:'req',set:{sent:['1','ok'],change:['순번 1 · 보냄','ok']}}],
+     src:'MembershipKafkaSender.java:119'},
+    {group:'flow',title:'리스너가 알림을 저장하고 알려요',active:['T','S2','ND','R','U2'],
+     doing:['원본 기록과 순번이 맞는지 확인해요','알림과 처리 위치를 함께 저장해요','같은 순번이 또 오면 건너뛰어요'],
+     msgs:[{edge:'T-S2',label:'구성원 사건',kind:'sig'},{edge:'S2-ND',label:'알림 · 처리 위치',kind:'req',set:{noti:['M 내보내짐','ok'],unread:['1','ok'],progress:['1','ok']}},
+           {edge:'S2-R',label:'U2 알림 바뀜',kind:'sig'},{edge:'R-S2',label:'U2 알림 바뀜',kind:'sig'},{edge:'S2-U2',label:'SSE 안내',kind:'sig'}],
+     notes:{U2:['새 알림','ok']},
+     src:'MembershipNotificationProcessor.java:34'},
+    {group:'sum',title:'추방은 바로, 알림은 나중에 도착해요',active:['S1','K','S2'],
+     doing:['요청은 상태와 변경 기록만 남기고 끝나요','알림은 Kafka를 거쳐 리스너가 만들어요','두 설정의 기본값은 꺼짐이에요'],
+     notes:{S1:['상태 · 기록','ok'],K:['전송','ok'],S2:['알림 저장','ok']},
+     src:'application.yml:260'}
+   ]}
+  ]
+};
+/* ====================== CONFIG END ====================== */
+
+/* ===================== 엔진 (고치지 않는다) ===================== */
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+const Q=new URLSearchParams(location.search),EMBED=Q.has('embed');
+if(EMBED)document.body.classList.add('embed');
+if(Q.get('theme'))document.documentElement.dataset.theme=Q.get('theme');
+const D=1.15,HOLD=1.8;                       // 메시지 하나 이동 시간, 단계 끝에서 멈추는 시간(초, 보통 속도)
+const GROUP={flow:'흐름',prob:'문제',sum:'정리'};
+const [VW,VH]=CONFIG.view;
+const svg=$('svg');svg.setAttribute('viewBox',`0 0 ${VW} ${VH}`);svg.setAttribute('preserveAspectRatio','xMidYMin meet');
+const el=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e};
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),ease=u=>{u=clamp(u,0,1);return u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2};
+function along(pts,u){const L=[];let tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);L.push(d);tot+=d}
+  let r=u*tot;for(let i=0;i<L.length;i++){if(r<=L[i]||i===L.length-1){const v=L[i]?clamp(r/L[i],0,1):1;return [pts[i][0]+(pts[i+1][0]-pts[i][0])*v,pts[i][1]+(pts[i+1][1]-pts[i][1])*v]}r-=L[i]}return pts[pts.length-1]}
+const N={},E={},ROW={};
+/* ---- 그림 만들기 ---- */
+function build(){
+  svg.innerHTML='';
+  const gE=el('g',{},svg),gN=el('g',{},svg),gT=el('g',{},svg);
+  CONFIG.edges.forEach(e=>{const g=el('g',{class:'e'},gE);el('path',{d:'M'+e.pts.map(p=>p.join(',')).join('L')},g);
+    const [x1,y1]=e.pts[e.pts.length-1],[x0,y0]=e.pts[e.pts.length-2],a=Math.atan2(y1-y0,x1-x0);
+    el('path',{d:`M${x1},${y1}L${x1-6*Math.cos(a-.45)},${y1-6*Math.sin(a-.45)}M${x1},${y1}L${x1-6*Math.cos(a+.45)},${y1-6*Math.sin(a+.45)}`},g);E[e.id]={...e,g}});
+  CONFIG.nodes.forEach(n=>{
+    const g=el('g',{class:'n'+(n.candidate?' cand':''),'data-id':n.id},gN);const r={x:n.x,y:n.y,w:n.w,h:n.h};
+    if(n.type==='db'){const ry=9;el('path',{class:'b',d:`M${n.x},${n.y+ry}A${n.w/2},${ry} 0 0 1 ${n.x+n.w},${n.y+ry}V${n.y+n.h-ry}A${n.w/2},${ry} 0 0 1 ${n.x},${n.y+n.h-ry}Z`},g);
+      el('path',{class:'b',d:`M${n.x},${n.y+ry}A${n.w/2},${ry} 0 0 0 ${n.x+n.w},${n.y+ry}`,fill:'none'},g)}
+    else el('rect',{class:'b',x:n.x,y:n.y,width:n.w,height:n.h,rx:n.type==='client'?12:8},g);
+    const tY=n.type==='db'?n.y+34:n.y+22;
+    el('text',{class:'t',x:n.x+n.w/2,y:tY,'text-anchor':'middle'},g).textContent=n.title;
+    if(n.sub)el('text',{class:'s',x:n.x+n.w/2,y:tY+15,'text-anchor':'middle'},g).textContent=n.sub;
+    (n.rows||[]).forEach((row,i)=>{const y=tY+12+i*26;el('rect',{class:'rbg',x:n.x+10,y,width:n.w-20,height:20,rx:4},g);
+      el('text',{class:'rk',x:n.x+18,y:y+14},g).textContent=row.label;
+      const v=el('text',{class:'rv',x:n.x+n.w-18,y:y+14,'text-anchor':'end'},g);ROW[row.key]={bg:g.lastChild.previousSibling.previousSibling,v,def:row.value}});
+    const note=el('text',{class:'note',x:n.x+n.w/2,y:n.y+n.h-10,'text-anchor':'middle'},g);
+    const cy=n.type==='db'?n.y+n.h/2:tY+(n.sub?20:8);       // 덮개는 이름 아래부터 덮는다
+    const cv=el('rect',{class:'cv',x:n.x+1,y:cy,width:n.w-2,height:n.y+n.h-1-cy,rx:6,visibility:'hidden'},g);
+    const cvt=el('text',{class:'cvt',x:n.x+n.w/2,y:cy+(n.y+n.h-cy)/2+4,'text-anchor':'middle',visibility:'hidden'},g);
+    N[n.id]={...n,g,note,cv,cvt,r};
+  });
+  (CONFIG.texts||[]).forEach(t=>{el('text',{x:t.x,y:t.y,'text-anchor':t.align||'start','font-size':10.5,fill:'var(--ink3)'},gT).textContent=t.text});
+  PILLS=el('g',{},svg);
+}
+let PILLS;
+/* ---- 상태 ---- */
+let SC,K=0,TAU=0,playing=false,started=false,SPEED=1;
+const steps=()=>SC.steps;
+const msgs=s=>s.msgs||[];
+const stepLen=s=>msgs(s).length*D+HOLD;
+function rowsAt(k,tau){
+  const st={};CONFIG.nodes.forEach(n=>(n.rows||[]).forEach(r=>st[r.key]=[r.value,'']));
+  Object.assign(st,SC.init||{});
+  for(let i=0;i<=k;i++)msgs(steps()[i]).forEach((m,j)=>{if(m.set&&(i<k||tau>=(j+1)*D))Object.assign(st,m.set)});
+  return st;
+}
+function render(){
+  const s=steps()[K];
+  $('grp').textContent=GROUP[s.group]||'';$('grp').className='grp '+(s.group||'');
+  $('stitle').textContent=s.title;
+  const ul=$('doing');ul.innerHTML='';s.doing.forEach(d=>{const li=document.createElement('li');li.textContent=d;ul.appendChild(li)});
+  $('cnt').textContent=(K+1)+' / '+steps().length;
+  [...$('list').querySelectorAll('.st')].forEach((li,i)=>{li.classList.toggle('cur',i===K);li.classList.toggle('past',i<K);li.setAttribute('aria-current',i===K?'step':'false')});
+  $('prev').disabled=K===0;$('next').disabled=K===steps().length-1;
+  const act=new Set(s.active||[]),used=new Set(msgs(s).map(m=>m.edge));
+  for(const id in N){const n=N[id],covered=!!(s.covers||{})[id];n.g.classList.toggle('on',act.has(id));n.g.classList.toggle('off',act.size>0&&!act.has(id)&&!covered);
+    const nt=TAU>=msgs(s).length*D?(s.notes||{})[id]:null;      // 메모는 메시지가 다 도착한 뒤에 보인다
+    n.note.textContent=nt?nt[0]:'';n.note.setAttribute('fill',nt?`var(--${nt[1]==='ok'?'ok':nt[1]==='bad'?'bad':'retry'})`:'none');
+    const cvr=(s.covers||{})[id];n.cv.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.setAttribute('visibility',cvr?'visible':'hidden');n.cvt.textContent=cvr||''}
+  for(const id in E){const e=E[id],m=msgs(s).find(m=>m.edge===id);e.g.setAttribute('class','e'+(used.has(id)?' on '+(m.kind||'req'):' off'))}
+  const st=rowsAt(K,TAU);for(const k in ROW){const [v,tone]=st[k]||[ROW[k].def,''];ROW[k].v.textContent=v;ROW[k].bg.setAttribute('class','rbg '+(tone||''))}
+  // 움직이는 메시지
+  PILLS.innerHTML='';
+  msgs(s).forEach((m,j)=>{const a=j*D,u=(TAU-a)/D;if(u<0||u>1)return;
+    const e=E[m.edge],pts=m.rev?[...e.pts].reverse():e.pts,[x,y]=along(pts,ease(u)),kind=m.kind||'req';
+    el('circle',{class:'dotm',cx:x,cy:y,r:5,fill:`var(--${kind==='res'?'ok':kind==='sig'?'cur':kind==='fail'?'bad':'wrk'})`},PILLS);
+    if(m.fail&&u>.55){const [fx,fy]=along(pts,.55),g=el('g',{stroke:'var(--bad)','stroke-width':2.5},PILLS);el('path',{d:`M${fx-6},${fy-6}L${fx+6},${fy+6}M${fx+6},${fy-6}L${fx-6},${fy+6}`},g)}
+    if(m.label){const g=el('g',{class:'pill '+kind},PILLS),t=el('text',{x:0,y:0,'text-anchor':'middle'},g);t.textContent=m.label;
+      const bb=t.getBBox(),w=bb.width+12,h=16;let px=x,py=y-14;px=clamp(px,w/2+2,VW-w/2-2);py=clamp(py,h/2+2,VH-h/2-2);
+      el('rect',{x:px-w/2,y:py-h/2,width:w,height:h,rx:8},g);g.appendChild(t);t.setAttribute('x',px);t.setAttribute('y',py+3.5)}
+  });
+  $('play').textContent=playing?'일시정지':'재생';
+}
+function go(k,play){K=clamp(k,0,steps().length-1);TAU=0;if(play!=null)playing=play;started=true;render()}
+function setScene(id){
+  SC=CONFIG.scenes.find(s=>s.id===id)||CONFIG.scenes[0];$('scene').value=SC.id;
+  const ol=$('list');ol.innerHTML='';let lastG=null;
+  SC.steps.forEach((s,i)=>{if(s.group!==lastG){const h=document.createElement('li');h.className='gh '+(s.group||'');h.textContent=GROUP[s.group]||'';ol.appendChild(h);lastG=s.group}
+    const li=document.createElement('li');li.className='st';li.tabIndex=0;li.setAttribute('role','button');li.setAttribute('aria-label',(i+1)+'단계: '+s.title);
+    li.innerHTML='<span></span><span></span>';li.children[0].textContent=i+1;li.children[1].textContent=s.title;
+    const f=()=>go(i,true);li.onclick=f;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f()}};ol.appendChild(li)});
+  K=0;TAU=0;render();
+}
+/* ---- 화면 ---- */
+$('ttl').textContent=CONFIG.title;document.title=CONFIG.title;
+if(CONFIG.chapters){CONFIG.chapters.forEach((c,i)=>{if(i){const s=document.createElement('i');s.textContent='→';$('chap').appendChild(s)}const a=document.createElement('a');a.href=c.href||'#';a.textContent=c.label;if(c.current)a.setAttribute('aria-current','page');$('chap').appendChild(a)})}
+else $('chap').remove();
+CONFIG.scenes.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.tab;$('scene').appendChild(o)});
+$('scene').onchange=e=>{setScene(e.target.value);playing=true;started=true;render()};
+const colOf=k=>k==='res'?'ok':k==='sig'?'cur':k==='fail'?'bad':'wrk';
+CONFIG.legend.forEach(([k,t])=>{const s=document.createElement('span'),b=document.createElement('b');b.style.borderColor=`var(--${colOf(k)})`;s.appendChild(b);s.appendChild(document.createTextNode(t));$('key').appendChild(s)});
+if(CONFIG.nodes.some(n=>n.candidate)){const s=document.createElement('span'),b=document.createElement('b');b.className='dash';s.appendChild(b);s.appendChild(document.createTextNode('해결 후보로 추가되는 장치'));$('key').appendChild(s)}
+$('play').onclick=()=>{if(!playing&&K===steps().length-1&&TAU>=stepLen(steps()[K]))go(0);playing=!playing;started=true;render()};
+$('prev').onclick=()=>go(K-1,false);$('next').onclick=()=>go(K+1,false);$('first').onclick=()=>go(0,false);
+$('speed').onchange=e=>{SPEED=+e.target.value};
+let last=null;
+function loop(ts){if(last!=null&&playing){TAU+=Math.min(.1,(ts-last)/1000)*SPEED;const s=steps()[K];
+  if(TAU>=stepLen(s)){if(K<steps().length-1){K++;TAU=0}else{TAU=stepLen(s);playing=false}}render()}last=ts;requestAnimationFrame(loop)}
+build();setScene(Q.get('s')||CONFIG.scenes[0].id);
+if(EMBED&&'IntersectionObserver' in window){new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){if(!started){started=true;go(0)}playing=true}else playing=false;render()}),{threshold:.2}).observe($('frame'))}
+else{playing=true;started=true}
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){playing=false;TAU=stepLen(steps()[0]);render()}
+requestAnimationFrame(loop);
+window.__sim={type:'step',get kind(){return CONFIG.kind},get scenes(){return CONFIG.scenes.map(s=>s.id)},scene(id){setScene(id);playing=false;render()},
+  get steps(){return SC.steps},get step(){return K},get playing(){return playing},
+  at(k,u){K=k;const s=steps()[k];TAU=u==null?stepLen(s):u*msgs(s).length*D;playing=false;render()},
+  msgTimes(k){return msgs(steps()[k]).map((m,j)=>(j+.5)/Math.max(1,msgs(steps()[k]).length))},
+  config:CONFIG};
+})();
+</script>
+</body>
+</html>
